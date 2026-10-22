@@ -2520,6 +2520,7 @@
                                                 <TextBox x:Name="ScreenshotDirectoryBox" Grid.Column="0" Height="34"
                                                          Style="{StaticResource ModernTextBox}" VerticalContentAlignment="Center"/>
                                                 <Button Grid.Column="1" Margin="6,0,0,0" Padding="12,6"
+                                                        Style="{DynamicResource SecondaryButton}"
                                                         Click="OnScreenshotBrowse_Click"
                                                         Content="{loc:Loc Common.Browse}"/>
                                             </Grid>

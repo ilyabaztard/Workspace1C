@@ -73,6 +73,13 @@ namespace Workspace1C
 
             Add(_viewModel.HotkeyEnterprise, _viewModel.LaunchEnterpriseCommand);
             Add(_viewModel.HotkeyConfigurator, _viewModel.LaunchConfiguratorCommand);
+            // Производные хоткеи запуска (issue #48): Ctrl+хоткей — «с выбором параметров»,
+            // Shift+хоткей — «с аутентификацией». Пусты, если основной назначен
+            // с Shift/Ctrl или вообще не задан — тогда ничего не регистрируется.
+            Add(_viewModel.HotkeyEnterpriseWithParams, _viewModel.LaunchEnterpriseWithParamsCommand);
+            Add(_viewModel.HotkeyEnterpriseWithAuth, _viewModel.LaunchEnterpriseWithAuthCommand);
+            Add(_viewModel.HotkeyConfiguratorWithParams, _viewModel.LaunchConfiguratorWithParamsCommand);
+            Add(_viewModel.HotkeyConfiguratorWithAuth, _viewModel.LaunchConfiguratorWithAuthCommand);
             Add(_viewModel.HotkeyFavorite, _viewModel.ToggleFavoriteCommand);
             Add(_viewModel.HotkeyEdit, _viewModel.EditInfobaseCommand);
             Add(_viewModel.HotkeyDelete, _viewModel.DeleteInfobaseCommand);

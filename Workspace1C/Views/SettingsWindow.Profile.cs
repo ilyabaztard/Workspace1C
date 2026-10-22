@@ -88,6 +88,7 @@ namespace Workspace1C
             var browse = new Button
             {
                 Content = LocalizationManager.T("Settings.Profile.Browse"),
+                Style = TryFindResource("SecondaryButton") as Style,
                 Padding = new Thickness(10, 4, 10, 4),
                 Margin = new Thickness(8, 0, 0, 0)
             };
@@ -121,9 +122,22 @@ namespace Workspace1C
             });
 
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
-            var backup = new Button { Content = LocalizationManager.T("Settings.Profile.BackupNow"), Padding = new Thickness(12, 6, 12, 6), Margin = new Thickness(0, 0, 8, 0) };
+            // Кнопки резервного копирования профиля используют вторичный стиль темы
+            // (issue #46): раньше рисовались дефолтным стилем и не переключались с темой.
+            var backup = new Button
+            {
+                Content = LocalizationManager.T("Settings.Profile.BackupNow"),
+                Style = TryFindResource("SecondaryButton") as Style,
+                Padding = new Thickness(12, 6, 12, 6),
+                Margin = new Thickness(0, 0, 8, 0)
+            };
             backup.Click += (_, _) => OnProfileBackup_Click();
-            var restore = new Button { Content = LocalizationManager.T("Settings.Profile.RestoreNow"), Padding = new Thickness(12, 6, 12, 6) };
+            var restore = new Button
+            {
+                Content = LocalizationManager.T("Settings.Profile.RestoreNow"),
+                Style = TryFindResource("SecondaryButton") as Style,
+                Padding = new Thickness(12, 6, 12, 6)
+            };
             restore.Click += (_, _) => OnProfileRestore_Click();
             buttons.Children.Add(backup);
             buttons.Children.Add(restore);

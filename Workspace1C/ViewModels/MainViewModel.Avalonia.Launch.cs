@@ -94,10 +94,13 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Запуск с авторизацией: сохранённые имя и пароль на один раз убираются,
-    /// чтобы платформа спросила их сама. Прежние значения возвращаются всегда.
+    /// Запуск с авторизацией (issue #48): сохранённые имя и пароль на один раз убираются,
+    /// чтобы платформа спросила их сама. Для режима очищаются и отдельные учётные данные
+    /// (Предприятие — <see cref="Infobase.EnterpriseAuth"/>, Конфигуратор —
+    /// <see cref="Infobase.ConfiguratorAuth"/>), иначе лаунчер запустил бы клиент
+    /// с сохранёнными данными. Прежние значения возвращаются всегда.
     /// </summary>
-    private void LaunchWithAuth()
+    private void LaunchWithAuth(LaunchKind kind)
     {
         var infobase = SelectedInfobase;
         if (infobase?.Connection is not { } connection)
@@ -107,13 +110,10 @@ public partial class MainViewModel : ViewModelBase
         var savedPassword = connection.Password;
         var savedMode = connection.AuthenticationMode;
 
-        // У базы может быть отдельная авторизация Предприятия, и лаунчер
-        // предпочитает именно её: без этого пункт молча запускал бы клиент
-        // с сохранёнными учётными данными.
-        var enterpriseAuth = infobase.EnterpriseAuth;
-        var savedAuthUser = enterpriseAuth?.User;
-        var savedAuthPassword = enterpriseAuth?.Password;
-        var savedAuthMode = enterpriseAuth?.AuthenticationMode;
+        var modeAuth = kind == LaunchKind.Configurator ? infobase.ConfiguratorAuth : infobase.EnterpriseAuth;
+        var savedAuthUser = modeAuth?.User;
+        var savedAuthPassword = modeAuth?.Password;
+        var savedAuthMode = modeAuth?.AuthenticationMode;
 
         try
         {
@@ -121,14 +121,14 @@ public partial class MainViewModel : ViewModelBase
             connection.Password = string.Empty;
             connection.AuthenticationMode = AuthenticationMode.Prompt;
 
-            if (enterpriseAuth is not null)
+            if (modeAuth is not null)
             {
-                enterpriseAuth.User = string.Empty;
-                enterpriseAuth.Password = string.Empty;
-                enterpriseAuth.AuthenticationMode = AuthenticationMode.Prompt;
+                modeAuth.User = string.Empty;
+                modeAuth.Password = string.Empty;
+                modeAuth.AuthenticationMode = AuthenticationMode.Prompt;
             }
 
-            Launch(_launchVm.LaunchCommand, LaunchKind.Enterprise);
+            Launch(_launchVm.LaunchCommand, kind);
         }
         finally
         {
@@ -136,11 +136,11 @@ public partial class MainViewModel : ViewModelBase
             connection.Password = savedPassword;
             connection.AuthenticationMode = savedMode;
 
-            if (enterpriseAuth is not null)
+            if (modeAuth is not null)
             {
-                enterpriseAuth.User = savedAuthUser ?? string.Empty;
-                enterpriseAuth.Password = savedAuthPassword ?? string.Empty;
-                enterpriseAuth.AuthenticationMode = savedAuthMode ?? AuthenticationMode.Prompt;
+                modeAuth.User = savedAuthUser ?? string.Empty;
+                modeAuth.Password = savedAuthPassword ?? string.Empty;
+                modeAuth.AuthenticationMode = savedAuthMode ?? AuthenticationMode.Prompt;
             }
 
             // Причина та же, что и у запуска с параметрами: успешный запуск

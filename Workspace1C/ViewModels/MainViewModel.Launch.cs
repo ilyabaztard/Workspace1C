@@ -136,7 +136,13 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private void LaunchEnterpriseWithAuth(object? parameter)
+    /// <summary>
+    /// Запуск с запросом авторизации (issue #48): сохранённые имя и пароль на один
+    /// раз убираются, чтобы платформа спросила их сама. Для Конфигуратора, у которого
+    /// могут быть отдельные учётные данные (<see cref="Infobase.ConfiguratorAuth"/>),
+    /// очищаются и они. Прежние значения возвращаются всегда.
+    /// </summary>
+    private void LaunchWithAuth(LaunchKind kind)
     {
         if (SelectedInfobase is null) return;
         var ib = SelectedInfobase;
@@ -144,9 +150,10 @@ public partial class MainViewModel : ViewModelBase
         var savedUser = conn.User;
         var savedPwd = conn.Password;
         var savedAuth = conn.AuthenticationMode;
+        var mode = kind == LaunchKind.Configurator ? OneCLaunchMode.Configurator : OneCLaunchMode.Enterprise;
         // Учётные данные очищаются на время запуска (чтобы платформа спросила их сама):
         // pre-команда выполняется до фактического запуска, восстановление — в finally.
-        _ = LaunchWithAuthCoreAsync(ib, conn, savedUser, savedPwd, savedAuth);
+        _ = LaunchWithAuthCoreAsync(ib, conn, savedUser, savedPwd, savedAuth, mode);
     }
 
     /// <summary>
@@ -154,14 +161,30 @@ public partial class MainViewModel : ViewModelBase
     /// запуск → post-команда; прежние значения восстанавливаются всегда.
     /// </summary>
     private async Task LaunchWithAuthCoreAsync(
-        Infobase ib, ConnectionSettings conn, string savedUser, string savedPwd, AuthenticationMode savedAuth)
+        Infobase ib, ConnectionSettings conn, string savedUser, string savedPwd, AuthenticationMode savedAuth,
+        OneCLaunchMode mode)
     {
+        // Отдельные учётные данные режима (для Конфигуратора — ConfiguratorAuth):
+        // их лаунчер предпочитает общим, поэтому очищаем вместе с ними.
+        var modeAuth = mode == OneCLaunchMode.Configurator ? ib.ConfiguratorAuth : null;
+        var savedModeUser = modeAuth?.User;
+        var savedModePwd = modeAuth?.Password;
+        var savedModeAuth = modeAuth?.AuthenticationMode;
+
         try
         {
             conn.User = string.Empty;
             conn.Password = string.Empty;
             conn.AuthenticationMode = AuthenticationMode.Prompt;
-            var ok = await RunScriptedLaunchAsync(ib, () => _launcher.Launch(ib, OneCLaunchMode.Enterprise));
+
+            if (modeAuth is not null)
+            {
+                modeAuth.User = string.Empty;
+                modeAuth.Password = string.Empty;
+                modeAuth.AuthenticationMode = AuthenticationMode.Prompt;
+            }
+
+            var ok = await RunScriptedLaunchAsync(ib, () => _launcher.Launch(ib, mode));
             if (ok)
             {
                 ib.LastLaunchDate = DateTime.Now;
@@ -184,6 +207,13 @@ public partial class MainViewModel : ViewModelBase
             conn.User = savedUser;
             conn.Password = savedPwd;
             conn.AuthenticationMode = savedAuth;
+
+            if (modeAuth is not null)
+            {
+                modeAuth.User = savedModeUser ?? string.Empty;
+                modeAuth.Password = savedModePwd ?? string.Empty;
+                modeAuth.AuthenticationMode = savedModeAuth ?? AuthenticationMode.Prompt;
+            }
         }
     }
 

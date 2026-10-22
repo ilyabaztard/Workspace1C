@@ -1319,7 +1319,13 @@ public string HotkeyEnterprise
         set
         {
             if (SetProperty(ref _hotkeyEnterprise, NormalizeHotkey(value, "F3")))
+            {
                 ScheduleSaveSettings();
+                // Производные хоткеи «Запуск с выбором параметров» (Ctrl+F3) и
+                // «Запуск с аутентификацией» (Shift+F3) зависят от основного (issue #48).
+                OnPropertyChanged(nameof(HotkeyEnterpriseWithParams));
+                OnPropertyChanged(nameof(HotkeyEnterpriseWithAuth));
+            }
         }
     }
 
@@ -1329,9 +1335,38 @@ public string HotkeyEnterprise
         set
         {
             if (SetProperty(ref _hotkeyConfigurator, NormalizeHotkey(value, "F4")))
+            {
                 ScheduleSaveSettings();
+                // Производные хоткеи Конфигуратора (issue #48): Ctrl+F4 / Shift+F4.
+                OnPropertyChanged(nameof(HotkeyConfiguratorWithParams));
+                OnPropertyChanged(nameof(HotkeyConfiguratorWithAuth));
+            }
         }
     }
+
+    /// <summary>«Запуск с выбором параметров» Предприятия: Ctrl + хоткей запуска (issue #48). Пусто — не добавлять.</summary>
+    public string HotkeyEnterpriseWithParams =>
+        Services.LaunchHotkeyDerivatives.TryDerive(HotkeyEnterprise, out _, out var withParams)
+            ? withParams ?? string.Empty
+            : string.Empty;
+
+    /// <summary>«Запуск с аутентификацией» Предприятия: Shift + хоткей запуска (issue #48). Пусто — не добавлять.</summary>
+    public string HotkeyEnterpriseWithAuth =>
+        Services.LaunchHotkeyDerivatives.TryDerive(HotkeyEnterprise, out var withAuth, out _)
+            ? withAuth ?? string.Empty
+            : string.Empty;
+
+    /// <summary>«Запуск с выбором параметров» Конфигуратора: Ctrl + хоткей запуска (issue #48). Пусто — не добавлять.</summary>
+    public string HotkeyConfiguratorWithParams =>
+        Services.LaunchHotkeyDerivatives.TryDerive(HotkeyConfigurator, out _, out var withParams)
+            ? withParams ?? string.Empty
+            : string.Empty;
+
+    /// <summary>«Запуск с аутентификацией» Конфигуратора: Shift + хоткей запуска (issue #48). Пусто — не добавлять.</summary>
+    public string HotkeyConfiguratorWithAuth =>
+        Services.LaunchHotkeyDerivatives.TryDerive(HotkeyConfigurator, out var withAuth, out _)
+            ? withAuth ?? string.Empty
+            : string.Empty;
 
     public string HotkeyFavorite
     {

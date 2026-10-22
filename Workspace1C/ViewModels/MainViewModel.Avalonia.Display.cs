@@ -441,6 +441,35 @@ public partial class MainViewModel : ViewModelBase
     // в нём другие. Теперь читаются оттуда.
     public string HotkeyEnterprise => _settings.HotkeyEnterprise;
     public string HotkeyConfigurator => _settings.HotkeyConfigurator;
+
+    // ---- Производные хоткеи запуска (issue #48) ----
+    // «Запуск с выбором параметров» = Ctrl + хоткей режима, «Запуск с аутентификацией» =
+    // Shift + хоткей режима. Если основной хоткей назначен с Shift/Ctrl или не задан —
+    // производные пусты, и их не регистрируют и не показывают в меню.
+    /// <summary>«Запуск с выбором параметров» Предприятия (Ctrl + хоткей запуска). Пусто — не добавлять.</summary>
+    public string HotkeyEnterpriseWithParams =>
+        Services.LaunchHotkeyDerivatives.TryDerive(HotkeyEnterprise, out _, out var withParams)
+            ? withParams ?? string.Empty
+            : string.Empty;
+
+    /// <summary>«Запуск с аутентификацией» Предприятия (Shift + хоткей запуска). Пусто — не добавлять.</summary>
+    public string HotkeyEnterpriseWithAuth =>
+        Services.LaunchHotkeyDerivatives.TryDerive(HotkeyEnterprise, out var withAuth, out _)
+            ? withAuth ?? string.Empty
+            : string.Empty;
+
+    /// <summary>«Запуск с выбором параметров» Конфигуратора (Ctrl + хоткей запуска). Пусто — не добавлять.</summary>
+    public string HotkeyConfiguratorWithParams =>
+        Services.LaunchHotkeyDerivatives.TryDerive(HotkeyConfigurator, out _, out var withParams)
+            ? withParams ?? string.Empty
+            : string.Empty;
+
+    /// <summary>«Запуск с аутентификацией» Конфигуратора (Shift + хоткей запуска). Пусто — не добавлять.</summary>
+    public string HotkeyConfiguratorWithAuth =>
+        Services.LaunchHotkeyDerivatives.TryDerive(HotkeyConfigurator, out var withAuth, out _)
+            ? withAuth ?? string.Empty
+            : string.Empty;
+
     public string HotkeyEdit => _settings.HotkeyEdit;
     public string HotkeyAdd => _settings.HotkeyAdd;
     public string HotkeyFavorite => _settings.HotkeyFavorite;
@@ -533,6 +562,11 @@ public partial class MainViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(HotkeyEnterprise));
         OnPropertyChanged(nameof(HotkeyConfigurator));
+        // Производные хоткеи запуска (issue #48): Ctrl/Shift + основной хоткей.
+        OnPropertyChanged(nameof(HotkeyEnterpriseWithParams));
+        OnPropertyChanged(nameof(HotkeyEnterpriseWithAuth));
+        OnPropertyChanged(nameof(HotkeyConfiguratorWithParams));
+        OnPropertyChanged(nameof(HotkeyConfiguratorWithAuth));
         OnPropertyChanged(nameof(HotkeyEdit));
         OnPropertyChanged(nameof(HotkeyAdd));
         OnPropertyChanged(nameof(HotkeyFavorite));

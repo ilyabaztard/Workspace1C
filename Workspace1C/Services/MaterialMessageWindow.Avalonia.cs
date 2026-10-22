@@ -2,6 +2,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Workspace1C.Localization;
@@ -157,6 +158,24 @@ internal sealed class MaterialMessageWindowAvalonia : Window
         content.Children.Add(buttonsPanel);
 
         Content = content;
+    }
+
+    /// <summary>
+    /// ESC закрывает окно сообщения (issue #47), как кнопка «Нет»/«Отмена»:
+    /// для подтверждений результат — «Нет», для информационных окон — просто закрытие.
+    /// </summary>
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None && !e.Handled)
+        {
+            _answered = true;
+            Confirmed = false;
+            e.Handled = true;
+            Close();
+            return;
+        }
+
+        base.OnKeyDown(e);
     }
 }
 #endif

@@ -528,6 +528,7 @@
                                       Text="{Binding RepositoryServer, UpdateSourceTrigger=PropertyChanged}"
                                       ToolTip="{loc:Loc Connection.RepositoryServerTooltip}"/>
                             <Button Grid.Row="0" Grid.Column="2" Margin="6,3,0,3" Height="30" Padding="8,0"
+                                    Style="{DynamicResource SecondaryButton}"
                                     Click="OnPasteRepositorySplit_Click" Cursor="Hand"
                                     ToolTip="{loc:Loc Connection.RepositoryPasteTooltip}">
                                 <StackPanel Orientation="Horizontal">

@@ -662,8 +662,10 @@ public partial class MainViewModel : ViewModelBase
         LaunchEnterpriseAsAdminCommand = new RelayCommand(_ => Launch(LaunchKind.Enterprise, runAsAdmin: true), _ => SelectedInfobase != null);
         LaunchConfiguratorAsAdminCommand = new RelayCommand(_ => Launch(LaunchKind.Configurator, runAsAdmin: true), _ => SelectedInfobase != null);
         LaunchEnterpriseWithParamsCommand = new RelayCommand(LaunchEnterpriseWithParams, _ => SelectedInfobase != null);
-        LaunchEnterpriseWithAuthCommand = new RelayCommand(LaunchEnterpriseWithAuth, _ => SelectedInfobase != null);
+        LaunchEnterpriseWithAuthCommand = new RelayCommand(_ => LaunchWithAuth(LaunchKind.Enterprise), _ => SelectedInfobase != null);
         LaunchConfiguratorWithParamsCommand = new RelayCommand(LaunchConfiguratorWithParams, _ => SelectedInfobase != null);
+        // Запуск Конфигуратора с запросом авторизации (issue #48): SHIFT+хоткей Конфигуратора.
+        LaunchConfiguratorWithAuthCommand = new RelayCommand(_ => LaunchWithAuth(LaunchKind.Configurator), _ => SelectedInfobase != null);
         LaunchNativeStarterCommand = new RelayCommand(_ => LaunchNativeStarter());
         ImportFromIbasesV8iCommand = new RelayCommand(ImportFromIbasesV8i);
         ExportToIbasesV8iCommand = new RelayCommand(_ => ExportToIbases());

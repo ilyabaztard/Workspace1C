@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Workspace1C.Localization;
 using Workspace1C.Models;
 using Workspace1C.Services;
+using Workspace1C.Themes;
 using Workspace1C.ViewModels;
 
 namespace Workspace1C;
@@ -61,18 +62,24 @@ public sealed class ExportsListWindow : ModalWindowBase
             Spacing = 8,
             Margin = new Avalonia.Thickness(0, 12, 0, 0)
         };
+        // Кнопки списка выгрузок используют вторичный стиль темы (issue #46):
+        // иначе они рисуются дефолтным стилем и не переключаются с темой.
         var refresh = new Button { Content = T("Common.Refresh"), Width = 100 };
+        refresh.Styled(ControlThemes.SecondaryButton);
         refresh.Click += (_, _) => _vm.Refresh();
 
         _restoreButton.Content = T("Restore.Title");
         _restoreButton.Width = 110;
+        _restoreButton.Styled(ControlThemes.SecondaryButton);
         _restoreButton.IsEnabled = _infobase is not null && _mainVm is not null;
         _restoreButton.Click += async (_, _) => await RestoreSelectedAsync();
 
         var openFolder = new Button { Content = T("Restore.OpenFolder"), Width = 110 };
+        openFolder.Styled(ControlThemes.SecondaryButton);
         openFolder.Click += (_, _) => OpenFolder();
 
         var close = new Button { Content = T("Common.Close"), Width = 90 };
+        close.Styled(ControlThemes.SecondaryButton);
         close.Click += (_, _) => Close();
 
         bottom.Children.Add(refresh);

@@ -146,6 +146,13 @@ namespace Workspace1C
             // не должен удалять базу. Ему отдельный обработчик ниже.
             AddHotkey(_vm.HotkeyEnterprise, _vm.LaunchEnterpriseCommand);
             AddHotkey(_vm.HotkeyConfigurator, _vm.LaunchConfiguratorCommand);
+            // Производные хоткеи запуска (issue #48): Ctrl+хоткей — «с выбором параметров»,
+            // Shift+хоткей — «с аутентификацией». Пусты, если основной назначен
+            // с Shift/Ctrl или вообще не задан — тогда ничего не регистрируется.
+            AddHotkey(_vm.HotkeyEnterpriseWithParams, _vm.LaunchEnterpriseWithParamsCommand);
+            AddHotkey(_vm.HotkeyEnterpriseWithAuth, _vm.LaunchEnterpriseWithAuthCommand);
+            AddHotkey(_vm.HotkeyConfiguratorWithParams, _vm.LaunchConfiguratorWithParamsCommand);
+            AddHotkey(_vm.HotkeyConfiguratorWithAuth, _vm.LaunchConfiguratorWithAuthCommand);
             AddHotkey(_vm.HotkeyEdit, _vm.EditInfobaseCommand);
             AddHotkey(_vm.HotkeyAdd, _vm.AddInfobaseCommand);
             AddHotkey(_vm.HotkeyFavorite, _vm.ToggleFavoriteCommand);

@@ -851,10 +851,10 @@ namespace Workspace1C
                 "LaunchEnterpriseCommand",
                 LocalizationManager.T("Main.LaunchEnterpriseTooltip"),
                 primary: true,
-                new (string, string, string?, string?)[]
+                new (string, string, string?, string?, string?)[]
                 {
-                    (LocalizationManager.T("Main.LaunchWithParams"), "LaunchEnterpriseWithParamsCommand", "IconTune", "#0EA5E9"),
-                    (LocalizationManager.T("Main.LaunchWithAuth"), "LaunchEnterpriseWithAuthCommand", "IconAccountKey", "#8B5CF6")
+                    (LocalizationManager.T("Main.LaunchWithParams"), "LaunchEnterpriseWithParamsCommand", "IconTune", "#0EA5E9", _vm?.HotkeyEnterpriseWithParams),
+                    (LocalizationManager.T("Main.LaunchWithAuth"), "LaunchEnterpriseWithAuthCommand", "IconAccountKey", "#8B5CF6", _vm?.HotkeyEnterpriseWithAuth)
                 });
 
             // Конфигуратор — secondary full-width (без отдельной тяжёлой карточки).
@@ -864,9 +864,10 @@ namespace Workspace1C
                 "LaunchConfiguratorCommand",
                 LocalizationManager.T("Main.LaunchConfiguratorSectionTooltip"),
                 primary: false,
-                new (string, string, string?, string?)[]
+                new (string, string, string?, string?, string?)[]
                 {
-                    (LocalizationManager.T("Main.LaunchWithParams"), "LaunchConfiguratorWithParamsCommand", "IconTune", "#0EA5E9")
+                    (LocalizationManager.T("Main.LaunchWithParams"), "LaunchConfiguratorWithParamsCommand", "IconTune", "#0EA5E9", _vm?.HotkeyConfiguratorWithParams),
+                    (LocalizationManager.T("Main.LaunchWithAuth"), "LaunchConfiguratorWithAuthCommand", "IconAccountKey", "#8B5CF6", _vm?.HotkeyConfiguratorWithAuth)
                 });
 
             // Остальные действия («Очистить кеш», «Изменить настройки», «Удалить»,
@@ -1559,7 +1560,7 @@ namespace Workspace1C
             string commandPath,
             string tooltip,
             bool primary,
-            IReadOnlyList<(string Header, string Command, string? IconKey, string? IconColor)> menuItems)
+            IReadOnlyList<(string Header, string Command, string? IconKey, string? IconColor, string? Gesture)> menuItems)
         {
             var radius = UiMetrics.RadiusLg;
             var mainCorner = new CornerRadius(radius, 0, 0, radius);
@@ -1587,7 +1588,7 @@ namespace Workspace1C
             main.Bind(Button.CommandProperty, new Binding(commandPath));
 
             var menu = new ContextMenu().Styled(Themes.ControlThemes.ModernContextMenu);
-            foreach (var (header, command, itemIcon, itemColor) in menuItems)
+            foreach (var (header, command, itemIcon, itemColor, gesture) in menuItems)
             {
                 if (header.Length == 0)
                 {
@@ -1603,6 +1604,11 @@ namespace Workspace1C
                 if (itemIcon is not null)
                     item.Icon = IconHelper.MakeIcon(itemIcon, 18,
                         itemColor is not null ? new SolidColorBrush(Color.Parse(itemColor)) : Brushes.Gray);
+                // Производный хоткей (issue #48) показывается рядом с пунктом,
+                // как в остальных меню программы; пустая строка — не показываем.
+                if (!string.IsNullOrWhiteSpace(gesture)
+                    && Controls.HotkeyBox.TryParse(gesture, out var parsed) && parsed is not null)
+                    item.InputGesture = parsed;
                 item.Bind(MenuItem.CommandProperty, new Binding(command));
                 menu.Items.Add(item);
             }

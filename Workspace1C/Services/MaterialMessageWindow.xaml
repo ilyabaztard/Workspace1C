@@ -79,6 +79,7 @@
                         Background="Transparent" BorderThickness="1.5"
                         BorderBrush="{DynamicResource BorderBrushColor}"
                         Cursor="Hand" Visibility="Collapsed"
+                        IsCancel="True"
                         Click="OnCancelClick">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">

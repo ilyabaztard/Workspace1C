@@ -117,6 +117,7 @@
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button x:Name="CloseButton" Style="{StaticResource ModernButton}"
                     Background="{DynamicResource ItemHoverBrush}" Padding="12,5" MinWidth="110"
+                    IsCancel="True"
                     Click="OnClose_Click">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Kind="Close" Width="14" Height="14"

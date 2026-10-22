@@ -84,6 +84,7 @@
                 <PasswordBox x:Name="PasswordRevealTextBox" Grid.Column="0" Padding="6,3"
                              Visibility="Collapsed"/>
                 <Button x:Name="ShowPasswordButton" Grid.Column="1" Width="30" Margin="6,0,0,0"
+                        Style="{DynamicResource IconButton}"
                         Content="👁" Click="OnShowPasswordToggle_Click"/>
             </Grid>
         </Grid>

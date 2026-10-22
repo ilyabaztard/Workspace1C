@@ -34,6 +34,10 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>Запуск Конфигуратора с разовыми параметрами командной строки.</summary>
     public ICommand LaunchConfiguratorWithParamsCommand { get; private set; } = null!;
+
+    /// <summary>Запуск Конфигуратора с запросом имени и пароля вместо сохранённых (issue #48).</summary>
+    public ICommand LaunchConfiguratorWithAuthCommand { get; private set; } = null!;
+
     public ICommand EditInfobaseCommand { get; private set; } = null!;
     public ICommand AddInfobaseCommand { get; private set; } = null!;
     public ICommand DeleteInfobaseCommand { get; private set; } = null!;
@@ -104,8 +108,10 @@ public partial class MainViewModel : ViewModelBase
         LaunchEnterpriseCommand = new RelayCommand(_ => Launch(_launchVm.LaunchCommand, LaunchKind.Enterprise), _ => SelectedInfobase is not null);
         LaunchConfiguratorCommand = new RelayCommand(_ => Launch(_launchVm.LaunchCommand, LaunchKind.Configurator), _ => SelectedInfobase is not null);
         LaunchEnterpriseWithParamsCommand = new RelayCommand(_ => LaunchWithParams(LaunchKind.Enterprise), _ => SelectedInfobase is not null);
-        LaunchEnterpriseWithAuthCommand = new RelayCommand(_ => LaunchWithAuth(), _ => SelectedInfobase is not null);
+        LaunchEnterpriseWithAuthCommand = new RelayCommand(_ => LaunchWithAuth(LaunchKind.Enterprise), _ => SelectedInfobase is not null);
         LaunchConfiguratorWithParamsCommand = new RelayCommand(_ => LaunchWithParams(LaunchKind.Configurator), _ => SelectedInfobase is not null);
+        // Запуск Конфигуратора с запросом авторизации (issue #48): SHIFT+хоткей Конфигуратора.
+        LaunchConfiguratorWithAuthCommand = new RelayCommand(_ => LaunchWithAuth(LaunchKind.Configurator), _ => SelectedInfobase is not null);
         EditInfobaseCommand = new RelayCommand(p => EditInfobase(p as Infobase ?? SelectedInfobase), _ => SelectedInfobase is not null);
         AddInfobaseCommand = new RelayCommand(AddInfobase);
         DeleteInfobaseCommand = new RelayCommand(_ => DeleteInfobase(),

@@ -2529,6 +2529,9 @@ namespace Workspace1C
                 Margin = new Thickness(6, 0, 0, 0),
                 Padding = new Thickness(12, 6)
             };
+            // Вторичный стиль темы (issue #46): раньше кнопка «Обзор» рисовалась
+            // дефолтным стилем и не переключалась с темой.
+            screenshotBrowse.Styled(ControlThemes.SecondaryButton);
             screenshotBrowse.Click += (_, _) =>
             {
                 var picked = _viewModel.PickFolder(
@@ -2796,6 +2799,9 @@ namespace Workspace1C
                 Padding = new Thickness(10, 4),
                 Margin = new Thickness(8, 0, 0, 0)
             };
+            // Вторичный стиль темы (issue #46): кнопки резервного копирования профиля
+            // раньше рисовались дефолтным стилем и не переключались с темой.
+            profileBrowse.Styled(ControlThemes.SecondaryButton);
             ToolTip.SetTip(profileBrowse, LocalizationManager.T("Settings.Profile.BrowseTooltip"));
             profileBrowse.Click += (_, _) =>
             {
@@ -2837,6 +2843,7 @@ namespace Workspace1C
                 Content = LocalizationManager.T("Settings.Profile.BackupNow"),
                 Padding = new Thickness(12, 6)
             };
+            backupNow.Styled(ControlThemes.SecondaryButton);
             ToolTip.SetTip(backupNow, LocalizationManager.T("Settings.Profile.BackupNowTooltip"));
             backupNow.Click += (_, _) =>
             {
@@ -2849,6 +2856,7 @@ namespace Workspace1C
                 Content = LocalizationManager.T("Settings.Profile.RestoreNow"),
                 Padding = new Thickness(12, 6)
             };
+            restoreNow.Styled(ControlThemes.SecondaryButton);
             ToolTip.SetTip(restoreNow, LocalizationManager.T("Settings.Profile.RestoreNowTooltip"));
             restoreNow.Click += (_, _) =>
             {

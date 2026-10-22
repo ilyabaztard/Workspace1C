@@ -1096,6 +1096,7 @@ public partial class MainViewModel : ViewModelBase
     public ICommand LaunchEnterpriseWithParamsCommand { get; }
     public ICommand LaunchEnterpriseWithAuthCommand { get; }
     public ICommand LaunchConfiguratorWithParamsCommand { get; }
+    public ICommand LaunchConfiguratorWithAuthCommand { get; }
     public ICommand LaunchNativeStarterCommand { get; }
 
 }

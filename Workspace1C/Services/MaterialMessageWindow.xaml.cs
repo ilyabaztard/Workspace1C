@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Workspace1C.Localization;
 using MaterialDesignThemes.Wpf;
 
@@ -58,6 +59,18 @@ public partial class MaterialMessageWindow : Window
         }
 
         Loaded += (_, _) => { OkButton.Focus(); };
+
+        // ESC закрывает окно и для информационных сообщений (issue #47): у
+        // подтверждений это делает кнопка «Нет» (IsCancel), а в информационных
+        // режимах кнопка отмены скрыта (Visibility.Collapsed).
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape && CancelButton.Visibility != Visibility.Visible)
+            {
+                e.Handled = true;
+                Close();
+            }
+        };
     }
 
     /// <summary>
