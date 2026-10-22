@@ -130,7 +130,22 @@ jobs:
           if [ -f "rel_notes_${ver}.md" ]; then
             cp "rel_notes_${ver}.md" dist/notes.md
           else
-            echo "Workspace 1C ${ver}. Подробности — в CHANGELOG.md." > dist/notes.md
+            # rel_notes_* удалены как дубль CHANGELOG.md — берём раздел «## [<версия>]»
+            # из CHANGELOG.md (до следующего заголовка версии «## [»).
+            awk -v hdr="## [${ver}]" '
+              index($0, hdr) == 1 { found = 1; next }
+              found && /^## \[/ { exit }
+              found { print }
+            ' CHANGELOG.md > dist/section.md
+            if [ -s dist/section.md ]; then
+              { echo "# Workspace 1C ${ver}"; echo; \
+                echo "Релиз доступен для **Windows** (WPF) и **Linux** (Avalonia)."; \
+                cat dist/section.md; echo; \
+                echo "Подробности — в [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md)."; \
+              } > dist/notes.md
+            else
+              echo "Workspace 1C ${ver}. Подробности — в CHANGELOG.md." > dist/notes.md
+            fi
           fi
           echo "version=${ver}" >> "$GITHUB_OUTPUT"
           ls -lh dist/release
