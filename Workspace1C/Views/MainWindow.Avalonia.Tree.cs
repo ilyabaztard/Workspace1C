@@ -1283,8 +1283,9 @@ namespace Workspace1C
                 SessionOption(LocalizationManager.T("Main.SessionClientAutoFull"), "SessionClient", "IsSessionClientAuto"));
             clientOptions.Children.Add(
                 SessionOption(LocalizationManager.T("Main.SessionClientOrdinary"), "SessionClient", "IsSessionClientOrdinary"));
-            // Тултипа «Полный клиент…» нет (issue #45, 1.0.0.52) — детали режима клиента
-            // вынесены прямо в подписи радиокнопок и в подсказку «?» (Main.CurrentSessionHelp).
+            // Тултипа «Полный клиент…» нет (issue #45). Подписи радиокнопок — краткие, без
+            // скобок (1.0.0.53); детали режима клиента (формы, ключи запуска) — только в
+            // подсказке «?» (Main.CurrentSessionHelp).
             clientOptions.Children.Add(
                 SessionOption(LocalizationManager.T("Main.SessionClientThickManaged"), "SessionClient", "IsSessionClientThick"));
             clientOptions.Children.Add(
@@ -1492,7 +1493,10 @@ namespace Workspace1C
                 header.Children.Add(new Controls.HelpLink
                 {
                     Margin = new Thickness(6, 0, 0, 4),
-                    HelpText = LocalizationManager.T(helpKey)
+                    HelpText = LocalizationManager.T(helpKey),
+                    // Справка «Текущая сессия» содержит длинные строки с ключами запуска
+                    // (/RunModeOrdinaryApplication) — подсказка шире стандартной (issue #45).
+                    PopupMaxWidth = helpKey == "Main.CurrentSessionHelp" ? 616 : 460
                 });
             content.Children.Add(header);
 

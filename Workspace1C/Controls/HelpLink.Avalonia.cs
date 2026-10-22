@@ -28,6 +28,19 @@ namespace Workspace1C.Controls
             set => SetValue(HelpTextProperty, value);
         }
 
+        /// <summary>
+        /// Максимальная ширина текста подсказки (по умолчанию 460). Для справок с длинными
+        /// строками (ключи запуска 1С в «Текущая сессия», issue #45) задаётся шире.
+        /// </summary>
+        public static readonly StyledProperty<double> PopupMaxWidthProperty =
+            AvaloniaProperty.Register<HelpLink, double>(nameof(PopupMaxWidth), 460);
+
+        public double PopupMaxWidth
+        {
+            get => GetValue(PopupMaxWidthProperty);
+            set => SetValue(PopupMaxWidthProperty, value);
+        }
+
         private readonly ToggleButton _helpToggle = new();
         private readonly Popup _helpPopup = new();
         private readonly TextBlock _helpBody;
@@ -104,6 +117,7 @@ namespace Workspace1C.Controls
             if (_helpToggle.IsChecked == true)
             {
                 _helpBody.Text = HelpText;
+                _helpBody.MaxWidth = PopupMaxWidth;
                 _helpPopup.IsOpen = true;
             }
             else

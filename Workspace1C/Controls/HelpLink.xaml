@@ -70,7 +70,7 @@
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="12"
-                    MaxWidth="460"
+                    MaxWidth="{Binding PopupMaxWidth, ElementName=Root}"
                     Margin="0,6,0,0"
                     UseLayoutRounding="True">
                 <StackPanel>

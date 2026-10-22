@@ -27,6 +27,24 @@ namespace Workspace1C.Controls
             set => SetValue(HelpTextProperty, value);
         }
 
+        /// <summary>
+        /// Максимальная ширина всплывающей подсказки (по умолчанию 460). Для справок
+        /// с длинными строками (например, ключи запуска 1С в «Текущая сессия», issue #45)
+        /// задаётся шире, чтобы строка не переносилась посередине.
+        /// </summary>
+        public static readonly DependencyProperty PopupMaxWidthProperty =
+            DependencyProperty.Register(
+                nameof(PopupMaxWidth),
+                typeof(double),
+                typeof(HelpLink),
+                new PropertyMetadata(460.0));
+
+        public double PopupMaxWidth
+        {
+            get => (double)GetValue(PopupMaxWidthProperty);
+            set => SetValue(PopupMaxWidthProperty, value);
+        }
+
         private Window? _host;
 
         public HelpLink()

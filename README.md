@@ -1,6 +1,6 @@
 # Workspace 1C
 
-![Версия](https://img.shields.io/badge/Версия-1.0.0.52-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
+![Версия](https://img.shields.io/badge/Версия-1.0.0.53-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
 
 > **Кроссплатформенное десктопное приложение на .NET для управления информационными базами 1С:Предприятие 8.3**, заменяющее стандартный список баз 1С современным интерфейсом. Одна кодовая база собирается под обе ОС: **WPF** на Windows и **Avalonia 11** на Linux.
 
@@ -8,7 +8,7 @@
 
 **Workspace 1C** — новое название программы «Управление конфигурациями 1С». Возможности
 сохранены полностью, нумерация версий начата заново с **1.0.0.0** (последняя версия под
-прежним названием — 0.3.12.70); актуальная версия — **1.0.0.52**.
+прежним названием — 0.3.12.70); актуальная версия — **1.0.0.53**.
 
 ## 📣 Telegram-канал
 
@@ -78,6 +78,7 @@
 | Зелёная точка у имени базы | Показывает, что база сейчас запущена | Не открывать базу второй раз |
 | Кнопка «+» на панели инструментов | Создаёт пустую базу или базу из шаблона .cf и .dt | Завести новую базу |
 | Вкладки «Все / Избранное / Недавние / Запущенные» | Переключение вкладок ускорено: контейнеры строк переиспользуются (1.0.0.31, issue #21); Recycling-пул контейнеров сбрасывается на каждой смене вкладки — память не копится (1.0.0.50, issue #21) | Меньше задержка и память при частом переключении |
+| Блок «Текущая сессия» (правая панель) | Задаёт режим клиента (Авто / Обычное приложение / Толстый клиент / Тонкий клиент) и разрядность только для следующего запуска; подписи — краткие, детали режимов и ключи `/RunModeOrdinaryApplication`, `/RunModeManagedApplication` — в расширенной подсказке «?» (1.0.0.53, issue #45) | Запустить базу разово в другом режиме, не меняя её настроек |
 
 ### Свойства информационной базы
 | Где в программе | Что там делается | Зачем |

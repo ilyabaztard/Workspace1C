@@ -3025,7 +3025,10 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <controls:HelpLink Margin="6,0,0,4"
+                                    <!-- Подсказка шире стандартной: строки с ключами
+                                         /RunModeOrdinaryApplication и /RunModeManagedApplication
+                                         должны помещаться целиком (issue #45). -->
+                                    <controls:HelpLink Margin="6,0,0,4" PopupMaxWidth="640"
                                                        HelpText="{loc:Loc Main.CurrentSessionHelp}"/>
                                 </StackPanel>
                                 <TextBlock Text="{loc:Loc Main.SessionOnceHint}"
