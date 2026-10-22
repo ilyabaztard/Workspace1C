@@ -2836,6 +2836,9 @@ public partial class MainViewModel : ViewModelBase
     /// и сразу подключается, а также выбранный кластер монитора
     /// <paramref name="initialClusterId"/> (issue #25). Логика применения результата —
     /// в общем <see cref="ApplyClusterImportResult"/> (единая для WPF и Avalonia).
+    /// Владелец — активное видимое окно приложения (issue #41): при открытии из
+    /// «Серверы 1С» это само окно монитора, а не отключённый модальным циклом
+    /// MainWindow, иначе окно импорта/миграции оказывалось ПОД «Серверы 1С».
     /// </summary>
     private void ExecuteImportClusterInfobases(
         ManagementServer? initialServer = null, Guid? initialClusterId = null, bool autoConnect = false)
@@ -2848,7 +2851,7 @@ public partial class MainViewModel : ViewModelBase
             autoConnect,
             initialClusterId)
         {
-            Owner = System.Windows.Application.Current.MainWindow
+            Owner = WindowOwnerResolver.ActiveOrMain()
         };
         if (window.ShowDialog() != true)
             return;

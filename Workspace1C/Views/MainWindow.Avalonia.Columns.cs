@@ -782,9 +782,22 @@ namespace Workspace1C
             if (viewport <= 0)
                 return;
 
+            // Guard «полоса не нужна» (issue #21, паритет с WPF): если фактическая полоса
+            // меньше 1px (доли пикселя от округления последней колонки) и расчётная сумма
+            // колонок помещается во вьюпорт (с допуском 1px) — схлопываем контент до
+            // вьюпорта, полоса исчезает. Условие по _listMinWidth защищает анти-регресс
+            // #255: при колонках, реально не помещающихся, полоса нужна и сохраняется.
+            var scrollable = _listScroll.Extent.Width - _listScroll.Viewport.Width;
             var target = Math.Max(_listMinWidth, viewport);
+            if (scrollable < 1 && _listMinWidth <= viewport + 1)
+                target = viewport;
 
-            if (Math.Abs(_listContent.Width - target) > 0.5)
+            // При схлопывании разница может быть меньше обычного порога 0.5 (например,
+            // 1000.3 → 1000) — записываем принудительно, иначе «зависшая» полоса
+            // не исчезла бы (паритет с WPF, issue #21).
+            var collapseToViewport = scrollable < 1 && _listMinWidth <= viewport + 1
+                && target < _listContent.Width - 0.01;
+            if (collapseToViewport || Math.Abs(_listContent.Width - target) > 0.5)
                 _listContent.Width = target;
         }
 

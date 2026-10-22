@@ -343,6 +343,12 @@ namespace Workspace1C
             _viewModel.TreeRebuilding += () =>
             {
                 RememberTreeScroll();
+                // Откладываем запись MinWidth/MaxWidth контента (issue #21): во время
+                // перестроения дерева строки ещё не материализованы, и effective по
+                // промежуточным headerSumNow/viewportNow «залипал» бы (горизонтальная
+                // полоса при переключении на «Недавние»). Финальный проход
+                // TreeMinWidthFinalizeStep фиксирует значение по стабильному кадру.
+                _treeMinWidthDeferred = true;
                 // Замер VM-части чистого переключения вкладки (issue #21, Этап E):
                 // флаг IsListModeSwitchInProgress истинен на время RebuildGroupTreeCore.
                 if (_viewModel.IsListModeSwitchInProgress)
@@ -373,6 +379,9 @@ namespace Workspace1C
                 if (_viewModel.IsRevealNavigationInProgress)
                 {
                     QueueHeaderAlign();
+                    // Финальный проход сходимости ширины после пересборки (issue #21):
+                    // строки материализуются позже, и минимум фиксируется по стабильному кадру.
+                    QueueTreeMinWidthFinalize();
                     return;
                 }
 
@@ -387,6 +396,9 @@ namespace Workspace1C
                 {
                     RestoreTreeKeyboardFocus();
                     QueueHeaderAlign();
+                    // Финальный проход сходимости ширины после пересборки (issue #21):
+                    // строки материализуются позже, и минимум фиксируется по стабильному кадру.
+                    QueueTreeMinWidthFinalize();
                     return;
                 }
 
@@ -466,6 +478,11 @@ namespace Workspace1C
                 // MainTree.SizeChanged после материализации строк.
                 _headerAlignSinglePass = true;
                 QueueHeaderAlign();
+                // Финальный проход сходимости ширины после смены вкладки (issue #21):
+                // строки материализуются виртуализацией в проходе разметки ПОСЛЕ этого
+                // события, поэтому минимум фиксируется по стабильному кадру на
+                // ApplicationIdle, а не по промежуточным headerSumNow/viewportNow.
+                QueueTreeMinWidthFinalize();
                 // Освобождение старых контейнеров (issue #21, 1.0.0.52): панели дерева
                 // работают в VirtualizationMode.Standard (см. MainWindow.xaml) и не
                 // используют Recycling-пул ItemContainerGenerator — контейнеры строк

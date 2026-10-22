@@ -253,4 +253,103 @@ public sealed class ListMinWidthCalculatorTests
         const double viewport = 500;
         Assert.True(totalNarrow <= viewport, "Суженные колонки помещаются — ложной полосы нет.");
     }
+
+    /// <summary>
+    /// Сценарий issue #21 (жалоба 1): переключение на «Недавние» при помещающихся
+    /// колонках. Фактическая сумма заголовка (headerSumNow) отражает текущую ширину
+    /// контента и при «залипшем» MinWidth со старого кадра больше вьюпорта, но
+    /// расчётная сумма колонок (total) помещается — целевая ширина обязана быть
+    /// вьюпортом, а не самоподдерживающейся суммой заголовка.
+    /// </summary>
+    [Fact]
+    public void EffectiveContentWidth_StaleHeaderWiderThanViewport_ColumnsFit_CollapsesToViewport()
+    {
+        const double total = 900;        // колонки помещаются
+        const double viewport = 1000;
+        const double headerSumNow = 1001.5; // контент «залип» шире вьюпорта (старый кадр)
+        const double scrollable = 1.5;   // полоса есть, но колонки помещаются
+
+        var effective = ListMinWidthCalculator.EffectiveContentWidth(
+            total, headerSumNow, viewport, scrollable);
+
+        Assert.Equal(1000, effective);
+    }
+
+    /// <summary>
+    /// Сценарий issue #21 (жалоба 2): «зависший» скролл — все колонки на экране,
+    /// но полоса есть. ScrollableWidth в долях пикселя (0.3), Auto рисует полосу.
+    /// Guard схлопывает контент до вьюпорта.
+    /// </summary>
+    [Fact]
+    public void EffectiveContentWidth_SubPixelScrollable_ColumnsFit_CollapsesToViewport()
+    {
+        const double total = 900;
+        const double viewport = 1000;
+        const double headerSumNow = 1000.3; // контент «залип» на 0.3px шире вьюпорта
+        const double scrollable = 0.3;      // полоса в долях пикселя
+
+        var effective = ListMinWidthCalculator.EffectiveContentWidth(
+            total, headerSumNow, viewport, scrollable);
+
+        Assert.Equal(1000, effective);
+    }
+
+    /// <summary>
+    /// Анти-регресс #255 (issue #21): колонки реально не помещаются (total > viewport + 1),
+    /// а контент временно уже вьюпорта (scrollable = 0) — полоса ОБЯЗАНА появиться,
+    /// guard «полоса не нужна» не должен схлопывать контент.
+    /// </summary>
+    [Fact]
+    public void EffectiveContentWidth_ColumnsDoNotFit_ScrollableZero_KeepsColumnSum()
+    {
+        const double total = 1200;       // колонки не помещаются
+        const double viewport = 1000;
+        const double headerSumNow = 1000; // контент ещё уже вьюпорта (не разложился)
+        const double scrollable = 0;      // полосы пока нет
+
+        var effective = ListMinWidthCalculator.EffectiveContentWidth(
+            total, headerSumNow, viewport, scrollable);
+
+        Assert.Equal(1200, effective);
+    }
+
+    /// <summary>
+    /// Сценарий issue #309: колонки не помещаются, и фактическая сумма заголовка
+    /// (с округлением) больше расчётной — целевая ширина обязана дотягивать до
+    /// последней колонки (максимум из расчётной и фактической суммы).
+    /// </summary>
+    [Fact]
+    public void EffectiveContentWidth_ColumnsDoNotFit_HeaderSumWider_ReachesLastColumn()
+    {
+        const double total = 1000;
+        const double viewport = 999.5;
+        const double headerSumNow = 1000.4; // округление последней колонки
+        const double scrollable = 0.9;      // полоса меньше 1px, но колонки не помещаются
+
+        var effective = ListMinWidthCalculator.EffectiveContentWidth(
+            total, headerSumNow, viewport, scrollable);
+
+        // total > viewport + 1? Нет (1000 <= 1000.5) — guard схлопывает до вьюпорта:
+        // полоса меньше 1px бесполезна, а 0.4px обрезки последней колонки невидимы.
+        Assert.Equal(999.5, effective);
+    }
+
+    /// <summary>
+    /// Сценарий issue #309 (полная версия): колонки не помещаются с запасом больше
+    /// 1px, и фактическая сумма заголовка больше расчётной — целевая ширина равна
+    /// максимуму из них, полоса дотягивает до последней колонки.
+    /// </summary>
+    [Fact]
+    public void EffectiveContentWidth_ColumnsDoNotFitByMargin_HeaderSumWider_KeepsMax()
+    {
+        const double total = 1000;
+        const double viewport = 900;
+        const double headerSumNow = 1000.4;
+        const double scrollable = 100.4; // полоса реальная
+
+        var effective = ListMinWidthCalculator.EffectiveContentWidth(
+            total, headerSumNow, viewport, scrollable);
+
+        Assert.Equal(1000.4, effective);
+    }
 }

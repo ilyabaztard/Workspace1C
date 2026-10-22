@@ -780,6 +780,25 @@ namespace Workspace1C
         private double _lastTreeMinWidth = -1;
 
         /// <summary>
+        /// Отложенная запись MinWidth/MaxWidth контента (issue #21): во время перестроения
+        /// дерева/смены вкладки строки ещё не материализованы, и effective, посчитанный по
+        /// промежуточным headerSumNow/viewportNow, «залипал» бы (горизонтальная полоса
+        /// появлялась при переключении на «Недавние»). Пока флаг истинен,
+        /// <see cref="UpdateTreeMinWidth"/> только кэширует сумму колонок; финальный проход
+        /// <see cref="TreeMinWidthFinalizeStep"/> фиксирует значение по стабильному кадру.
+        /// </summary>
+        private bool _treeMinWidthDeferred;
+
+        /// <summary>Очередь финального прохода сходимости ширины после смены вкладки (issue #21).</summary>
+        private bool _treeMinWidthFinalizeQueued;
+
+        /// <summary>Счётчик итераций финального прохода (защита от бесконечного цикла).</summary>
+        private int _treeMinWidthFinalizeCount;
+
+        /// <summary>Максимум итераций финального прохода, пока строки не материализованы.</summary>
+        private const int TreeMinWidthFinalizeMax = 8;
+
+        /// <summary>
         /// Кэш расчётной суммы минимальной ширины списка без побочных эффектов (issue #343).
         /// Обновляется в <see cref="UpdateTreeMinWidth"/> и используется для решения
         /// о необходимости горизонтальной полосы и в диагностике CM_COLUMNS.
@@ -872,9 +891,20 @@ namespace Workspace1C
             // растягивается на весь вьюпорт, полоса не появляется (анти-регресс #255).
             var headerSumNow = defs.Sum(d => d.ActualWidth);
             var viewportNow = DbListScroll?.ViewportWidth ?? MainTree.ActualWidth;
-            var effective = Math.Max(
-                headerSumNow > viewportNow + 1 ? Math.Max(total, headerSumNow) : total,
-                viewportNow);
+            var scrollableNow = DbListScroll?.ScrollableWidth ?? 0;
+            // Целевая ширина контента: максимум из суммы колонок и вьюпорта с учётом
+            // фактической суммы заголовка (округление) и guard «полоса не нужна»
+            // (issue #21). Расчёт общий с Linux/Avalonia (ListMinWidthCalculator).
+            var effective = ListMinWidthCalculator.EffectiveContentWidth(
+                total, headerSumNow, viewportNow, scrollableNow);
+
+            // Во время перестроения дерева (смена вкладки) НЕ фиксируем промежуточные
+            // значения: строки ещё не материализованы, headerSumNow/viewportNow могут быть
+            // промежуточными, и записанный effective «залипал» бы (issue #21). Сумма колонок
+            // кэширована выше, запись откладывается до финального прохода
+            // TreeMinWidthFinalizeStep по стабильному кадру.
+            if (_treeMinWidthDeferred)
+                return;
 
             // Вертикальный скроллбар вынесен отдельным столбцом вне горизонтальной прокрутки
             // (ListVerticalBar) и ширину контента не съедает, поэтому прежняя компенсация
@@ -890,7 +920,13 @@ namespace Workspace1C
             // зовёт UpdateTreeMinWidth на каждый ScrollChanged, и безусловная запись
             // MinWidth инвалидировала measure даже при том же значении, продлевая цикл
             // listMin → extent → ScrollChanged → listMin.
-            if (Math.Abs(effective - _lastTreeMinWidth) > 0.5)
+            //
+            // Guard «полоса не нужна» (issue #21): при схлопывании контента до вьюпорта
+            // разница может быть меньше обычного порога 0.5 (например, 1000.3 → 1000),
+            // и без принудительной записи «зависшая» полоса не исчезла бы.
+            var collapseToViewport = scrollableNow < 1 && total <= viewportNow + 1
+                && effective < _lastTreeMinWidth - 0.01;
+            if (collapseToViewport || Math.Abs(effective - _lastTreeMinWidth) > 0.5)
             {
                 _lastTreeMinWidth = effective;
                 ListContentGrid.MinWidth = effective;
@@ -1099,6 +1135,55 @@ namespace Workspace1C
                 UpdateTreeMinWidth();
                 SyncHeaderWidthWithList();
             }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>
+        /// Ставит финальный проход сходимости минимальной ширины списка после смены вкладки
+        /// (issue #21): строки материализуются виртуализацией в проходе разметки ПОСЛЕ события
+        /// TreeRebuilt, поэтому пересчёт на ApplicationIdle выполняется по стабильному кадру,
+        /// а не по промежуточным headerSumNow/viewportNow. Повторные вызовы до выполнения
+        /// объединяются в один проход (как <see cref="QueueHeaderAlign"/>).
+        /// </summary>
+        private void QueueTreeMinWidthFinalize()
+        {
+            if (_treeMinWidthFinalizeQueued)
+                return;
+            _treeMinWidthFinalizeQueued = true;
+            _treeMinWidthFinalizeCount = 0;
+            Dispatcher.BeginInvoke(new Action(TreeMinWidthFinalizeStep),
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        }
+
+        /// <summary>
+        /// Один шаг финального прохода сходимости ширины (issue #21): снимает отложенную
+        /// запись (<see cref="_treeMinWidthDeferred"/>) и пересчитывает минимум по стабильному
+        /// кадру — строки уже материализованы, замер контента и сумма колонок актуальны.
+        /// Пока первая строка не появилась (виртуализация достраивает её в следующем проходе),
+        /// отложенная запись СОХРАНЯЕТСЯ (промежуточный effective не фиксируется), а шаг
+        /// повторяется на ApplicationIdle — как <see cref="HeaderAlignStabilizeStep"/>.
+        /// Пустой список (нет элементов вовсе) считается стабильным: строк материализовать
+        /// нечему, и минимум фиксируется сразу.
+        /// </summary>
+        private void TreeMinWidthFinalizeStep()
+        {
+            _treeMinWidthFinalizeQueued = false;
+            _treeMinWidthFinalizeCount++;
+            // Ждём материализации строк: пока первая строка не появилась, раскладка ещё
+            // промежуточная, и запись MinWidth «залипла» бы (issue #21). Пустой список
+            // (нет элементов вовсе) считается стабильным — строк материализовать нечему.
+            var rowsPending = MainTree is not null && MainTree.Items.Count > 0
+                && FindFirstInfobaseItem(MainTree) is null;
+            if (rowsPending && _treeMinWidthFinalizeCount < TreeMinWidthFinalizeMax)
+            {
+                _treeMinWidthFinalizeQueued = true;
+                Dispatcher.BeginInvoke(new Action(TreeMinWidthFinalizeStep),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                return;
+            }
+            // Стабильный кадр: снимаем отложенную запись и фиксируем минимум.
+            _treeMinWidthDeferred = false;
+            UpdateTreeMinWidthContent();
+            UpdateTreeMinWidth();
         }
 
         /// <summary>Спецификация колонки заголовка для расчёта минимальной ширины.</summary>

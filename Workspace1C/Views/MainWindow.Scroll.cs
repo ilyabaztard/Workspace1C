@@ -318,8 +318,12 @@ namespace Workspace1C
             // выполненный по прежней строке, может не дотягивать до реальной ширины (issue #309).
             // Пересчитываем замер только когда полоса реально есть (минимум больше вьюпорта)
             // и верхняя строка сменилась — при помещающихся колонках замер не нужен вовсе.
+            // Во время перестроения дерева (смена вкладки) замер пропускаем: строки ещё не
+            // материализованы, и финальный проход TreeMinWidthFinalizeStep перемерит их по
+            // стабильному кадру (issue #21) — дорогой Measure(Infinity) здесь был бы впустую.
             if (e.ExtentWidthChange != 0
-                && _treeMinWidthTotal > (DbListScroll?.ViewportWidth ?? 0))
+                && _treeMinWidthTotal > (DbListScroll?.ViewportWidth ?? 0)
+                && !_treeMinWidthDeferred)
             {
                 var top = GetTopVisibleRowData();
                 if (!ReferenceEquals(top, _treeMinWidthAnchorData))

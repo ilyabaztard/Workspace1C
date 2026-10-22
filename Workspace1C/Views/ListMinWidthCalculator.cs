@@ -47,5 +47,39 @@ namespace Workspace1C
             return name + SumVisible(leading) + padding * 2 + SumVisible(values);
         }
 
+        /// <summary>
+        /// Целевая ширина контента списка (issue #21): максимум из суммы колонок
+        /// и вьюпорта, с учётом фактической суммы колонок заголовка (округление)
+        /// и guard «полоса не нужна». Общая для WPF и Avalonia, покрыта юнит-тестами.
+        /// </summary>
+        /// <param name="total">Расчётная сумма видимых колонок (<see cref="Compute"/>).</param>
+        /// <param name="headerSumNow">Фактическая сумма <c>ActualWidth</c> колонок заголовка.</param>
+        /// <param name="viewportNow">Ширина вьюпорта внешней прокрутки списка.</param>
+        /// <param name="scrollableWidth">Текущая прокручиваемая ширина (extent − viewport).</param>
+        public static double EffectiveContentWidth(
+            double total, double headerSumNow, double viewportNow, double scrollableWidth)
+        {
+            // Колонки реально не помещаются (расчётная сумма больше вьюпорта): берём
+            // максимум из расчётной и фактической суммы заголовка, чтобы полоса
+            // гарантированно дотягивала до последней колонки (issue #309). Условие
+            // по РАСЧЁТНОЙ сумме, а не по фактической (headerSumNow): фактическая
+            // сумма заголовка отражает текущую ширину контента, и при «залипшем»
+            // MinWidth (старый кадр после смены вкладки) она самоподдерживалась бы,
+            // оставляя полосу при помещающихся колонках (issue #21).
+            var effective = Math.Max(
+                total > viewportNow ? Math.Max(total, headerSumNow) : total,
+                viewportNow);
+
+            // Guard «полоса не нужна» (issue #21): ScrollableWidth в долях пикселя,
+            // а Auto рисует полосу при любом положительном значении. Если полоса
+            // меньше 1px И расчётная сумма колонок помещается во вьюпорт (с допуском
+            // 1px на округление) — схлопываем контент до вьюпорта. Условие по total
+            // защищает анти-регресс #255: при колонках, реально не помещающихся
+            // (total > viewport + 1), полоса нужна, и схлопывание не выполняется.
+            if (scrollableWidth < 1 && total <= viewportNow + 1)
+                effective = viewportNow;
+            return effective;
+        }
+
     }
 }
