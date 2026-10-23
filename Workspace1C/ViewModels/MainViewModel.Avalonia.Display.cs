@@ -292,6 +292,9 @@ public partial class MainViewModel : ViewModelBase
         if (_listMode == mode)
             return;
         _listMode = mode;
+        // Единый режим списка (issue #52): выбранная вкладка сохраняется автоматически.
+        // Старые флаги ниже продолжают писаться для обратной совместимости.
+        _settings.ListMode = mode;
         _settings.ShowFavoritesOnly = mode == "Favorites";
         _settings.ShowRunningOnly = mode == "Running";
         // При включении отбора сразу актуализируем флаги запуска — не дожидаясь таймера.

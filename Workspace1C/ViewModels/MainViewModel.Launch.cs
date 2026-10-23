@@ -592,6 +592,9 @@ public partial class MainViewModel : ViewModelBase
         s.ShowFavoritesOnly = _showFavoritesOnly;
         // Отбор «Только запущенные» (issue #339).
         s.ShowRunningOnly = _showRunningOnly;
+        // Единый режим списка (issue #52): выбранная вкладка сохраняется автоматически.
+        // Старые флаги выше продолжают писаться для обратной совместимости.
+        s.ListMode = ListViewModes.ToSettingString(_listViewMode);
         s.GroupByGroup = _groupByGroup;
         s.ShowEmptyGroups = _showEmptyGroups;
         s.Theme = _savedTheme;

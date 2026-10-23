@@ -152,8 +152,9 @@ public partial class MainViewModel
             _showFavoritesOnly = settings.ShowFavoritesOnly;
             // Отбор «Только запущенные» (issue #339): флаг восстанавливается вместе с режимом списка.
             _showRunningOnly = settings.ShowRunningOnly;
-            if (_showRunningOnly)
-                _listViewMode = ListViewMode.Running;
+            // Единый режим списка (issue #52): восстанавливаем выбранную вкладку, включая
+            // «Недавние». Старые файлы мигрируются в NormalizeForLoad из флагов.
+            _listViewMode = ListViewModes.Parse(settings.ListMode);
             _groupByGroup = settings.GroupByGroup;
             _showEmptyGroups = settings.ShowEmptyGroups;
             _sortField = string.IsNullOrWhiteSpace(settings.SortField) ? "Name" : settings.SortField;

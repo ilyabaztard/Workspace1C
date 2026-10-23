@@ -20,6 +20,15 @@ public class AppSettings
     /// <summary>Показывать только запущенные базы (issue #339).</summary>
     public bool ShowRunningOnly { get; set; }
 
+    /// <summary>
+    /// Единый режим списка главного окна (issue #52): "All" / "Favorites" / "Recent" / "Running".
+    /// Канонические значения — <see cref="ListViewModes"/>. Пустое значение означает «Все базы»
+    /// (обратная совместимость со старыми файлами, где режим задавался флагами
+    /// <see cref="ShowFavoritesOnly"/>/<see cref="ShowRunningOnly"/>; миграция — в
+    /// <see cref="NormalizeListMode"/>).
+    /// </summary>
+    public string ListMode { get; set; } = "";
+
     /// <summary>Группировать базы по группам.</summary>
     public bool GroupByGroup { get; set; } = true;
 
@@ -923,6 +932,28 @@ public class AppSettings
     }
 
     /// <summary>
+    /// Приводит выбор режима списка к актуальному виду (миграция старых настроек, issue #52):
+    /// если <see cref="ListMode"/> пуст — выводит его из устаревших флагов
+    /// <see cref="ShowRunningOnly"/>/<see cref="ShowFavoritesOnly"/> (приоритет «Запущенные»,
+    /// затем «Избранное», иначе «Все базы»). Неизвестные значения заменяются на «Все базы».
+    /// Возвращает итоговую каноническую строку режима.
+    /// </summary>
+    public string NormalizeListMode()
+    {
+        if (string.IsNullOrWhiteSpace(ListMode))
+        {
+            ListMode = ShowRunningOnly
+                ? ListViewModes.Running
+                : ShowFavoritesOnly ? ListViewModes.Favorites : ListViewModes.All;
+        }
+        else
+        {
+            ListMode = ListViewModes.Normalize(ListMode);
+        }
+        return ListMode;
+    }
+
+    /// <summary>
     /// Приводит настройки, загруженные из файла, к безопасному состоянию (issue #64).
     /// В легаси-файлах, созданных более ранними версиями приложения, поля-коллекции
     /// могли отсутствовать либо явно содержать <c>null</c>. Десериализация в таком случае
@@ -962,6 +993,9 @@ public class AppSettings
         FunctionalMode = string.IsNullOrWhiteSpace(FunctionalMode)
             ? Models.FunctionalModes.Default
             : FunctionalMode;
+        // Единый режим списка (issue #52): старые файлы с флагами ShowFavoritesOnly/
+        // ShowRunningOnly мигрируются в ListMode, чтобы обе платформы читали один источник.
+        NormalizeListMode();
     }
 
 }

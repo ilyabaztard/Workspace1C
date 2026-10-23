@@ -324,8 +324,10 @@ public partial class MainViewModel : ViewModelBase
         var settings = _repository.LoadSettings();
         _showFavoritesOnly = settings.ShowFavoritesOnly;
         _groupByGroup = settings.GroupByGroup;
-        if (settings.ShowRunningOnly)
-            _listViewMode = ListViewMode.Running;
+        // Единый режим списка (issue #52): восстанавливаем выбранную вкладку, включая
+        // «Недавние». Старые файлы мигрируются в NormalizeForLoad из флагов
+        // ShowFavoritesOnly/ShowRunningOnly; Parse — страховка от неизвестных значений.
+        _listViewMode = ListViewModes.Parse(settings.ListMode);
         _showEmptyGroups = settings.ShowEmptyGroups;
         _noGroupColor = string.IsNullOrWhiteSpace(settings.NoGroupColor) ? "#6B7280" : settings.NoGroupColor;
         _noGroupIconColor = string.IsNullOrWhiteSpace(settings.NoGroupIconColor) ? "#FFFFFF" : settings.NoGroupIconColor;

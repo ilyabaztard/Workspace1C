@@ -669,11 +669,9 @@ public partial class MainViewModel : ViewModelBase
             _defaultDoubleClickAction = DoubleClickAction.Normalize(_settings.DefaultDoubleClickAction);
             _sortField = string.IsNullOrWhiteSpace(_settings.SortField) ? "Name" : _settings.SortField;
             _sortAscending = _settings.SortAscending;
-            // Вид списка хранится теми же признаками, что и в WPF: «избранные» / «запущенные».
-            if (_settings.ShowRunningOnly)
-                _listMode = "Running";
-            else
-                _listMode = _settings.ShowFavoritesOnly ? "Favorites" : "All";
+            // Вид списка хранится единым полем ListMode (issue #52); старые файлы
+            // мигрируются в NormalizeForLoad из флагов ShowFavoritesOnly/ShowRunningOnly.
+            _listMode = ListViewModes.Normalize(_settings.ListMode);
             _sessionClient = SessionClientFromSetting(_settings.SessionClientMode);
             _sessionArch = SessionArchFromSetting(_settings.SessionArchitecture);
             // «Текущая сессия» учитывается лаунчером первым шагом приоритета

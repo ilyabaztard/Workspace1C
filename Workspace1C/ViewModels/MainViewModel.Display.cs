@@ -190,6 +190,9 @@ public partial class MainViewModel : ViewModelBase
                 {
                     _listModeSwitchInProgress = false;
                 }
+                // Выбранная вкладка запоминается автоматически (issue #52): сохранение
+                // отложенное, как у остальных настроек главной модели.
+                ScheduleSaveSettings();
             }
         }
     }
