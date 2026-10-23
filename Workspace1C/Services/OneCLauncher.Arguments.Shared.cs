@@ -1,5 +1,7 @@
+using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Workspace1C.Models;
 
@@ -45,8 +47,70 @@ public static partial class OneCLauncher
         return auth;
     }
 
+    // ---------------------------------------------------------------------------
+    // «Запуск с аутентификацией» (issue #48, комментарий 7OH 23.10): разовый запрос
+    // имени и пароля. Флаг ставится на конкретную базу и «съедается» первой же
+    // сборкой аргументов для неё. Флаг, а не временная очистка учётных данных базы:
+    // pre-команда может выполняться асинхронно до 30 секунд, и прежнее восстановление
+    // в finally успевало вернуть сохранённые данные раньше фактического запуска; к тому
+    // же очищенные данные успевали сохраниться на диск. Срок жизни ограничен, чтобы
+    // несостоявшийся запуск (не найдена платформа и т.п.) не повлиял на следующий.
+    // ---------------------------------------------------------------------------
+
+    private static readonly ConditionalWeakTable<Infobase, StrongBox<DateTime>> s_authPromptRequests = new();
+
+    /// <summary>Сколько живёт неиспользованный запрос авторизации (pre-команда ждёт до 30 с).</summary>
+    internal static readonly TimeSpan AuthPromptRequestLifetime = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// Ключи авторизации, которые при запуске с аутентификацией не передаются ни из
+    /// параметров базы, ни из 1CLaunch.cfg: имя/пароль и аутентификация ОС.
+    /// </summary>
+    private static readonly string[] AuthPromptSuppressedKeys = { "/N", "/P", "/WA", "/WA+", "/WA-" };
+
+    /// <summary>
+    /// Запрашивает для ближайшего запуска базы ввод имени и пароля: сохранённые
+    /// учётные данные не подставляются, автовход по учётной записи ОС отключается
+    /// ключом <c>/WA-</c> — платформа обязательно спросит пользователя и пароль.
+    /// </summary>
+    public static void RequestAuthPrompt(Infobase infobase)
+    {
+        if (infobase is null)
+            return;
+        s_authPromptRequests.AddOrUpdate(infobase, new StrongBox<DateTime>(DateTime.UtcNow));
+    }
+
+    /// <summary>Снимает неиспользованный запрос авторизации базы.</summary>
+    public static void CancelAuthPrompt(Infobase infobase)
+    {
+        if (infobase is not null)
+            s_authPromptRequests.Remove(infobase);
+    }
+
+    /// <summary>Забирает запрос авторизации базы (true — запрос был и ещё действителен).</summary>
+    internal static bool ConsumeAuthPrompt(Infobase infobase)
+    {
+        if (!s_authPromptRequests.TryGetValue(infobase, out var box))
+            return false;
+        s_authPromptRequests.Remove(infobase);
+        return DateTime.UtcNow - box.Value <= AuthPromptRequestLifetime;
+    }
+
+    private static bool IsAuthPromptSuppressedKey(string key)
+        => AuthPromptSuppressedKeys.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Убирает из строки параметров ключи /N, /P и /WA± (для запуска с аутентификацией).</summary>
+    internal static string StripAuthKeys(string parameters)
+    {
+        var parsed = OneCLaunchArgumentParser.ParseLaunchParameters(parameters);
+        if (!parsed.Any(a => IsAuthPromptSuppressedKey(a.Key)))
+            return parameters;
+        return OneCLaunchArgumentParser.FormatLaunchParameters(
+            parsed.Where(a => !IsAuthPromptSuppressedKey(a.Key)));
+    }
+
     /// <summary>Формирует аргументы командной строки для запуска 1С.</summary>
-    private static string BuildArguments(Infobase infobase, OneCLaunchMode mode, OneCClientType? clientType, OneCRunMode? runMode)
+    internal static string BuildArguments(Infobase infobase, OneCLaunchMode mode, OneCClientType? clientType, OneCRunMode? runMode)
     {
         var modeArg = mode switch
         {
@@ -85,7 +149,12 @@ public static partial class OneCLauncher
         // Конфигуратора/Предприятия (EnterpriseAuth/ConfiguratorAuth), иначе авторизация базы.
         InfobaseAuthResolver.Resolve(infobase, mode, out var authMode, out var authUser, out var authPassword);
 
-        string authArg = authMode switch
+        // Запуск с аутентификацией (issue #48): ни сохранённых имени/пароля, ни входа
+        // по учётной записи ОС — /WA- заставляет платформу спросить имя и пароль, даже
+        // если у пользователя ИБ включена аутентификация операционной системы.
+        var forceAuthPrompt = ConsumeAuthPrompt(infobase);
+
+        string authArg = forceAuthPrompt ? " /WA-" : authMode switch
         {
             AuthenticationMode.Credentials when !string.IsNullOrWhiteSpace(authUser)
                 => BuildCredentialsArg(authUser, authPassword),
@@ -143,9 +212,10 @@ public static partial class OneCLauncher
             }
         }
 
-        var extraArg = string.IsNullOrWhiteSpace(infobase.LaunchParameters)
-            ? ""
-            : " " + infobase.LaunchParameters.Trim();
+        var extraParameters = infobase.LaunchParameters?.Trim() ?? string.Empty;
+        if (forceAuthPrompt && extraParameters.Length > 0)
+            extraParameters = StripAuthKeys(extraParameters).Trim();
+        var extraArg = extraParameters.Length == 0 ? "" : " " + extraParameters;
 
         var arguments = $"{modeArg}{clientArg}{connectionArg}{authArg}{repositoryArg}{externalArg}{extraArg}";
 
@@ -164,6 +234,8 @@ public static partial class OneCLauncher
             foreach (var d in defaults)
             {
                 if (existingKeys.Contains(d.Key))
+                    continue;
+                if (forceAuthPrompt && IsAuthPromptSuppressedKey(d.Key))
                     continue;
                 arguments += d.HasValue ? $" {d.Key} \"{d.Value}\"" : $" {d.Key}";
             }

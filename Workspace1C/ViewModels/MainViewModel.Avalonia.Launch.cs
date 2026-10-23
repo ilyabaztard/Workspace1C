@@ -94,59 +94,21 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Запуск с авторизацией (issue #48): сохранённые имя и пароль на один раз убираются,
-    /// чтобы платформа спросила их сама. Для режима очищаются и отдельные учётные данные
-    /// (Предприятие — <see cref="Infobase.EnterpriseAuth"/>, Конфигуратор —
-    /// <see cref="Infobase.ConfiguratorAuth"/>), иначе лаунчер запустил бы клиент
-    /// с сохранёнными данными. Прежние значения возвращаются всегда.
+    /// Запуск с авторизацией (issue #48): платформа обязательно спрашивает имя и пароль.
+    /// Сохранённые учётные данные (общие и отдельные для режима) не подставляются, ключ
+    /// <c>/WA-</c> отключает автовход по учётной записи ОС — см.
+    /// <see cref="OneCLauncher.RequestAuthPrompt"/>. Учётные данные базы не меняются:
+    /// флаг «съедается» сборкой аргументов, даже если запуск ушёл после асинхронной
+    /// pre-команды (раньше восстановление в finally опережало такой запуск).
     /// </summary>
     private void LaunchWithAuth(LaunchKind kind)
     {
         var infobase = SelectedInfobase;
-        if (infobase?.Connection is not { } connection)
+        if (infobase is null)
             return;
 
-        var savedUser = connection.User;
-        var savedPassword = connection.Password;
-        var savedMode = connection.AuthenticationMode;
-
-        var modeAuth = kind == LaunchKind.Configurator ? infobase.ConfiguratorAuth : infobase.EnterpriseAuth;
-        var savedAuthUser = modeAuth?.User;
-        var savedAuthPassword = modeAuth?.Password;
-        var savedAuthMode = modeAuth?.AuthenticationMode;
-
-        try
-        {
-            connection.User = string.Empty;
-            connection.Password = string.Empty;
-            connection.AuthenticationMode = AuthenticationMode.Prompt;
-
-            if (modeAuth is not null)
-            {
-                modeAuth.User = string.Empty;
-                modeAuth.Password = string.Empty;
-                modeAuth.AuthenticationMode = AuthenticationMode.Prompt;
-            }
-
-            Launch(_launchVm.LaunchCommand, kind);
-        }
-        finally
-        {
-            connection.User = savedUser;
-            connection.Password = savedPassword;
-            connection.AuthenticationMode = savedMode;
-
-            if (modeAuth is not null)
-            {
-                modeAuth.User = savedAuthUser ?? string.Empty;
-                modeAuth.Password = savedAuthPassword ?? string.Empty;
-                modeAuth.AuthenticationMode = savedAuthMode ?? AuthenticationMode.Prompt;
-            }
-
-            // Причина та же, что и у запуска с параметрами: успешный запуск
-            // сохраняет базы изнутри, и пустые учётные данные уже на диске.
-            SaveSilently();
-        }
+        OneCLauncher.RequestAuthPrompt(infobase);
+        Launch(_launchVm.LaunchCommand, kind);
     }
 
     /// <summary>

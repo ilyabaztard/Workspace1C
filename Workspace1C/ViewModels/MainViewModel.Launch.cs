@@ -137,54 +137,35 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Запуск с запросом авторизации (issue #48): сохранённые имя и пароль на один
-    /// раз убираются, чтобы платформа спросила их сама. Для Конфигуратора, у которого
-    /// могут быть отдельные учётные данные (<see cref="Infobase.ConfiguratorAuth"/>),
-    /// очищаются и они. Прежние значения возвращаются всегда.
+    /// Запуск с запросом авторизации (issue #48): платформа обязательно спрашивает имя
+    /// и пароль. Сохранённые учётные данные (общие и отдельные для режима) не
+    /// подставляются, а ключ <c>/WA-</c> отключает автовход по учётной записи ОС —
+    /// см. <see cref="OneCLauncher.RequestAuthPrompt"/>. Учётные данные базы не
+    /// меняются (раньше они временно очищались, и Предприятию всё равно уходили
+    /// отдельные учётные данные режима).
     /// </summary>
     private void LaunchWithAuth(LaunchKind kind)
     {
         if (SelectedInfobase is null) return;
         var ib = SelectedInfobase;
-        var conn = ib.Connection;
-        var savedUser = conn.User;
-        var savedPwd = conn.Password;
-        var savedAuth = conn.AuthenticationMode;
         var mode = kind == LaunchKind.Configurator ? OneCLaunchMode.Configurator : OneCLaunchMode.Enterprise;
-        // Учётные данные очищаются на время запуска (чтобы платформа спросила их сама):
-        // pre-команда выполняется до фактического запуска, восстановление — в finally.
-        _ = LaunchWithAuthCoreAsync(ib, conn, savedUser, savedPwd, savedAuth, mode);
+        _ = LaunchWithAuthCoreAsync(ib, mode);
     }
 
     /// <summary>
-    /// Ядро запуска с запросом авторизации: очистка учётных данных → pre-команда →
-    /// запуск → post-команда; прежние значения восстанавливаются всегда.
+    /// Ядро запуска с запросом авторизации: pre-команда → запуск с флагом запроса
+    /// авторизации → post-команда. Флаг ставится непосредственно перед запуском
+    /// (после pre-команды) и снимается в любом случае.
     /// </summary>
-    private async Task LaunchWithAuthCoreAsync(
-        Infobase ib, ConnectionSettings conn, string savedUser, string savedPwd, AuthenticationMode savedAuth,
-        OneCLaunchMode mode)
+    private async Task LaunchWithAuthCoreAsync(Infobase ib, OneCLaunchMode mode)
     {
-        // Отдельные учётные данные режима (для Конфигуратора — ConfiguratorAuth):
-        // их лаунчер предпочитает общим, поэтому очищаем вместе с ними.
-        var modeAuth = mode == OneCLaunchMode.Configurator ? ib.ConfiguratorAuth : null;
-        var savedModeUser = modeAuth?.User;
-        var savedModePwd = modeAuth?.Password;
-        var savedModeAuth = modeAuth?.AuthenticationMode;
-
         try
         {
-            conn.User = string.Empty;
-            conn.Password = string.Empty;
-            conn.AuthenticationMode = AuthenticationMode.Prompt;
-
-            if (modeAuth is not null)
+            var ok = await RunScriptedLaunchAsync(ib, () =>
             {
-                modeAuth.User = string.Empty;
-                modeAuth.Password = string.Empty;
-                modeAuth.AuthenticationMode = AuthenticationMode.Prompt;
-            }
-
-            var ok = await RunScriptedLaunchAsync(ib, () => _launcher.Launch(ib, mode));
+                OneCLauncher.RequestAuthPrompt(ib);
+                return _launcher.Launch(ib, mode);
+            });
             if (ok)
             {
                 ib.LastLaunchDate = DateTime.Now;
@@ -204,16 +185,7 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
-            conn.User = savedUser;
-            conn.Password = savedPwd;
-            conn.AuthenticationMode = savedAuth;
-
-            if (modeAuth is not null)
-            {
-                modeAuth.User = savedModeUser ?? string.Empty;
-                modeAuth.Password = savedModePwd ?? string.Empty;
-                modeAuth.AuthenticationMode = savedModeAuth ?? AuthenticationMode.Prompt;
-            }
+            OneCLauncher.CancelAuthPrompt(ib);
         }
     }
 
