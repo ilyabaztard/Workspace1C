@@ -32,6 +32,11 @@
     <Color x:Key="TreeSelectedColor">#B45309</Color>
 
     <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}"/>
+    <!-- Поля Material Design (текстовые без стиля ModernTextBox, напр. в ConnectionSettingsWindow)
+         при фокусе рисуют подчёркивание-полосу кистью Primary (BundledTheme Primary=Amber).
+         Приводим её к акценту темы, чтобы подчёркивание следовало выбранной схеме (issue #51).
+         При акценте по умолчанию (янтарный) значение совпадает с Amber — визуально без изменений. -->
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Primary" Color="{DynamicResource AccentColor}"/>
     <SolidColorBrush x:Key="AccentHoverBrush" Color="{DynamicResource AccentHoverColor}"/>
     <SolidColorBrush x:Key="AccentPressedBrush" Color="{DynamicResource AccentPressedColor}"/>
     <SolidColorBrush x:Key="SidebarBrush" Color="{DynamicResource SidebarColor}"/>

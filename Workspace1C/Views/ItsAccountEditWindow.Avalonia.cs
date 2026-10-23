@@ -26,8 +26,9 @@ namespace Workspace1C
         private readonly IDialogService _dialogs = AppServices.GetRequiredService<IDialogService>();
         private readonly string _originalId;
 
-        private readonly TextBox _nameBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
-        private readonly TextBox _loginBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
+        // Поля со стилем ModernTextBox — акцентный контур при фокусе из темы (issue #51).
+        private readonly TextBox _nameBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
+        private readonly TextBox _loginBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
         private readonly PasswordBox _passwordBox = new PasswordBox { Height = 32 }.Styled(ControlThemes.ModernPasswordBox);
 
         /// <summary>Готовая учётная запись при подтверждении, иначе <c>null</c>.</summary>

@@ -90,4 +90,49 @@ public sealed class UnderlineThemeBindingTests
             Assert.DoesNotContain("new SolidColorBrush(Color.Parse(\"#0B6BCB\"))", code);
         }
     }
+
+    [Fact]
+    public void WpfThemes_OverrideMaterialDesignPrimaryWithAccent()
+    {
+        // Issue #51 (продолжение): поля Material Design без стиля ModernTextBox
+        // (ConnectionSettingsWindow, SettingsWindow и др.) при фокусе рисуют полосу
+        // кистью MaterialDesign.Brush.Primary (BundledTheme Primary=Amber — «оранжевая»).
+        // Переопределяем ключ в темах на акцент схемы, чтобы подчёркивание следовало
+        // выбранному пользователем акценту, а не жёсткому янтарю (issue #51).
+        foreach (var name in new[] { "LightTheme.xaml", "DarkTheme.xaml" })
+        {
+            var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Themes", name));
+            Assert.Contains("x:Key=\"MaterialDesign.Brush.Primary\"", xaml);
+            Assert.Contains("Color=\"{DynamicResource AccentColor}\"", xaml);
+        }
+    }
+
+    [Fact]
+    public void ConnectionSettingsWindow_Avalonia_FieldsUseThemeBrushes()
+    {
+        // Поля окна «Настройка информационной базы» (Avalonia) уже стилизованы
+        // ModernTextBox/ModernPasswordBox — при фокусе акцентный контур темы (issue #51).
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ConnectionSettingsWindow.Avalonia.cs"));
+        Assert.Contains(".Styled(ControlThemes.ModernTextBox)", code);
+        Assert.Contains(".Styled(ControlThemes.ModernPasswordBox)", code);
+    }
+
+    [Fact]
+    public void AvaloniaFieldEditors_UseModernTextBox()
+    {
+        // Редакторы записей (сервер, учётная запись ITS, база rac, репозиторий):
+        // поля ввода получают тему ModernTextBox — при фокусе контур из AccentBrush (issue #51).
+        var files = new[]
+        {
+            Path.Combine("Workspace1C", "Views", "ServerEditWindow.Avalonia.cs"),
+            Path.Combine("Workspace1C", "Views", "ItsAccountEditWindow.Avalonia.cs"),
+            Path.Combine("Workspace1C", "Views", "RacInfobaseCreateWindow.Avalonia.cs"),
+            Path.Combine("Workspace1C", "Views", "RepositoryBrowserWindow.Avalonia.cs")
+        };
+        foreach (var file in files)
+        {
+            var code = ReadProjectFile(file);
+            Assert.Contains("ControlThemes.ModernTextBox", code);
+        }
+    }
 }

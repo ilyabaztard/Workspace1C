@@ -99,7 +99,7 @@ namespace Workspace1C
                 PasswordChar = '●',
                 MinWidth = 180,
                 Padding = new Thickness(6, 3)
-            };
+            }.Styled(ControlThemes.ModernTextBox);
 
             var connectPanel = new Grid
             {
@@ -140,7 +140,7 @@ namespace Workspace1C
             {
                 Width = 300,
                 Padding = new Thickness(4, 3)
-            };
+            }.Styled(ControlThemes.ModernTextBox);
             commentBox.Bind(TextBox.TextProperty, new Binding("LockComment"));
             ToolTip.SetTip(commentBox, LocalizationManager.T("RepositoryBrowser.LockCommentHint"));
 

@@ -25,10 +25,12 @@ namespace Workspace1C
         private readonly IDialogService _dialogs = AppServices.GetRequiredService<IDialogService>();
         private readonly string _originalId;
 
-        private readonly TextBox _descriptionBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
-        private readonly TextBox _addressBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
-        private readonly TextBox _portBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
-        private readonly TextBox _userBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
+        // Поля со стилем ModernTextBox — акцентный контур при фокусе из темы (issue #51),
+        // как в WPF-разметке (ServerEditWindow.xaml:32-68).
+        private readonly TextBox _descriptionBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
+        private readonly TextBox _addressBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
+        private readonly TextBox _portBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
+        private readonly TextBox _userBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
         private readonly PasswordBox _passwordBox = new PasswordBox { Height = 32 }.Styled(ControlThemes.ModernPasswordBox);
 
         /// <summary>Готовая запись сервера при подтверждении, иначе <c>null</c>.</summary>

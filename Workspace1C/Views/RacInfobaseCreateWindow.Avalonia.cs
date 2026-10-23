@@ -23,12 +23,14 @@ namespace Workspace1C
     {
         private readonly IDialogService _dialogs = AppServices.GetRequiredService<IDialogService>();
 
-        private readonly TextBox _nameBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
-        private readonly TextBox _descriptionBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
+        // Поля со стилем ModernTextBox — акцентный контур при фокусе из темы (issue #51),
+        // как в WPF-разметке (RacInfobaseCreateWindow.xaml:32-88).
+        private readonly TextBox _nameBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
+        private readonly TextBox _descriptionBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
         private readonly ComboBox _dbmsBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
-        private readonly TextBox _dbServerBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
-        private readonly TextBox _dbNameBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
-        private readonly TextBox _dbUserBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
+        private readonly TextBox _dbServerBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
+        private readonly TextBox _dbNameBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
+        private readonly TextBox _dbUserBox = new TextBox { Height = 32, VerticalContentAlignment = VerticalAlignment.Center }.Styled(ControlThemes.ModernTextBox);
         private readonly PasswordBox _dbPasswordBox = new PasswordBox { Height = 32 }.Styled(ControlThemes.ModernPasswordBox);
         private readonly ComboBox _localeBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
         private readonly ComboBox _securityLevelBox = new() { Height = 32, VerticalContentAlignment = VerticalAlignment.Center };
