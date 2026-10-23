@@ -277,7 +277,12 @@ public partial class MainViewModel : ViewModelBase
         // После «ОК» окно настроек могло изменить «Дополнение заголовка программы»
         // (issue #28) — пересобираем заголовок главного окна.
         if (Application.Current?.MainWindow is MainWindow main)
+        {
             main.RefreshWindowTitle();
+            // Правка структуры контекстного меню (issue #56) могла измениться в настройках
+            // (ContextMenuEditingEnabled) — контекстное меню дерева пересобирается кодом.
+            main.RebuildRowContextMenu();
+        }
     }
 
     /// <summary>

@@ -42,6 +42,10 @@ namespace Workspace1C
         /// <summary>Разделитель перед подменю действий: управляется вместе с ним.</summary>
         private Separator? _customActionsSeparator;
 
+        /// <summary>Блок «Для выделенных (N)…» контекстного меню дерева (0.3.9.90):
+        /// заголовок и видимость обновляет Opening (issue #56).</summary>
+        private MenuItem? _batchMenu;
+
         /// <summary>Строит строку дерева: заголовок группы или карточку базы.</summary>
         private Control BuildTreeRow(object? item)
         {
@@ -1995,48 +1999,298 @@ namespace Workspace1C
             var menu = new ContextMenu().Styled(Themes.ControlThemes.ModernContextMenu);
             if (_vm is null)
                 return menu;
+            _customActionsMenu = null;
+            _customActionsSeparator = null;
+            _batchMenu = null;
 
-            // Контекстное меню строки базы перестроено в подменю (issue #287): чтобы
-            // уменьшить высоту меню, группы команд свернуты в подменю «Обновление и связь»,
-            // «Администрирование», «Резервирование» и «Очистить кэш». Хоткеи (issue #290)
-            // сохранены на прежних пунктах.
-            menu.Items.Add(MenuAction("Main.LaunchEnterprise", _vm.LaunchEnterpriseCommand, _vm.HotkeyEnterprise, "IconPlay", "#22C55E"));
-            menu.Items.Add(MenuAction("Main.LaunchConfigurator", _vm.LaunchConfiguratorCommand, _vm.HotkeyConfigurator, "IconSettings", "#3B82F6"));
-            // «Выполнить скрипт» (issue #308): запуск выбранного сценария для базы (F5).
-            menu.Items.Add(MenuAction("Script.RunTitle", _vm.RunScriptForSelectedCommand, _vm.HotkeyRunScript, "IconScript", "#06B6D4"));
+            // Компоновка контекстного меню базы (issue #56): стандартная при выключенной
+            // правке структуры (обратная совместимость: меню выглядит как раньше — структура,
+            // хоткеи, batch-блок, пользовательские действия) или пользовательская из
+            // context_menu_layout.json при включённой (ContextMenuEditingEnabled).
+            // «Новинки программы» (issue #4) и Essential-пункты («Пользовательские действия»,
+            // «Для выделенных») гарантируются резолвером.
+            var store = AppServices.TryGetService<IContextMenuLayoutStore>();
+            var layout = ContextMenuResolver.PrepareForMenu(ContextMenuResolver.Resolve(_vm.Settings, store));
+            if (layout is null)
+                return menu;
 
-            // Подменю «Пользовательские действия…» (0.3.9.198, функция 7): наполнение —
-            // в Opening по единой логике BuildCustomActionMenuItems (как WPF). Разделитель
-            // перед подменю управляется кодом вместе с ним; ниже идёт обычный разделитель
-            // перед «Избранное», как в WPF-разметке (MainWindow.xaml:2450-2455). Иконка —
-            // IconScript (как у «Выполнить скрипт»): IconCodeBraces в Icons.axaml нет.
-            _customActionsSeparator = MenuSeparator();
-            _customActionsSeparator.IsVisible = false;
-            menu.Items.Add(_customActionsSeparator);
-            _customActionsMenu = new MenuItem
+            AppendRowAvaloniaNodes(menu.Items, layout.Root);
+
+            // Заголовок «Для выделенных (N)…» актуален на момент открытия: клики
+            // Ctrl/Shift меняют набор между открытиями меню, а само меню живёт
+            // долго (одно на всё дерево), поэтому обновляем его в Opening.
+            // В режиме «Пользователь» пакетные операции — системные, как в WPF.
+            // Пользовательские действия (0.3.9.198) перестраиваются так же каждый раз.
+            menu.Opening += (_, _) =>
             {
-                Header = LocalizationManager.T("Main.CustomActionsMenu"),
-                Icon = MenuIcon("IconScript", "#06B6D4"),
-                IsVisible = false
+                var count = _vm?.BatchOperationTargetCount ?? 0;
+                var restricted = _vm?.IsSystemMenuRestricted ?? false;
+                if (_batchMenu is not null)
+                {
+                    // Счёт целей включает и одну выделенную базу без Ctrl (issue #53):
+                    // пакетный блок виден при count >= 1 (в режиме «Пользователь» — системный).
+                    _batchMenu.Header = _vm?.BatchMenuTitle ?? _batchMenu.Header;
+                    _batchMenu.IsVisible = !restricted && count >= 1;
+                }
+                if (_customActionsMenu is not null)
+                {
+                    // Контекст/действия/цели могли измениться с прошлого открытия
+                    // (выделение, приватность, правки окна настроек) — подменю
+                    // перестраивается каждый раз, как batch-блок.
+                    PopulateCustomActionsMenu();
+                }
             };
-            _customActionsMenu.Styled(Themes.ControlThemes.ModernMenuItem);
-            menu.Items.Add(_customActionsMenu);
 
-            menu.Items.Add(MenuSeparator());
-            menu.Items.Add(MenuAction("Main.ToFavorites", _vm.ToggleFavoriteCommand, _vm.HotkeyFavorite, "IconStar", "#FBBF24"));
-            menu.Items.Add(MenuAction("Main.Pin", _vm.TogglePinCommand, _vm.HotkeyPin, "IconPin", "#8B5CF6"));
-            menu.Items.Add(MenuSeparator());
-            menu.Items.Add(MenuAction("Main.AddBase", _vm.AddInfobaseCommand, _vm.HotkeyAdd, "IconAdd", "#22C55E"));
+            return menu;
+        }
 
-            // Мультивыделение (0.3.9.90): блок пакетных операций. Виден при N >= 1:
-            // кроме Ctrl/Shift-набора цель — одна выделенная база без Ctrl (issue #53).
-            // Заголовок и видимость обновляет Opening меню.
-            var batchMenu = new MenuItem
+        /// <summary>Рекурсивно добавляет узлы компоновки контекстного меню в целевой
+        /// список пунктов меню (issue #56); аналог <see cref="AppendAvaloniaNodes"/>
+        /// для меню «Утилиты».</summary>
+        private void AppendRowAvaloniaNodes(ItemCollection target, List<ContextMenuNode> nodes)
+        {
+            if (nodes is null || target is null)
+                return;
+            Separator? lastSeparator = null;
+            foreach (var node in nodes)
             {
-                Header = _vm.BatchMenuTitle,
-                Icon = MenuIcon("IconTag", "#8B5CF6"),
-                IsVisible = false
-            };
+                if (node is null || !node.Visible)
+                    continue;
+                if (node.SeparatorBefore && target.Count > 0)
+                {
+                    var s = MenuSeparator();
+                    target.Add(s);
+                    lastSeparator = s;
+                }
+                if (string.Equals(node.Kind, "separator", StringComparison.Ordinal))
+                {
+                    // Узел-разделитель (issue #374): отдельный элемент дерева компоновки.
+                    if (target.Count > 0)
+                    {
+                        var s = MenuSeparator();
+                        target.Add(s);
+                        lastSeparator = s;
+                    }
+                    continue;
+                }
+                if (string.Equals(node.Kind, "group", StringComparison.Ordinal))
+                {
+                    var sub = new MenuItem
+                    {
+                        Header = RowAvaloniaGroupTitle(node),
+                        Icon = RowAvaloniaGroupIcon(node)
+                    };
+                    sub.Styled(Themes.ControlThemes.ModernMenuItem);
+                    AppendRowAvaloniaNodes(sub.Items, node.Children);
+                    target.Add(sub);
+                }
+                else
+                {
+                    var item = CreateRowAvaloniaItem(node);
+                    if (item is null)
+                        continue;
+                    var catalog = ContextMenuCatalog.Find(node.ItemId);
+                    if (catalog?.CommandKind == ContextMenuCommandKind.CustomActions)
+                    {
+                        _customActionsMenu = item;
+                        _customActionsSeparator = lastSeparator;
+                        if (_customActionsSeparator is not null)
+                            _customActionsSeparator.IsVisible = false;
+                    }
+                    target.Add(item);
+                }
+            }
+        }
+
+        /// <summary>Заголовок группы контекстного меню: пользовательский или локализованный стандартный.</summary>
+        private string RowAvaloniaGroupTitle(ContextMenuNode node)
+        {
+            if (!string.IsNullOrWhiteSpace(node.CustomTitle))
+                return node.CustomTitle!;
+            var key = ContextMenuCatalog.GroupTitleKey(node.GroupId ?? string.Empty);
+            return string.IsNullOrEmpty(key) ? string.Empty : LocalizationManager.T(key);
+        }
+
+        /// <summary>Иконка группы контекстного меню: из компоновки → стандартная каталога.</summary>
+        private static Control? RowAvaloniaGroupIcon(ContextMenuNode node)
+        {
+            var iconKey = !string.IsNullOrWhiteSpace(node.IconKey)
+                ? node.IconKey!
+                : ContextMenuCatalog.GroupAvaloniaIconKey(node.GroupId ?? string.Empty);
+            var color = !string.IsNullOrWhiteSpace(node.IconColor)
+                ? node.IconColor!
+                : ContextMenuCatalog.GroupIconColor(node.GroupId ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(iconKey) || string.IsNullOrWhiteSpace(color))
+                return null;
+            return MenuIcon(iconKey, color);
+        }
+
+        /// <summary>Создаёт пункт контекстного меню по узлу-ссылке на пункт каталога
+        /// (null — неизвестный пункт или платформенный фильтр).</summary>
+        private MenuItem? CreateRowAvaloniaItem(ContextMenuNode node)
+        {
+            var catalogItem = ContextMenuCatalog.Find(node.ItemId);
+            if (catalogItem is null)
+                return null;
+            // Платформенные фильтры: «Зарегистрировать COM-коннектор» — только Windows/WPF
+            // (в Linux регистрировать нечего); «История запусков» — сервиса запусков
+            // на Linux нет (прежнее поведение Avalonia-меню).
+            if (catalogItem.CommandKind is ContextMenuCommandKind.RegisterComConnector
+                or ContextMenuCommandKind.LaunchHistory)
+                return null;
+
+            var item = new MenuItem { Header = LocalizationManager.T(catalogItem.TextKey) };
+            item.Styled(Themes.ControlThemes.ModernMenuItem);
+
+            // Иконки пунктов (пара «ключ Icon* → цвет») воспроизводят прежнее
+            // Avalonia-меню v1.0.0.66 (обратная совместимость при выключенной правке).
+            var (iconKey, iconColor) = RowAvaloniaItemIcon(catalogItem.CommandKind);
+            if (!string.IsNullOrWhiteSpace(iconKey) && !string.IsNullOrWhiteSpace(iconColor))
+                item.Icon = MenuIcon(iconKey, iconColor);
+
+            var gesture = AvaloniaRowHotkey(catalogItem.HotkeyKey);
+            if (Controls.HotkeyBox.TryParse(gesture, out var parsed) && parsed is not null)
+                item.InputGesture = parsed;
+
+            // Динамические узлы стартуют скрытыми (как в прежнем меню): видимость
+            // устанавливает Opening (batch-блок, пользовательские действия).
+            if (catalogItem.CommandKind is ContextMenuCommandKind.CustomActions
+                or ContextMenuCommandKind.BatchOperations)
+                item.IsVisible = false;
+
+            ApplyRowAvaloniaCommand(item, catalogItem);
+            return item;
+        }
+
+        /// <summary>Иконки пунктов контекстного меню (Avalonia): прежние пары «ключ/цвет»
+        /// из BuildRowContextMenu v1.0.0.66; null — без иконки (как было в Avalonia-меню).</summary>
+        private static (string? Icon, string? Color) RowAvaloniaItemIcon(ContextMenuCommandKind kind) => kind switch
+        {
+            ContextMenuCommandKind.LaunchEnterprise => ("IconPlay", "#22C55E"),
+            ContextMenuCommandKind.LaunchConfigurator => ("IconSettings", "#3B82F6"),
+            ContextMenuCommandKind.RunScript => ("IconScript", "#06B6D4"),
+            ContextMenuCommandKind.CustomActions => ("IconScript", "#06B6D4"),
+            ContextMenuCommandKind.ToFavorites => ("IconStar", "#FBBF24"),
+            ContextMenuCommandKind.Pin => ("IconPin", "#8B5CF6"),
+            ContextMenuCommandKind.AddBase => ("IconAdd", "#22C55E"),
+            ContextMenuCommandKind.RefreshConfigInfo => ("IconCloudDownload", "#14B8A6"),
+            ContextMenuCommandKind.CheckUpdate => ("IconCloudDownload", "#14B8A6"),
+            ContextMenuCommandKind.SessionLock => ("IconRights", "#EF4444"),
+            ContextMenuCommandKind.NetworkDiagnostics => ("IconNetwork", "#3B82F6"),
+            ContextMenuCommandKind.OpenInfobaseFolder => ("IconFolderOpen", "#0EA5E9"),
+            ContextMenuCommandKind.CloneBase => ("IconCopy", "#14B8A6"),
+            ContextMenuCommandKind.CheckIntegrity => ("IconDatabase", "#10B981"),
+            ContextMenuCommandKind.DumpToDt => ("IconDatabaseExport", "#0EA5E9"),
+            ContextMenuCommandKind.DumpConfigToCf => ("IconFileExport", "#3B82F6"),
+            ContextMenuCommandKind.Delete => ("IconDelete", "#EF4444"),
+            ContextMenuCommandKind.FindInList => ("IconSearch", "#3B82F6"),
+            ContextMenuCommandKind.CreateDesktopShortcut => ("IconDesktopClassic", "#6366F1"),
+            ContextMenuCommandKind.CopyConnectionString => ("IconCopy", "#06B6D4"),
+            ContextMenuCommandKind.EditSettings => ("IconEdit", "#3B82F6"),
+            _ => (null, null) // ConfigLink/ShowExportsList/кэш-пункты — без иконки (как было)
+        };
+
+        /// <summary>Хоткей пункта контекстного меню по имени свойства MainViewModel (из каталога).</summary>
+        private string? AvaloniaRowHotkey(string? hotkeyKey)
+        {
+            if (string.IsNullOrWhiteSpace(hotkeyKey))
+                return null;
+            switch (hotkeyKey)
+            {
+                case "HotkeyEnterprise": return _vm?.HotkeyEnterprise;
+                case "HotkeyConfigurator": return _vm?.HotkeyConfigurator;
+                case "HotkeyRunScript": return _vm?.HotkeyRunScript;
+                case "HotkeyFavorite": return _vm?.HotkeyFavorite;
+                case "HotkeyPin": return _vm?.HotkeyPin;
+                case "HotkeyAdd": return _vm?.HotkeyAdd;
+                case "HotkeyCheckUpdate": return _vm?.HotkeyCheckUpdate;
+                case "HotkeySessionLock": return _vm?.HotkeySessionLock;
+                case "HotkeyCheckIntegrity": return _vm?.HotkeyCheckIntegrity;
+                case "HotkeyExportsList": return _vm?.HotkeyExportsList;
+                case "HotkeyClearCache": return _vm?.HotkeyClearCache;
+                case "HotkeyDelete": return _vm?.HotkeyDelete;
+                case "HotkeyFindInList": return _vm?.HotkeyFindInList;
+                case "HotkeyEdit": return _vm?.HotkeyEdit;
+                default: return null;
+            }
+        }
+
+        /// <summary>Привязывает команду/действие к пункту контекстного меню (Avalonia).</summary>
+        private void ApplyRowAvaloniaCommand(MenuItem item, ContextMenuItem catalogItem)
+        {
+            switch (catalogItem.CommandKind)
+            {
+                case ContextMenuCommandKind.LaunchEnterprise:
+                    item.Command = _vm!.LaunchEnterpriseCommand; break;
+                case ContextMenuCommandKind.LaunchConfigurator:
+                    item.Command = _vm!.LaunchConfiguratorCommand; break;
+                case ContextMenuCommandKind.RunScript:
+                    item.Command = _vm!.RunScriptForSelectedCommand; break;
+                case ContextMenuCommandKind.CustomActions:
+                    break; // динамическое подменю — наполняется в Opening
+                case ContextMenuCommandKind.ToFavorites:
+                    item.Command = _vm!.ToggleFavoriteCommand; break;
+                case ContextMenuCommandKind.Pin:
+                    item.Command = _vm!.TogglePinCommand; break;
+                case ContextMenuCommandKind.AddBase:
+                    item.Command = _vm!.AddInfobaseCommand; break;
+                case ContextMenuCommandKind.BatchOperations:
+                    PopulateRowAvaloniaBatchMenu(item); break; // блок «Для выделенных (N)…»
+                case ContextMenuCommandKind.RefreshConfigInfo:
+                    item.Command = _vm!.RefreshConfigurationInfoCommand; break;
+                case ContextMenuCommandKind.CheckUpdate:
+                    item.Command = _vm!.CheckUpdateCommand; break;
+                case ContextMenuCommandKind.ConfigLink:
+                    item.Click += (_, _) =>
+                    {
+                        if (_vm!.SelectedInfobase is not null)
+                            _vm.OpenConfigUpdateLink(_vm.SelectedInfobase);
+                    }; break;
+                case ContextMenuCommandKind.SessionLock:
+                    item.Command = _vm!.ShowSessionLockCommand; break;
+                case ContextMenuCommandKind.RegisterComConnector:
+                    break; // не строится на Linux (фильтр CreateRowAvaloniaItem)
+                case ContextMenuCommandKind.NetworkDiagnostics:
+                    item.Command = _vm!.NetworkDiagnosticsCommand; break;
+                case ContextMenuCommandKind.OpenInfobaseFolder:
+                    item.Command = _vm!.OpenInfobaseFolderCommand; break;
+                case ContextMenuCommandKind.CloneBase:
+                    item.Command = _vm!.CloneInfobaseCommand; break;
+                case ContextMenuCommandKind.CheckIntegrity:
+                    item.Command = _vm!.CheckIntegrityCommand; break;
+                case ContextMenuCommandKind.LaunchHistory:
+                    break; // команды нет на Linux (фильтр CreateRowAvaloniaItem)
+                case ContextMenuCommandKind.DumpToDt:
+                    item.Command = _vm!.DumpInfobaseDtCommand; break;
+                case ContextMenuCommandKind.DumpConfigToCf:
+                    item.Command = _vm!.DumpConfigurationCfCommand; break;
+                case ContextMenuCommandKind.ShowExportsList:
+                    item.Command = _vm!.ShowExportsListCommand; break;
+                case ContextMenuCommandKind.ClearProgramCache:
+                    item.Command = _vm!.ClearProgramCacheCommand; break;
+                case ContextMenuCommandKind.ClearUserCache:
+                    item.Command = _vm!.ClearUserCacheCommand; break;
+                case ContextMenuCommandKind.ClearCacheBoth:
+                    item.Command = _vm!.ClearCacheBothCommand; break;
+                case ContextMenuCommandKind.Delete:
+                    item.Command = _vm!.DeleteInfobaseCommand; break;
+                case ContextMenuCommandKind.FindInList:
+                    item.Command = _vm!.FindInListCommand; break;
+                case ContextMenuCommandKind.CreateDesktopShortcut:
+                    item.Command = _vm!.CreateDesktopShortcutCommand; break;
+                case ContextMenuCommandKind.CopyConnectionString:
+                    item.Command = _vm!.CopyConnectionStringCommand; break;
+                case ContextMenuCommandKind.EditSettings:
+                    item.Command = _vm!.EditInfobaseCommand; break;
+            }
+        }
+
+        /// <summary>Наполняет блок «Для выделенных (N)…» (мультивыделение, 0.3.9.90) —
+        /// состав прежнего Avalonia-меню (MainWindow.Avalonia.Tree.cs:2034–2050).</summary>
+        private void PopulateRowAvaloniaBatchMenu(MenuItem batchMenu)
+        {
+            batchMenu.Header = _vm?.BatchMenuTitle ?? LocalizationManager.T("Main.BatchForSelected");
+            batchMenu.Icon = MenuIcon("IconTag", "#8B5CF6");
             batchMenu.Styled(Themes.ControlThemes.ModernMenuItem);
             batchMenu.Items.Add(BatchMenuAction("Main.BatchAssignTag", OnBatchAssignTagClick, "IconTag", "#14B8A6"));
             batchMenu.Items.Add(BatchMenuAction("Main.BatchMoveToGroup", OnBatchMoveToGroupClick, "IconFolder", "#0EA5E9"));
@@ -2047,123 +2301,7 @@ namespace Workspace1C
             // «найти → заменить на» по полям строк подключения выделенных баз.
             batchMenu.Items.Add(BatchMenuAction("Main.BatchConnectionReplace", OnBatchConnectionReplaceClick, "IconFindReplace", "#F59E0B"));
             batchMenu.Items.Add(BatchMenuAction("Main.BatchDelete", OnBatchDeleteClick, "IconDelete", "#EF4444"));
-            menu.Items.Add(batchMenu);
-
-            // Заголовок «Для выделенных (N)…» актуален на момент открытия: клики
-            // Ctrl/Shift меняют набор между открытиями меню, а само меню живёт
-            // долго (одно на всё дерево), поэтому обновляем его в Opening.
-            // В режиме «Пользователь» пакетные операции — системные, как в WPF.
-            menu.Opening += (_, _) =>
-            {
-                // Счёт целей включает и одну выделенную базу без Ctrl (issue #53):
-                // пакетный блок виден при count >= 1 (в режиме «Пользователь» — системный).
-                var count = _vm?.BatchOperationTargetCount ?? 0;
-                var restricted = _vm?.IsSystemMenuRestricted ?? false;
-                batchMenu.Header = _vm?.BatchMenuTitle ?? batchMenu.Header;
-                batchMenu.IsVisible = !restricted && count >= 1;
-
-                // Пользовательские действия (0.3.9.198): контекст/действия/цели могли
-                // измениться с прошлого открытия (выделение, приватность, правки окна
-                // настроек) — подменю перестраивается каждый раз, как batch-блок.
-                PopulateCustomActionsMenu();
-            };
-
-            menu.Items.Add(MenuSeparator());
-
-            // Подменю «Обновление и связь»: обновление информации о конфигурации, проверка
-            // обновлений и привязка базы к конфигурации (issue #287).
-            var updateMenu = new MenuItem
-            {
-                Header = LocalizationManager.T("Menu.UpdateAndLink"),
-                Icon = MenuIcon("IconRefresh", "#14B8A6")
-            };
-            updateMenu.Styled(Themes.ControlThemes.ModernMenuItem);
-            updateMenu.Items.Add(MenuAction("Main.RefreshConfigInfo", _vm.RefreshConfigurationInfoCommand, null, "IconCloudDownload", "#14B8A6"));
-            // Проверка обновлений конфигураций 1С (функции №21/№22): F9 — для выбранной
-            // ИБ, ALT+F9 — окно «Актуальные релизы». Сочетания показываются из настроек.
-            updateMenu.Items.Add(MenuAction("Updates.CheckTitle", _vm.CheckUpdateCommand, _vm.HotkeyCheckUpdate, "IconCloudDownload", "#14B8A6"));
-            updateMenu.Items.Add(MenuSeparator());
-            // «Актуальные релизы» перенесено в общее подменю «Утилиты» верхней панели (issue #262).
-            var linkItem = new MenuItem { Header = LocalizationManager.T("Updates.ConfigLink") };
-            linkItem.Styled(Themes.ControlThemes.ModernMenuItem);
-            linkItem.Click += (_, _) =>
-            {
-                if (_vm.SelectedInfobase is not null)
-                    _vm.OpenConfigUpdateLink(_vm.SelectedInfobase);
-            };
-            updateMenu.Items.Add(linkItem);
-            menu.Items.Add(updateMenu);
-
-            // Подменю «Администрирование»: блокировки, каталог и проверка целостности (issue #287).
-            // «Зарегистрировать COM-коннектор» и «История запусков» здесь нет намеренно:
-            // внешнее соединение это COM, в Linux регистрировать нечего, а история запусков
-            // ждёт порта сервисов запуска.
-            var adminMenu = new MenuItem
-            {
-                Header = LocalizationManager.T("Menu.Administration"),
-                Icon = MenuIcon("IconServer", "#EF4444")
-            };
-            adminMenu.Styled(Themes.ControlThemes.ModernMenuItem);
-            // Блокировка сеансов файловой ИБ (функция №20, Ctrl+Alt+L). Временная
-            // блокировка приложения (функция №19) перенесена в «Утилиты» (issue #294).
-            adminMenu.Items.Add(MenuAction("SessionLock.Title", _vm.ShowSessionLockCommand, _vm.HotkeySessionLock, "IconRights", "#EF4444"));
-            adminMenu.Items.Add(MenuSeparator());
-            // Диагностика сети до сервера 1С (функция 12): DNS/ICMP/TCP-проверка хоста
-            // и портов 1540/1541/1545 с выводами по проблемам. CanExecute — только для
-            // клиент-серверной и веб-базы (файловая — пункт гаснет).
-            adminMenu.Items.Add(MenuAction("Main.NetworkDiagnostics", _vm.NetworkDiagnosticsCommand, null, "IconNetwork", "#3B82F6"));
-            adminMenu.Items.Add(MenuAction("Main.OpenCatalog", _vm.OpenInfobaseFolderCommand, null, "IconFolderOpen", "#0EA5E9"));
-            // Дублирование базы (0.3.9.100, функция №10): файловая ИБ — копия каталога,
-            // клиент-серверная — клон на сервере; для запущенной базы пункт гаснет (CanExecute).
-            adminMenu.Items.Add(MenuAction("Clone.Title", _vm.CloneInfobaseCommand, null, "IconCopy", "#14B8A6"));
-            // Администрирование ИБ (Этап 6, функция №29): проверка целостности файловой ИБ
-            // (chdbfl). Консоль серверов перенесена в «Утилиты» (issue #287).
-            adminMenu.Items.Add(MenuAction("Admin.CheckIntegrity", _vm.CheckIntegrityCommand, _vm.HotkeyCheckIntegrity, "IconDatabase", "#10B981"));
-            menu.Items.Add(adminMenu);
-
-            // Подменю «Резервирование»: выгрузки и список выгрузок (issue #287).
-            // «Сценарии резервирования» и «Выполнить резервирование» перенесены в общее
-            // меню «Утилиты» (issue #293); «Список выгрузок» (функция №18, Ctrl+Shift+F7)
-            // остаётся здесь.
-            var backupMenu = new MenuItem
-            {
-                Header = LocalizationManager.T("Menu.Backup"),
-                Icon = MenuIcon("IconDatabaseExport", "#0EA5E9")
-            };
-            backupMenu.Styled(Themes.ControlThemes.ModernMenuItem);
-            backupMenu.Items.Add(MenuAction("Main.DumpToDt", _vm.DumpInfobaseDtCommand, null, "IconDatabaseExport", "#0EA5E9"));
-            backupMenu.Items.Add(MenuAction("Main.DumpConfigToCf", _vm.DumpConfigurationCfCommand, null, "IconFileExport", "#3B82F6"));
-            backupMenu.Items.Add(MenuSeparator());
-            backupMenu.Items.Add(MenuAction("Restore.Title", _vm.ShowExportsListCommand, _vm.HotkeyExportsList, null, null));
-            menu.Items.Add(backupMenu);
-
-            // Подменю «Очистить кэш»: три варианта очистки. Сочетание Ctrl+Shift+C (открытие
-            // окна очистки обоих кешей) показано на пункте «Программный и пользовательский».
-            var cacheMenu = new MenuItem
-            {
-                Header = LocalizationManager.T("Main.ClearCache"),
-                Icon = MenuIcon("IconBroom", "#14B8A6")
-            };
-            cacheMenu.Styled(Themes.ControlThemes.ModernMenuItem);
-            cacheMenu.Items.Add(MenuAction("Main.ClearProgramCache", _vm.ClearProgramCacheCommand));
-            cacheMenu.Items.Add(MenuAction("Main.ClearUserCache", _vm.ClearUserCacheCommand));
-            cacheMenu.Items.Add(MenuSeparator());
-            cacheMenu.Items.Add(MenuAction("Main.ClearCacheBoth", _vm.ClearCacheBothCommand, _vm.HotkeyClearCache));
-            menu.Items.Add(cacheMenu);
-
-            // «Удалить» отделён разделителями сверху и снизу, как в issue #242 (соответствует WPF).
-            menu.Items.Add(MenuSeparator());
-            menu.Items.Add(MenuAction("Main.Delete", _vm.DeleteInfobaseCommand, _vm.HotkeyDelete, "IconDelete", "#EF4444"));
-            menu.Items.Add(MenuSeparator());
-            // «Найти в списке»: переход к базе в общем списке «Все базы» (issue #285).
-            menu.Items.Add(MenuAction("Main.FindInList", _vm.FindInListCommand, _vm.HotkeyFindInList, "IconSearch", "#3B82F6"));
-            menu.Items.Add(MenuAction("Main.DesktopShortcut", _vm.CreateDesktopShortcutCommand, null, "IconDesktopClassic", "#6366F1"));
-            menu.Items.Add(MenuAction("Main.CopyConnectionString", _vm.CopyConnectionStringCommand, null, "IconCopy", "#06B6D4"));
-            menu.Items.Add(MenuSeparator());
-            // «Изменить настройки» (аналог «Свойств» в ОС) размещён внизу меню,
-            // после разделителя, как в issue #242 (соответствует WPF).
-            menu.Items.Add(MenuAction("Main.EditSettings", _vm.EditInfobaseCommand, _vm.HotkeyEdit, "IconEdit", "#3B82F6"));
-            return menu;
+            _batchMenu = batchMenu;
         }
 
         /// <summary>

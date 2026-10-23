@@ -76,6 +76,17 @@ public partial class MainViewModel : ViewModelBase
         set => _settings.UtilitiesMenuEditingEnabled = value;
     }
 
+    /// <summary>
+    /// Разрешить правку структуры контекстного меню базы (issue #56). По умолчанию
+    /// выключено — контекстное меню строится по стандартной компоновке (обратная
+    /// совместимость).
+    /// </summary>
+    public bool ContextMenuEditingEnabled
+    {
+        get => _settings.ContextMenuEditingEnabled;
+        set => _settings.ContextMenuEditingEnabled = value;
+    }
+
     /// <summary>Глобальное действие по двойному щелчку на базе (функция №28 StartManager).</summary>
     private string _defaultDoubleClickAction = DoubleClickAction.GlobalDefault;
 

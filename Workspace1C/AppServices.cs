@@ -116,6 +116,10 @@ public static class AppServices
         // utilities_menu_layout.json рядом с настройками, по образцу CustomActionsStore.
         // Чистый сервис — без UI-зависимостей.
         services.AddSingleton<IUtilitiesMenuLayoutStore, UtilitiesMenuLayoutStore>();
+        // Компоновка контекстного меню базы (issue #56): пользовательская структура
+        // контекстного меню — context_menu_layout.json рядом с настройками, по образцу
+        // UtilitiesMenuLayoutStore. Чистый сервис — без UI-зависимостей.
+        services.AddSingleton<IContextMenuLayoutStore, ContextMenuLayoutStore>();
         // Обозреватель хранилища конфигурации (цикл 0.3.9.127–0.3.9.130): пакетные операции
         // хранилища через DESIGNER (выгрузка версии .cf, отчёт по истории, захват/отмена
         // захвата) + состав версии. Чистый сервис — без UI-зависимостей.

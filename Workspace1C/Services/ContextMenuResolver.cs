@@ -1,0 +1,180 @@
+using System.Collections.Generic;
+using Workspace1C.Models;
+
+namespace Workspace1C.Services;
+
+/// <summary>
+/// Резолвер компоновки контекстного меню базы (issue #56): выбирает эффективную
+/// компоновку по настройкам (правка включена/выключена), собирает «новинки
+/// программы» и гарантирует наличие Essential-пунктов. Платформенно-нейтральная
+/// логика, общая для построителей WPF и Avalonia.
+/// </summary>
+public static class ContextMenuResolver
+{
+    /// <summary>
+    /// Возвращает компоновку для построения меню:
+    /// <list type="bullet">
+    /// <item>правка выключена (по умолчанию) — стандартная компоновка (обратная совместимость);</item>
+    /// <item>правка включена и файл компоновки есть — пользовательская компоновка;</item>
+    /// <item>правка включена, файла нет — стандартная компоновка (файл создаст редактор).</item>
+    /// </list>
+    /// </summary>
+    public static ContextMenuLayout Resolve(AppSettings? settings, IContextMenuLayoutStore? store)
+    {
+        if (settings is null || !settings.ContextMenuEditingEnabled)
+            return ContextMenuLayouts.Default();
+        var layout = store?.Load();
+        return layout ?? ContextMenuLayouts.Default();
+    }
+
+    /// <summary>
+    /// Готовит компоновку к построению: гарантирует наличие Essential-пунктов
+    /// (см. <see cref="EnsureEssentialItems"/>) и группы «Новинки программы»
+    /// (см. <see cref="EnsureNewItemsGroup"/>). Вызывается построителями меню
+    /// WPF и Avalonia после <see cref="Resolve"/>.
+    /// </summary>
+    public static ContextMenuLayout PrepareForMenu(ContextMenuLayout layout)
+    {
+        if (layout is null)
+            return ContextMenuLayouts.Default();
+        return EnsureNewItemsGroup(EnsureEssentialItems(layout)) ?? layout;
+    }
+
+    /// <summary>
+    /// Гарантирует наличие в компоновке Essential-пунктов каталога
+    /// («Пользовательские действия» и «Для выделенных (N)…» — от них зависят
+    /// функция 7 и пакетные операции; issue #56). Если пункт отсутствует,
+    /// он добавляется в конец корневого списка (видимость по умолчанию true);
+    /// при переносе/перемещении пользователем пункт сохраняет своё местоположение.
+    /// </summary>
+    public static ContextMenuLayout? EnsureEssentialItems(ContextMenuLayout? layout)
+    {
+        if (layout is null)
+            return layout;
+        layout.Root ??= new List<ContextMenuNode>();
+        var present = new HashSet<string>();
+        CollectItemIds(layout.Root, present);
+        foreach (var item in ContextMenuCatalog.All)
+        {
+            if (item.Essential && !present.Contains(item.Id))
+                layout.Root.Add(new ContextMenuNode { Kind = "item", ItemId = item.Id });
+        }
+        return layout;
+    }
+
+    /// <summary>
+    /// Собирает «новинки программы»: пункты каталога с <see cref="ContextMenuItem.IsNew"/>,
+    /// отсутствующие в компоновке (по <c>ItemId</c>). Такие пункты автоматически попадают
+    /// в подменю «Новинки программы» в конце меню, пока пользователь не разместит их
+    /// в редакторе структуры.
+    /// </summary>
+    public static IReadOnlyList<ContextMenuItem> CollectNewItems(ContextMenuLayout layout)
+    {
+        var present = new HashSet<string>();
+        CollectItemIds(layout?.Root, present);
+        var result = new List<ContextMenuItem>();
+        foreach (var item in ContextMenuCatalog.All)
+        {
+            if (item.IsNew && !present.Contains(item.Id))
+                result.Add(item);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Гарантирует наличие группы «Новинки программы» в компоновке (issue #4): если
+    /// в каталоге есть пункты с признаком «новинка», отсутствующие в компоновке, они
+    /// добавляются в группу <see cref="ContextMenuCatalog.GroupNewItems"/>. Группа
+    /// создаётся в конце корня, если её нет в компоновке; если она уже есть — используется
+    /// её текущее местоположение (пользователь может менять только его).
+    /// <para>
+    /// Видимость группы в рабочем меню определяется НАЛИЧИЕМ пунктов, а не галочкой
+    /// в редакторе структуры: при наличии неразмещённых новинок группа принудительно
+    /// видима (скрытие в редакторе не влияет на отображение), при их отсутствии —
+    /// скрывается, даже если в файле компоновки она помечена видимой.
+    /// </para>
+    /// </summary>
+    public static ContextMenuLayout? EnsureNewItemsGroup(ContextMenuLayout? layout)
+    {
+        if (layout is null)
+            return null;
+        var newItems = CollectNewItems(layout);
+        if (newItems.Count == 0)
+        {
+            // Новых пунктов нет — группа «Новинки программы» в рабочем меню не показывается
+            // (issue #4): видимость определяется наличием пунктов, а не галочкой в редакторе.
+            var emptyGroup = FindGroup(layout.Root, ContextMenuCatalog.GroupNewItems);
+            if (emptyGroup is not null)
+                emptyGroup.Visible = false;
+            return layout;
+        }
+
+        var existing = FindGroup(layout.Root, ContextMenuCatalog.GroupNewItems);
+        if (existing is not null)
+        {
+            // Группа уже есть (пользователь мог её переместить) — добавляем в неё
+            // отсутствующие пункты и принудительно включаем видимость.
+            existing.Visible = true;
+            var present = new HashSet<string>();
+            CollectItemIds(existing.Children, present);
+            foreach (var item in newItems)
+            {
+                if (!present.Contains(item.Id))
+                    existing.Children.Add(new ContextMenuNode { Kind = "item", ItemId = item.Id });
+            }
+            return layout;
+        }
+
+        // Группы нет — создаём в конце корня с разделителем перед ней (как в меню).
+        var group = new ContextMenuNode
+        {
+            Kind = "group",
+            GroupId = ContextMenuCatalog.GroupNewItems,
+            Visible = true,
+            SeparatorBefore = true,
+        };
+        foreach (var item in newItems)
+            group.Children.Add(new ContextMenuNode { Kind = "item", ItemId = item.Id });
+        layout.Root.Add(group);
+        return layout;
+    }
+
+    /// <summary>Ищет группу с указанным <c>GroupId</c> в дереве (рекурсивно, включая вложенные).</summary>
+    private static ContextMenuNode? FindGroup(IEnumerable<ContextMenuNode>? nodes, string groupId)
+    {
+        if (nodes is null)
+            return null;
+        foreach (var node in nodes)
+        {
+            if (node is null)
+                continue;
+            if (string.Equals(node.Kind, "group", StringComparison.Ordinal) &&
+                string.Equals(node.GroupId, groupId, StringComparison.Ordinal))
+            {
+                return node;
+            }
+            var found = FindGroup(node.Children, groupId);
+            if (found is not null)
+                return found;
+        }
+        return null;
+    }
+
+    /// <summary>Собирает все ItemId узлов дерева (включая вложенные группы).</summary>
+    public static void CollectItemIds(IEnumerable<ContextMenuNode>? nodes, HashSet<string> target)
+    {
+        if (nodes is null || target is null)
+            return;
+        foreach (var node in nodes)
+        {
+            if (node is null)
+                continue;
+            if (string.Equals(node.Kind, "item", StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(node.ItemId))
+            {
+                target.Add(node.ItemId!);
+            }
+            CollectItemIds(node.Children, target);
+        }
+    }
+}

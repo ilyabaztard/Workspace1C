@@ -40,6 +40,9 @@ namespace Workspace1C
         /// <summary>Чекбокс «Правка структуры меню „Утилиты“» (issue #374): читается в «Сохранить».</summary>
         private ToggleButton? _utilitiesMenuEditingCheck;
 
+        /// <summary>Чекбокс «Правка структуры контекстного меню» (issue #56): читается в «Сохранить».</summary>
+        private ToggleButton? _contextMenuEditingCheck;
+
         /// <summary>Пара «подпись режима функциональности — канонический код» для списка выбора (issue #263).</summary>
         private sealed class FunctionalModeOption
         {
@@ -3286,6 +3289,8 @@ namespace Workspace1C
                 _viewModel.ConfirmCustomActions = confirmCustomActionsCheck.IsChecked == true;
                 // Правка структуры меню «Утилиты» (issue #374).
                 _viewModel.UtilitiesMenuEditingEnabled = _utilitiesMenuEditingCheck?.IsChecked == true;
+                // Правка структуры контекстного меню базы (issue #56).
+                _viewModel.ContextMenuEditingEnabled = _contextMenuEditingCheck?.IsChecked == true;
 
                 // Порог предупреждения «Свободно на диске» в Центре обслуживания (0.3.9.96).
                 if (int.TryParse(freeSpaceWarningBox.Text, out var freeSpaceWarningGb))
@@ -4289,6 +4294,13 @@ namespace Workspace1C
         private Control BuildUtilitiesMenuTab()
         {
             var panel = new StackPanel { Spacing = 6 };
+
+            // Общее описание вкладки (issue #56): здесь настраиваются и меню «Утилиты»,
+            // и контекстное меню базы.
+            panel.Children.Add(Hint(LocalizationManager.T("Settings.UtilitiesMenu.Hint"), bottom: 10));
+
+            // Меню «Утилиты» (issue #374).
+            panel.Children.Add(GroupSectionHeader("Settings.UtilitiesMenu.GroupTitle"));
             _utilitiesMenuEditingCheck = SettingsSwitch(
                 "Settings.UtilitiesMenu.EditingEnabled", _viewModel.UtilitiesMenuEditingEnabled,
                 "IconApps", "#3B82F6", "Settings.UtilitiesMenu.EditingEnabledTooltip");
@@ -4318,9 +4330,49 @@ namespace Workspace1C
             editButton.Click += (_, _) => OpenUtilitiesMenuEditor();
             panel.Children.Add(editButton);
 
-            panel.Children.Add(Hint(LocalizationManager.T("Settings.UtilitiesMenu.Hint"), bottom: 0));
+            // Контекстное меню базы (issue #56).
+            panel.Children.Add(GroupSectionHeader("Settings.ContextMenu.GroupTitle"));
+            _contextMenuEditingCheck = SettingsSwitch(
+                "Settings.ContextMenu.EditingEnabled", _viewModel.ContextMenuEditingEnabled,
+                "IconApps", "#8B5CF6", "Settings.ContextMenu.EditingEnabledTooltip");
+            _contextMenuEditingCheck.Margin = new Thickness(0, 0, 0, 6);
+            panel.Children.Add(_contextMenuEditingCheck);
+
+            var contextEditButton = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6,
+                    Children =
+                    {
+                        IconHelper.MakeIcon("IconApps", 16, "TextPrimaryBrush"),
+                        new TextBlock
+                        {
+                            Text = LocalizationManager.T("Settings.ContextMenu.EditButton"),
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
+                    }
+                },
+                Padding = new Thickness(12, 7),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            contextEditButton.Styled(ControlThemes.ModernButton);
+            contextEditButton.Click += (_, _) => OpenContextMenuEditor();
+            panel.Children.Add(contextEditButton);
+
+            panel.Children.Add(Hint(LocalizationManager.T("Settings.ContextMenu.Hint"), bottom: 0));
             return panel;
         }
+
+        /// <summary>Заголовок раздела вкладки «Правка меню» (вторичный цвет, как GroupBox-заголовки).</summary>
+        private static TextBlock GroupSectionHeader(string textKey) => new()
+        {
+            Text = LocalizationManager.T(textKey),
+            Margin = new Thickness(0, 8, 0, 0),
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.Parse("#94A3B8"))
+        };
 
         /// <summary>Открывает редактор структуры меню «Утилиты» (issue #374).</summary>
         private void OpenUtilitiesMenuEditor()
@@ -4329,6 +4381,21 @@ namespace Workspace1C
             {
                 var store = AppServices.TryGetService<IUtilitiesMenuLayoutStore>();
                 var win = new UtilitiesMenuEditorWindow(store);
+                win.ShowDialogSync(this);
+            }
+            catch
+            {
+                // Не критично: редактор не открылся — настройка останется прежней.
+            }
+        }
+
+        /// <summary>Открывает редактор структуры контекстного меню базы (issue #56).</summary>
+        private void OpenContextMenuEditor()
+        {
+            try
+            {
+                var store = AppServices.TryGetService<IContextMenuLayoutStore>();
+                var win = new ContextMenuEditorWindow(store);
                 win.ShowDialogSync(this);
             }
             catch

@@ -37,11 +37,12 @@ namespace Workspace1C
         /// </summary>
         private void PopulateCustomActionsMenu(ContextMenu menu)
         {
-            if (_viewModel == null || !menu.Items.Contains(CustomActionsMenu))
+            if (_viewModel == null || _customActionsMenu is null || !menu.Items.Contains(_customActionsMenu))
             {
                 HideCustomActionsBlock();
                 return;
             }
+            var actionsMenu = _customActionsMenu;
 
             CustomActionContext context;
             string header;
@@ -79,11 +80,11 @@ namespace Workspace1C
             // Индикация выполнения: заголовок показывает текст текущего действия,
             // пункты действий недоступны (повторный запуск блокируется и в VM).
             var running = _viewModel.IsCustomActionRunning;
-            CustomActionsMenu.Header = running && !string.IsNullOrEmpty(_viewModel.RunningCustomActionText)
+            actionsMenu.Header = running && !string.IsNullOrEmpty(_viewModel.RunningCustomActionText)
                 ? _viewModel.RunningCustomActionText
                 : header;
 
-            CustomActionsMenu.Items.Clear();
+            actionsMenu.Items.Clear();
             foreach (var action in actions)
             {
                 var item = new MenuItem
@@ -97,10 +98,10 @@ namespace Workspace1C
                 item.Icon = CreateCustomActionIcon();
                 var captured = action;
                 item.Click += async (_, _) => await _viewModel.ExecuteCustomActionAsync(captured, context);
-                CustomActionsMenu.Items.Add(item);
+                actionsMenu.Items.Add(item);
             }
 
-            CustomActionsMenu.Items.Add(new Separator());
+            actionsMenu.Items.Add(new Separator());
 
             var settingsItem = new MenuItem
             {
@@ -110,19 +111,20 @@ namespace Workspace1C
             };
             settingsItem.Icon = CreateCustomActionSettingsIcon();
             settingsItem.Click += (_, _) => _viewModel.ShowCustomActionsSettingsCommand.Execute(null);
-            CustomActionsMenu.Items.Add(settingsItem);
+            actionsMenu.Items.Add(settingsItem);
 
-            CustomActionsMenu.Visibility = Visibility.Visible;
-            CustomActionsSeparator.Visibility = Visibility.Visible;
+            actionsMenu.Visibility = Visibility.Visible;
+            if (_customActionsSeparator is not null)
+                _customActionsSeparator.Visibility = Visibility.Visible;
         }
 
         /// <summary>Скрывает подменю и его разделитель (нет контекста, действий или целей).</summary>
         private void HideCustomActionsBlock()
         {
-            if (CustomActionsMenu != null)
-                CustomActionsMenu.Visibility = Visibility.Collapsed;
-            if (CustomActionsSeparator != null)
-                CustomActionsSeparator.Visibility = Visibility.Collapsed;
+            if (_customActionsMenu != null)
+                _customActionsMenu.Visibility = Visibility.Collapsed;
+            if (_customActionsSeparator != null)
+                _customActionsSeparator.Visibility = Visibility.Collapsed;
         }
 
         /// <summary>Стиль пункта контекстного меню из тем; при сбое — стандартный вид.</summary>

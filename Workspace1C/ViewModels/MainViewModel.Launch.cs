@@ -691,6 +691,8 @@ public partial class MainViewModel : ViewModelBase
         s.ConfirmCustomActions = _confirmCustomActions;
         // Правка структуры меню «Утилиты» (issue #374).
         s.UtilitiesMenuEditingEnabled = _utilitiesMenuEditingEnabled;
+        // Правка структуры контекстного меню базы (issue #56).
+        s.ContextMenuEditingEnabled = _contextMenuEditingEnabled;
         s.CompactMode = _compactMode;
         s.ExplorerIntegrationEnabled = _explorerIntegrationEnabled;
         // Автозапуск при старте ОС (функция №31) и копия экрана (функция №30, Этап 8).

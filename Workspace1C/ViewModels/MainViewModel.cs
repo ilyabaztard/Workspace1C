@@ -236,6 +236,23 @@ public partial class MainViewModel : ViewModelBase
         set => SetProperty(ref _utilitiesMenuEditingEnabled, value);
     }
 
+    /// <summary>
+    /// Разрешить правку структуры контекстного меню базы (issue #56). По умолчанию
+    /// выключено — контекстное меню строится по стандартной компоновке (обратная
+    /// совместимость).
+    /// </summary>
+    private bool _contextMenuEditingEnabled;
+
+    /// <summary>
+    /// Разрешить правку структуры контекстного меню базы (issue #56). По умолчанию
+    /// выключено — меню строится по стандартной компоновке (обратная совместимость).
+    /// </summary>
+    public bool ContextMenuEditingEnabled
+    {
+        get => _contextMenuEditingEnabled;
+        set => SetProperty(ref _contextMenuEditingEnabled, value);
+    }
+
     private string _sortField = "Name";
     private bool _sortAscending = true;
     /// <summary>Направление сортировки подгрупп по имени (true — А→Я, false — Я→А).</summary>
@@ -388,6 +405,9 @@ public partial class MainViewModel : ViewModelBase
         // Правка структуры меню «Утилиты» (issue #374): по умолчанию выключена —
         // меню строится по стандартной компоновке (обратная совместимость).
         _utilitiesMenuEditingEnabled = settings.UtilitiesMenuEditingEnabled;
+        // Правка структуры контекстного меню базы (issue #56): по умолчанию выключена —
+        // меню строится по стандартной компоновке (обратная совместимость).
+        _contextMenuEditingEnabled = settings.ContextMenuEditingEnabled;
         _comConnectorNameTemplate = settings.ComConnectorNameTemplate ?? "";
         // Кэш шаблона в коннекторе заполняем сразу, а не ленивым чтением файла (issue #175):
         // иначе результат зависел бы от того, случилось ли COM-чтение до смены активного

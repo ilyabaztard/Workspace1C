@@ -1994,19 +1994,47 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
-                        <CheckBox x:Name="UtilitiesMenuEditingCheck" Content="{loc:Loc Settings.UtilitiesMenu.EditingEnabled}"
-                                  Margin="0,0,0,8"/>
-                        <Button Click="OnUtilitiesMenuEdit_Click" Style="{StaticResource ModernButton}"
-                                HorizontalAlignment="Left" Padding="12,7" Margin="0,0,0,12">
-                            <StackPanel Orientation="Horizontal">
-                                <materialDesign:PackIcon Kind="Tune" Width="16" Height="16" Margin="0,0,6,0"
-                                    VerticalAlignment="Center"/>
-                                <TextBlock Text="{loc:Loc Settings.UtilitiesMenu.EditButton}" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
+                        <!-- Общее описание вкладки (issue #56): здесь настраиваются и меню
+                             «Утилиты», и контекстное меню базы. -->
                         <TextBlock Text="{loc:Loc Settings.UtilitiesMenu.Hint}"
                                    Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                   TextWrapping="Wrap" Margin="0,0,12,0"/>
+                                   TextWrapping="Wrap" Margin="0,0,12,12"/>
+
+                        <!-- Меню «Утилиты» (issue #374) -->
+                        <GroupBox Header="{loc:Loc Settings.UtilitiesMenu.GroupTitle}" Padding="8">
+                            <StackPanel>
+                                <CheckBox x:Name="UtilitiesMenuEditingCheck" Content="{loc:Loc Settings.UtilitiesMenu.EditingEnabled}"
+                                          Margin="0,0,0,8"/>
+                                <Button Click="OnUtilitiesMenuEdit_Click" Style="{StaticResource ModernButton}"
+                                        HorizontalAlignment="Left" Padding="12,7">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Tune" Width="16" Height="16" Margin="0,0,6,0"
+                                            VerticalAlignment="Center"/>
+                                        <TextBlock Text="{loc:Loc Settings.UtilitiesMenu.EditButton}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Контекстное меню базы (issue #56) -->
+                        <GroupBox Header="{loc:Loc Settings.ContextMenu.GroupTitle}" Padding="8" Margin="0,14,0,0">
+                            <StackPanel>
+                                <CheckBox x:Name="ContextMenuEditingCheck" Content="{loc:Loc Settings.ContextMenu.EditingEnabled}"
+                                          ToolTip="{loc:Loc Settings.ContextMenu.EditingEnabledTooltip}"
+                                          ToolTipService.ShowDuration="20000" Margin="0,0,0,8"/>
+                                <Button x:Name="ContextMenuEditButton" Click="OnContextMenuEdit_Click" Style="{StaticResource ModernButton}"
+                                        HorizontalAlignment="Left" Padding="12,7" Margin="0,0,0,4">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Apps" Width="16" Height="16" Margin="0,0,6,0"
+                                            VerticalAlignment="Center"/>
+                                        <TextBlock Text="{loc:Loc Settings.ContextMenu.EditButton}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <TextBlock Text="{loc:Loc Settings.ContextMenu.Hint}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                                           TextWrapping="Wrap" Margin="0,6,12,0"/>
+                            </StackPanel>
+                        </GroupBox>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

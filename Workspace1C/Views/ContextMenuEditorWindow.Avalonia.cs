@@ -1,0 +1,338 @@
+#if LINUX
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Styling;
+using Workspace1C.Localization;
+using Workspace1C.Models;
+using Workspace1C.Services;
+using Workspace1C.Themes;
+using Workspace1C.ViewModels;
+
+namespace Workspace1C
+{
+    /// <summary>
+    /// Редактор структуры контекстного меню базы (issue #56): Avalonia/Linux-версия
+    /// окна <see cref="ContextMenuEditorWindow"/> (WPF). Дерево компоновки с
+    /// перемещением пунктов (вверх/вниз/в группу/в корень), отключением, группировкой,
+    /// разделителями, сбросом к стандартной компоновке и сохранением/загрузкой в файл
+    /// <c>context_menu_layout.json</c>. Упрощённый вариант редактора меню «Утилиты»
+    /// (issue #374): без блока «Иконки» (иконки пунктов фиксированы каталогом).
+    /// </summary>
+    public partial class ContextMenuEditorWindow : ModalWindowBase
+    {
+        private readonly ContextMenuEditorViewModel _vm;
+        private readonly TreeView _tree = new();
+        private readonly ComboBox _groupCombo = new ComboBox().Styled(ControlThemes.ModernComboBox);
+
+        /// <param name="store">Хранилище компоновки (или null — редактирование без сохранения).</param>
+        public ContextMenuEditorWindow(IContextMenuLayoutStore? store)
+        {
+            Title = LocalizationManager.T("ContextMenu.Editor.Title");
+            Width = 760;
+            Height = 560;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+
+            _vm = new ContextMenuEditorViewModel(store);
+            DataContext = _vm;
+            Content = BuildLayout();
+
+            if (_vm.Groups.Count > 0)
+                _vm.SelectedGroup = _vm.Groups[0];
+        }
+
+        /// <summary>Компоновка после редактирования (актуальна после «Готово»).</summary>
+        public ContextMenuLayout Layout => _vm.Layout;
+
+        private Control BuildLayout()
+        {
+            var dock = new DockPanel { Margin = new Thickness(16) };
+
+            // Кнопки «Готово»/«Отмена» внизу (issue #56): «Готово» слева, «Отмена»
+            // справа — как в остальных окнах программы (отмена всегда в конце).
+            var buttons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Spacing = 8
+            };
+            buttons.Children.Add(BuildConfirmButton(
+                LocalizationManager.T("ContextMenu.Editor.Done"), 130, OnOkClick));
+            buttons.Children.Add(BuildCancelButton(110));
+            DockPanel.SetDock(buttons, Dock.Bottom);
+            buttons.Margin = new Thickness(0, 12, 0, 0);
+            dock.Children.Add(buttons);
+
+            // Дерево слева.
+            var treeHeader = new TextBlock
+            {
+                Text = LocalizationManager.T("ContextMenu.Editor.TreeHeader"),
+                Foreground = new SolidColorBrush(Color.Parse("#94A3B8")),
+                Margin = new Thickness(4, 4, 4, 8)
+            };
+            DockPanel.SetDock(treeHeader, Dock.Top);
+            dock.Children.Add(treeHeader);
+
+            var treeBorder = new Border
+            {
+                Background = TryBrush("CardBackgroundBrush"),
+                BorderBrush = TryBrush("BorderColorBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(4),
+                Margin = new Thickness(0, 0, 12, 0)
+            };
+            dock.Children.Add(treeBorder);
+
+            BuildTree();
+            treeBorder.Child = _tree;
+
+            // Правая панель операций.
+            var panel = BuildOperationsPanel();
+            dock.Children.Add(panel);
+
+            return dock;
+        }
+
+        private void BuildTree()
+        {
+            _tree.ItemsSource = _vm.Roots;
+            _tree.SelectionMode = SelectionMode.Single;
+            _tree.ItemTemplate = new FuncTreeDataTemplate(
+                typeof(ContextMenuNodeItem),
+                (item, _) => BuildTreeRow(item as ContextMenuNodeItem),
+                item => item is ContextMenuNodeItem node
+                    ? node.Children
+                    : Array.Empty<ContextMenuNodeItem>());
+            if (Application.Current?.TryFindResource(ControlThemes.ModernTreeItem, out var theme) == true
+                && theme is ControlTheme itemTheme)
+            {
+                _tree.ItemContainerTheme = itemTheme;
+            }
+            _tree.SelectionChanged += (_, _) =>
+                _vm.SelectedItem = _tree.SelectedItem as ContextMenuNodeItem;
+        }
+
+        /// <summary>Строка узла: чекбокс видимости + иконка + заголовок + пометка вида.</summary>
+        private Control BuildTreeRow(ContextMenuNodeItem? node)
+        {
+            if (node is null)
+                return new TextBlock { Text = string.Empty };
+            var check = new CheckBox().Styled(ControlThemes.CacheCleanCheckBox);
+            check.Bind(ToggleButton.IsCheckedProperty, new Binding("IsVisible"));
+            // issue #4: у группы «Новинки программы» видимость зафиксирована
+            // (CanToggleVisibility=false) — чекбокс отключён, менять можно только
+            // местоположение.
+            check.Bind(CheckBox.IsEnabledProperty, new Binding("CanToggleVisibility"));
+            var icon = IconHelper.MakeIcon(node.DisplayIconKey, 16, "TextPrimaryBrush");
+            if (icon is not null)
+            {
+                icon.Margin = new Thickness(4, 0, 0, 0);
+                icon.Bind(Control.IsVisibleProperty, new Binding("HasDisplayIcon"));
+            }
+            var title = new TextBlock { Text = node.Title, Margin = new Thickness(6, 0, 0, 0) };
+            title.Bind(TextBlock.TextProperty, new Binding("Title"));
+            var kind = new TextBlock
+            {
+                Text = node.KindLabel,
+                FontSize = 11,
+                Margin = new Thickness(8, 0, 0, 0),
+                Foreground = new SolidColorBrush(Color.Parse("#94A3B8"))
+            };
+            kind.Bind(TextBlock.TextProperty, new Binding("KindLabel"));
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
+            row.Children.Add(check);
+            if (icon is not null)
+                row.Children.Add(icon);
+            row.Children.Add(title);
+            row.Children.Add(kind);
+            return row;
+        }
+
+        private Control BuildOperationsPanel()
+        {
+            var panel = new StackPanel { Spacing = 6, Width = 250 };
+
+            // Перемещение.
+            panel.Children.Add(SectionHeader("ContextMenu.Editor.MoveHeader"));
+            var moveRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            moveRow.Children.Add(ActionButton("IconArrowUp", "ContextMenu.Editor.MoveUpTooltip", _vm.MoveUpCommand));
+            moveRow.Children.Add(ActionButton("IconArrowDown", "ContextMenu.Editor.MoveDownTooltip", _vm.MoveDownCommand));
+            moveRow.Children.Add(IconClickButton("IconFolderPlus", "ContextMenu.Editor.AddGroupTooltip", OnAddGroupClick));
+            moveRow.Children.Add(IconClickButton("IconMinus", "ContextMenu.Editor.AddSeparatorTooltip", () => _vm.AddSeparatorCommand.Execute(null)));
+            moveRow.Children.Add(IconClickButton("IconPencil", "ContextMenu.Editor.EditGroupTooltip", OnEditGroupClick, "CanEditGroup"));
+            moveRow.Children.Add(IconClickButton("IconDelete", "ContextMenu.Editor.DeleteGroupTooltip", OnDeleteGroupClick, "CanDeleteGroup"));
+            panel.Children.Add(moveRow);
+
+            // Поместить в группу.
+            panel.Children.Add(SectionHeader("ContextMenu.Editor.MoveToGroupHeader", top: 14));
+            _groupCombo.ItemsSource = _vm.Groups;
+            _groupCombo.ItemTemplate = new FuncDataTemplate<ContextMenuNodeItem>(
+                (g, _) => new TextBlock { Text = g.GroupLabel });
+            _groupCombo.Bind(SelectingItemsControl.SelectedItemProperty, new Binding("SelectedGroup"));
+            var groupRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            groupRow.Children.Add(_groupCombo);
+            groupRow.Children.Add(ActionButton("IconFolderMove", null, _vm.MoveToGroupCommand, caption: "ContextMenu.Editor.MoveToGroup"));
+            panel.Children.Add(groupRow);
+            var rootRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 6, 0, 0) };
+            rootRow.Children.Add(ActionButton("IconArrowUp", "ContextMenu.Editor.MoveToRootTooltip", _vm.MoveToRootCommand, caption: "ContextMenu.Editor.MoveToRoot"));
+            panel.Children.Add(rootRow);
+
+            // Сохранение/загрузка/сброс.
+            panel.Children.Add(SectionHeader("ContextMenu.Editor.FileHeader", top: 14));
+            var fileRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            fileRow.Children.Add(ActionButton("IconSave", null, _vm.SaveCommand, caption: "ContextMenu.Editor.Save"));
+            fileRow.Children.Add(ActionButton("IconFolderDownload", null, _vm.LoadCommand, caption: "ContextMenu.Editor.Load"));
+            panel.Children.Add(fileRow);
+            var fileRow2 = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 6, 0, 0) };
+            fileRow2.Children.Add(ActionButton("IconRestore", null, _vm.ResetDefaultCommand, caption: "ContextMenu.Editor.Reset"));
+            panel.Children.Add(fileRow2);
+
+            // Пояснение.
+            var hint = new Border
+            {
+                Background = TryBrush("CardBackgroundBrush"),
+                BorderBrush = TryBrush("BorderColorBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(10),
+                Margin = new Thickness(0, 14, 0, 0)
+            };
+            hint.Child = new TextBlock
+            {
+                Text = LocalizationManager.T("ContextMenu.Editor.Hint"),
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.Parse("#94A3B8"))
+            };
+            panel.Children.Add(hint);
+
+            return panel;
+        }
+
+        private TextBlock SectionHeader(string key, double top = 0)
+        {
+            var text = new TextBlock
+            {
+                Text = LocalizationManager.T(key),
+                Margin = new Thickness(0, top, 0, 4),
+                Foreground = new SolidColorBrush(Color.Parse("#94A3B8"))
+            };
+            return text;
+        }
+
+        private Button ActionButton(string? iconKey, string? tooltipKey, System.Windows.Input.ICommand command, string? caption = null)
+        {
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            if (iconKey is not null)
+                content.Children.Add(IconHelper.MakeIcon(iconKey, 16, "TextPrimaryBrush"));
+            if (caption is not null)
+                content.Children.Add(new TextBlock { Text = LocalizationManager.T(caption), VerticalAlignment = VerticalAlignment.Center });
+            var button = new Button
+            {
+                Content = content,
+                Padding = new Thickness(10, 6),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            button.Styled(ControlThemes.ModernButton);
+            if (tooltipKey is not null)
+                ToolTip.SetTip(button, LocalizationManager.T(tooltipKey));
+            button.Command = command;
+            return button;
+        }
+
+        /// <summary>Кнопка-иконка с обработчиком клика (диалоги групп, issue #56).
+        /// <paramref name="enabledBinding"/> — имя свойства ViewModel для IsEnabled (или null).</summary>
+        private Button IconClickButton(string iconKey, string? tooltipKey, Action onClick, string? enabledBinding = null)
+        {
+            var button = new Button
+            {
+                Content = IconHelper.MakeIcon(iconKey, 16, "TextPrimaryBrush"),
+                Padding = new Thickness(10, 6),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            button.Styled(ControlThemes.ModernButton);
+            if (tooltipKey is not null)
+                ToolTip.SetTip(button, LocalizationManager.T(tooltipKey));
+            if (enabledBinding is not null)
+                button.Bind(Button.IsEnabledProperty, new Binding(enabledBinding));
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
+        /// <summary>«Новая группа»: диалог имени → команда создания группы.</summary>
+        private void OnAddGroupClick()
+        {
+            var dialog = new ContextMenuGroupEditWindow();
+            dialog.ShowSync(this);
+            if (dialog.Result is not null)
+                _vm.AddGroupCommand.Execute(dialog.Result);
+        }
+
+        /// <summary>«Правка группы»: диалог с текущим именем → команда переименования.</summary>
+        private void OnEditGroupClick()
+        {
+            var item = _vm.SelectedItem;
+            if (item is null)
+                return;
+            var dialog = new ContextMenuGroupEditWindow(item.Title);
+            dialog.ShowSync(this);
+            if (dialog.Result is not null)
+                _vm.EditGroupCommand.Execute(dialog.Result);
+        }
+
+        /// <summary>«Удалить группу»: подтверждение; при непустой группе — предложение
+        /// переместить элементы с подгруппами в корень (issue #56). Разделитель удаляется
+        /// сразу, без вопроса — у него нет настроек, и его легко добавить заново.</summary>
+        private void OnDeleteGroupClick()
+        {
+            var item = _vm.SelectedItem;
+            if (item is null)
+                return;
+            // Разделитель: удаляем без подтверждения (issue #56).
+            if (string.Equals(item.Node.Kind, "separator", StringComparison.Ordinal))
+            {
+                _vm.DeleteGroupCommand.Execute(false);
+                return;
+            }
+            var dialogs = AppServices.GetRequiredService<IDialogService>();
+            var title = LocalizationManager.T("ContextMenu.Editor.DeleteGroupTitle");
+            if (item.Children.Count > 0)
+            {
+                var message = string.Format(
+                    LocalizationManager.T("ContextMenu.Editor.DeleteGroupWithItems"),
+                    item.Title);
+                if (dialogs.Confirm(message, title))
+                    _vm.DeleteGroupCommand.Execute(true);
+            }
+            else
+            {
+                var message = string.Format(
+                    LocalizationManager.T("ContextMenu.Editor.DeleteGroupEmpty"),
+                    item.Title);
+                if (dialogs.Confirm(message, title))
+                    _vm.DeleteGroupCommand.Execute(false);
+            }
+        }
+
+        private void OnOkClick()
+        {
+            _vm.SaveCommand.Execute(null);
+            DialogResult = true;
+            Close();
+        }
+
+        private IBrush? TryBrush(string key)
+        {
+            if (Application.Current is not { } app || !app.TryFindResource(key, out var found))
+                return null;
+            return found as IBrush;
+        }
+    }
+}
+#endif

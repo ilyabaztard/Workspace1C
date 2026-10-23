@@ -285,6 +285,11 @@ namespace Workspace1C
             _viewModel = viewModel ?? new ViewModels.MainViewModel();
             DataContext = _viewModel;
 
+            // Контекстное меню строки базы (issue #56): строится кодом (см.
+            // MainWindow.ContextMenu.cs) вместо статического XAML-блока и пересобирается
+            // при смене темы/языка/настроек (см. RebuildRowContextMenu).
+            MainTree.ContextMenu = BuildRowContextMenu();
+
             // Заголовок с «дополнением» (issue #28/#34): первый вызов UpdateWindowTitle
             // выше выполнялся до присваивания _viewModel и собирал заголовок без суффикса.
             // Пересобираем с VM — и системный Title, и видимая шапка содержат дополнение

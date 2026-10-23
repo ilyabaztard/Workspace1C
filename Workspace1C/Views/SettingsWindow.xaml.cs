@@ -121,6 +121,9 @@ namespace Workspace1C
             // Правка структуры меню «Утилиты» (issue #374).
             if (UtilitiesMenuEditingCheck != null)
                 UtilitiesMenuEditingCheck.IsChecked = viewModel.UtilitiesMenuEditingEnabled;
+            // Правка структуры контекстного меню базы (issue #56).
+            if (ContextMenuEditingCheck != null)
+                ContextMenuEditingCheck.IsChecked = viewModel.ContextMenuEditingEnabled;
             // Блокировка сеансов ИБ (функция №20, Ctrl+Alt+L) и временная блокировка
             // приложения паролем (функция №19): показываем текущие значения сочетаний.
             if (HotkeySessionLockBox != null)
@@ -374,6 +377,21 @@ namespace Workspace1C
         {
             var store = AppServices.TryGetService<IUtilitiesMenuLayoutStore>();
             var win = new UtilitiesMenuEditorWindow(store)
+            {
+                Owner = this,
+            };
+            win.ShowDialog();
+        }
+
+        /// <summary>
+        /// Открывает редактор структуры контекстного меню базы (issue #56): дерево
+        /// компоновки, перемещение/отключение/группировка пунктов, разделители,
+        /// сохранение/загрузка в файл context_menu_layout.json.
+        /// </summary>
+        private void OnContextMenuEdit_Click(object sender, RoutedEventArgs e)
+        {
+            var store = AppServices.TryGetService<IContextMenuLayoutStore>();
+            var win = new ContextMenuEditorWindow(store)
             {
                 Owner = this,
             };
@@ -649,6 +667,8 @@ namespace Workspace1C
             _viewModel.ConfirmCustomActions = ConfirmCustomActionsCheck?.IsChecked ?? true;
             // Правка структуры меню «Утилиты» (issue #374).
             _viewModel.UtilitiesMenuEditingEnabled = UtilitiesMenuEditingCheck?.IsChecked ?? false;
+            // Правка структуры контекстного меню базы (issue #56).
+            _viewModel.ContextMenuEditingEnabled = ContextMenuEditingCheck?.IsChecked ?? false;
             _viewModel.SaveSettings();
 
             var templatePaths = TemplatePathsList?.Items.Cast<string>().Where(s => !string.IsNullOrWhiteSpace(s)).ToList()

@@ -76,6 +76,19 @@ namespace Workspace1C
             if (sender is not ContextMenu menu || _viewModel == null)
                 return;
 
+            // Контекстное меню построено кодом (issue #56): при каждом открытии перечитываем
+            // резолвер компоновки (как меню «Утилиты») — если компоновка/настройка правки
+            // изменились с последней сборки, содержимое обновляется в месте, до batch- и
+            // custom-логики ниже.
+            var contextStore = AppServices.TryGetService<IContextMenuLayoutStore>();
+            var contextSettings = new AppSettings
+            {
+                ContextMenuEditingEnabled = _viewModel.ContextMenuEditingEnabled
+            };
+            var contextLayout = ContextMenuResolver.PrepareForMenu(ContextMenuResolver.Resolve(contextSettings, contextStore));
+            if (!string.Equals(_rowContextMenuLayoutKey, LayoutFingerprint(contextLayout), StringComparison.Ordinal))
+                PopulateRowContextMenu(menu.Items);
+
             var restricted = _viewModel.IsSystemMenuRestricted;
             var items = menu.Items.Cast<object>().ToList();
 
