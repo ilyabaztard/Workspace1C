@@ -70,6 +70,18 @@
   убираются; личные базы не затрагиваются ([`SharedListService.cs`](Workspace1C/Services/SharedListService.cs),
   новое поле базы `SharedSource`).
 
+### Исправлено
+
+- **Цвет иконки поиска совпадает с крестиком очистки (issue #60, Windows и Linux)** — в
+  светлой теме оба тёмные, в тёмной — рассинхрон: иконка поиска `Magnify` в поле поиска
+  теперь использует ту же кисть `TextSecondaryBrush`, что и крестик очистки `Close`, и не
+  полупрозрачна (убрана `Opacity="0.7"`)
+  ([`MainWindow.xaml`](Workspace1C/Views/MainWindow.xaml:372)). На Linux (Avalonia) обе
+  иконки уже строились одной кистью `TextSecondaryBrush`
+  ([`MainWindow.Avalonia.cs`](Workspace1C/Views/MainWindow.Avalonia.cs:1342)) — правка не
+  требовалась. Покрыто тестами `Issue60SearchIconColorTests` (WPF-разметка с кистью и без
+  прозрачности, WPF-инвариант одной кисти у обеих иконок, Avalonia-фрагменты).
+
 ### Технические изменения
 
 - Окна новых функций собираются в коде по общим помощникам
