@@ -2028,7 +2028,14 @@ public string HotkeyEnterprise
             return;
         }
 
-        var pinned = GroupNodes.FirstOrDefault(n => n.Group is null &&
+        // Стабильный набор корней (issue #21, Этап F): узел «Закреплённые» правится в
+        // кэше «Все» (_groupedTreeCache), а в GroupNodes он попадает через SyncStableRoots
+        // (иначе поштучная синхронизация удалила бы узел, добавленный мимо кэша).
+        var cache = _groupedTreeCache;
+        if (cache is null)
+            return; // кэш «Все» ещё не построен — закрепление проявится при пересборке
+
+        var pinned = cache.FirstOrDefault(n => n.Group is null &&
             string.Equals(n.Marker, GroupNodeViewModel.PinnedMarker, StringComparison.Ordinal));
 
         if (infobase.IsPinned)
@@ -2043,8 +2050,8 @@ public string HotkeyEnterprise
                     defaultIcon: _pinnedIcon) { IsExpanded = true };
                 pinned.Infobases.Add(infobase);
                 pinned.PopulateItems(); // NotifyCountChanged внутри
-                GroupNodes.Insert(0, pinned);
-                _groupNodes.Insert(0, pinned);
+                cache.Insert(0, pinned);
+                ApplyStableRoots(flatMode: false);
                 return;
             }
 
@@ -2064,10 +2071,10 @@ public string HotkeyEnterprise
             if (pinned.Infobases.Count == 0)
             {
                 // Узел «Закреплённые» опустел (issue #21, эксперимент A 1.0.0.34):
-                // отписываем от коллекций перед удалением из обоих списков.
+                // отписываем от коллекций перед удалением из кэша.
                 pinned.Detach();
-                GroupNodes.Remove(pinned);
-                _groupNodes.Remove(pinned);
+                cache.Remove(pinned);
+                ApplyStableRoots(flatMode: false);
             }
             else
             {

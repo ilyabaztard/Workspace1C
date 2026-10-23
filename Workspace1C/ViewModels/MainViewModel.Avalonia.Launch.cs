@@ -723,7 +723,6 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private void UpdatePinnedSection(Infobase infobase)
     {
-        var pinnedVisible = _groupByGroup && !IsFilterModeActive();
         var pinned = AllGroupNodes.FirstOrDefault(node => node.Group is null
             && string.Equals(node.Marker, GroupNodeViewModel.PinnedMarker, StringComparison.Ordinal));
 
@@ -742,8 +741,9 @@ public partial class MainViewModel : ViewModelBase
                 ApplyExpandedState(pinned);
                 SubscribeExpandedTracking(pinned);
                 AllGroupNodes.Insert(0, pinned);
-                if (pinnedVisible)
-                    GroupNodes.Insert(0, pinned);
+                // Стабильный набор корней (issue #21, Этап F): узел всегда в GroupNodes,
+                // видимость применяет ApplyStableRoots (в плоском режиме скрыт).
+                ApplyStableRoots(IsFilterModeActive() || !_groupByGroup);
                 return;
             }
 
@@ -775,7 +775,7 @@ public partial class MainViewModel : ViewModelBase
         // (issue #21, эксперимент A 1.0.0.34), затем удаляем из обоих списков.
         pinned.Detach();
         AllGroupNodes.Remove(pinned);
-        GroupNodes.Remove(pinned);
+        ApplyStableRoots(IsFilterModeActive() || !_groupByGroup);
     }
 
     /// <summary>

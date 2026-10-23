@@ -1483,10 +1483,15 @@ namespace Workspace1C
             // может измениться и самый левый отступ, по которому выровнен заголовок.
             // Счётчик созданных контейнеров — диагностика переключения вкладок
             // (issue #21, Этап E; CM_TREESWITCH): сколько строк реально пересоздано.
-            _tree.ContainerPrepared += (_, _) =>
+            _tree.ContainerPrepared += (_, e) =>
             {
                 _containersCreated++;
                 QueueHeaderAlign();
+                // Стабильный набор корней (issue #21, Этап F): скрытые корни остаются
+                // в GroupNodes, но не отображаются — переключение вкладки меняет только
+                // видимость, а не состав коллекции (нет Reset, контейнеры не пересоздаются).
+                if (e.Container is TreeViewItem item && item.DataContext is GroupNodeViewModel node)
+                    item.Bind(Visual.IsVisibleProperty, new Binding("IsVisible"));
             };
             _tree.ContainerClearing += (_, _) => _containersCleared++;
 
@@ -1761,6 +1766,16 @@ namespace Workspace1C
                         UpdateEmptyState();
                         QueueHeaderAlign();
                     }
+                    // Чистое переключение вкладки (issue #21, Этап F): GroupNodes не меняет
+                    // состав (стабильный набор корней), поэтому событие коллекции не
+                    // срабатывает — обновляем заглушку пустого списка по смене режима.
+                    if (e.PropertyName is nameof(MainViewModel.IsListModeAll)
+                        or nameof(MainViewModel.IsListModeFavorites)
+                        or nameof(MainViewModel.IsListModeRecent)
+                        or nameof(MainViewModel.IsListModeRunning))
+                    {
+                        UpdateEmptyState();
+                    }
                     // Меню трея показывает выбранную базу и недавние: без этого
                     // оно осталось бы таким, каким было собрано при запуске.
                     if (e.PropertyName == nameof(MainViewModel.SelectedInfobase)
@@ -1949,7 +1964,9 @@ namespace Workspace1C
             if (_vm is null)
                 return;
 
-            var hasItems = _vm.GroupNodes.Count > 0 || _vm.FlatItems.Count > 0;
+            // Стабильный набор корней (issue #21, Этап F): GroupNodes не пуст даже в
+            // плоском режиме (скрытые группы), поэтому считаем только видимые корни.
+            var hasItems = _vm.GroupNodes.Any(n => n.IsVisible) || _vm.FlatItems.Count > 0;
             if (hasItems)
             {
                 _emptyState.IsVisible = false;

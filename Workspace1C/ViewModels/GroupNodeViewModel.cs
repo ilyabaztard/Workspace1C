@@ -22,6 +22,10 @@ public class GroupNodeViewModel : ViewModelBase
     private string? _fullPathCache;
     private bool? _containsInfobasesCache;
     private bool _suppressNotifications;
+    // Видимость корня в дереве (issue #21, Этап F): стабильный набор корней держит
+    // плоский узел и все группы в GroupNodes всегда, а переключение вкладки меняет
+    // только этот флаг — контейнеры корней не пересоздаются (нет Reset GroupNodes).
+    private bool _isVisible = true;
     // Делегаты-обработчики коллекций: поля, чтобы метод Detach() мог отписаться
     // (issue #21, эксперимент A 1.0.0.34) — иначе анонимные лямбды не отписываемы.
     private readonly NotifyCollectionChangedEventHandler _onInfobasesChanged;
@@ -223,6 +227,24 @@ public class GroupNodeViewModel : ViewModelBase
 
     /// <summary>Внутренний маркер специального узла. Null для обычных групп.</summary>
     public string? Marker => _marker;
+
+    /// <summary>
+    /// Видимость узла в дереве (issue #21, Этап F): скрытые корни остаются в
+    /// <c>GroupNodes</c>, но не отображаются (TreeViewItem.Visibility привязан к этому
+    /// свойству). Стабильный набор корней — переключение вкладки меняет только видимость,
+    /// а не состав коллекции, поэтому контейнеры корней не пересоздаются (нет Reset).
+    /// </summary>
+    public bool IsVisible
+    {
+        get => _isVisible;
+        set
+        {
+            if (_isVisible == value)
+                return;
+            _isVisible = value;
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>
     /// Стабильный ключ узла для сохранения состояния развёрнутости (не зависит от языка).
@@ -617,8 +639,12 @@ public class GroupNodeViewModel : ViewModelBase
     public static GroupNodeViewModel? FindInfobaseHomeNode(
         IEnumerable<GroupNodeViewModel> roots, Infobase infobase)
     {
+        // Скрытые корни (issue #21, Этап F) остаются в GroupNodes, но не отображаются:
+        // reveal обязан искать цель только среди видимых узлов.
         foreach (var root in roots)
         {
+            if (!root.IsVisible)
+                continue;
             var found = FindInNode(root, infobase);
             if (found is not null)
                 return found;

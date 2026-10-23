@@ -891,52 +891,90 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     private void RebuildGroupTreeCore()
     {
-        // Один проход по базам без CollectionView.Refresh (он дорогой на больших списках).
-        // Учитываем выбранное поле сортировки (_sortField / _sortAscending).
-        var visible = GetVisibleForCurrentMode();
-
-        // Когда группировка отключена или активен временный фильтр
-        // (Избранное / Недавние / отбор по тегу / поиск) — показываем плоский список
-        // в одном узле без групп и закреплений. Так избегаем дублей: закреплённая база
-        // иначе попадает и в «Закреплённые», и в свою группу, а при фильтрации
-        // группировка по группам теряет смысл.
-        if (!_groupByGroup || IsFilterModeActive())
+        // События подняты здесь, а не в ReplaceGroupNodes (issue #21, Этап F): стабильный
+        // набор корней не меняет состав на переключении вкладки, но диагностике
+        // CM_TREESWITCH и окну нужны события смены вкладки (замер vmMs/allocMb, запоминание
+        // прокрутки).
+        TreeRebuilding?.Invoke();
+        try
         {
-            var filterActive = IsFilterModeActive();
-            // Постоянный плоский узел (issue #21, Этап C): переиспользуем один узел и
-            // обновляем только его содержимое (маркер/имя + Items одним Reset) — контейнер
-            // корневого узла в TreeView не пересоздаётся при каждом переключении вкладки.
-            _flatNode ??= new GroupNodeViewModel(null);
-            _flatNode.ResetFlatContent(
-                visible,
-                displayName: filterActive ? LocalizationManager.T("Main.FlatFound") : null,
-                marker: filterActive ? null : GroupNodeViewModel.AllBasesMarker);
-            _flatNode.IsExpanded = true;
-            _groupNodes = new List<GroupNodeViewModel> { _flatNode };
-            ReplaceGroupNodes(_groupNodes);
-            return;
-        }
+            // Один проход по базам без CollectionView.Refresh (он дорогой на больших списках).
+            // Учитываем выбранное поле сортировки (_sortField / _sortAscending).
+            var visible = GetVisibleForCurrentMode();
+            var flatMode = !_groupByGroup || IsFilterModeActive();
 
-        // Кэш группированного дерева режима «Все» (issue #21, Этап C): при чистом
-        // переключении вкладок (например, «Избранное» → «Все» с группировкой) узлы дерева
-        // переиспользуются, а не пересоздаются тысячи объектов GroupNodeViewModel и
-        // обёрток PinnedInfobaseItem (источник роста CPU и памяти с каждым переключением).
-        // Кэш инвалидируется в RebuildGroupTree при любом изменении данных/фильтров.
-        if (_groupedTreeCacheValid && _groupedTreeCache is not null)
+            // Когда группировка отключена или активен временный фильтр
+            // (Избранное / Недавние / отбор по тегу / поиск) — показываем плоский список
+            // в одном узле без групп и закреплений. Так избегаем дублей: закреплённая база
+            // иначе попадает и в «Закреплённые», и в свою группу, а при фильтрации
+            // группировка по группам теряет смысл.
+            if (flatMode)
+            {
+                var filterActive = IsFilterModeActive();
+                // Постоянный плоский узел (issue #21, Этап C): переиспользуем один узел и
+                // обновляем только его содержимое (маркер/имя + Items одним Reset) — контейнер
+                // корневого узла в TreeView не пересоздаётся при каждом переключении вкладки.
+                _flatNode ??= new GroupNodeViewModel(null);
+                _flatNode.ResetFlatContent(
+                    visible,
+                    displayName: filterActive ? LocalizationManager.T("Main.FlatFound") : null,
+                    marker: filterActive ? null : GroupNodeViewModel.AllBasesMarker);
+                _flatNode.IsExpanded = true;
+            }
+            else if (!(_groupedTreeCacheValid && _groupedTreeCache is not null))
+            {
+                // Кэш группированного дерева режима «Все» (issue #21, Этап C): при чистом
+                // переключении вкладок узлы дерева переиспользуются, а не пересоздаются
+                // тысячи объектов GroupNodeViewModel и обёрток PinnedInfobaseItem (источник
+                // роста CPU и памяти с каждым переключением). Кэш инвалидируется в
+                // RebuildGroupTree при любом изменении данных/фильтров.
+                BuildGroupedTree(visible);
+            }
+            else
+            {
+                // Состояние развёрнутости может отличаться от момента кэширования
+                // (раскрытие/сворачивание на вкладках) — применяем актуальное.
+                ApplyExpandedState(_groupedTreeCache);
+            }
+
+            // Стабильный набор корней (issue #21, Этап F): GroupNodes всегда содержит
+            // плоский узел и все корни кэша «Все»; переключение вкладки меняет только
+            // видимость узлов, а не состав коллекции (нет Reset GroupNodes, collReset=0
+            // в CM_TREESWITCH).
+            ApplyStableRoots(flatMode);
+
+            // Узлы групп пересоздаются при пересборке: ссылка SelectedGroupNode иначе
+            // осталась бы на старый (выброшенный) узел, и после правки настроек группы её
+            // выделение не восстановилось бы. Перепривязываем выбранную группу по её
+            // идентификатору модели.
+            var selectedGroupId = SelectedGroupNode?.Group?.Id;
+            if (!string.IsNullOrEmpty(selectedGroupId)
+                && _groupedTreeCache is not null
+                && FindGroupNodeById(_groupedTreeCache, selectedGroupId) is { } remapped)
+                SelectedGroupNode = remapped;
+
+            // Выбранный узел мог стать скрытым (плоский режим, пустая группа): снимаем
+            // выбор, иначе правая панель продолжила бы показывать группу, которой в дереве нет.
+            if (SelectedGroupNode is { } selected && !selected.IsVisible)
+                SelectedGroupNode = null;
+
+            // Панель тегов обновляем только если набор тегов мог измениться
+            // (не на каждый символ поиска — там уже есть ранний выход, но лишний проход лишний).
+            if (!flatMode)
+                RefreshTagFilterItems();
+        }
+        finally
         {
-            _groupNodes = _groupedTreeCache;
-            // Состояние развёрнутости может отличаться от момента кэширования
-            // (раскрытие/сворачивание на вкладках) — применяем актуальное.
-            ApplyExpandedState(_groupNodes);
-            var cachedSelectedId = SelectedGroupNode?.Group?.Id;
-            if (!string.IsNullOrEmpty(cachedSelectedId)
-                && FindGroupNodeById(_groupNodes, cachedSelectedId) is { } cachedRemapped)
-                SelectedGroupNode = cachedRemapped;
-            ReplaceGroupNodes(_groupNodes);
-            RefreshTagFilterItems();
-            return;
+            TreeRebuilt?.Invoke();
         }
+    }
 
+    /// <summary>
+    /// Строит группированное дерево режима «Все» и заполняет кэш (issue #21, Этап C).
+    /// Узлы переиспользуются при чистом переключении вкладок, а не пересоздаются.
+    /// </summary>
+    private void BuildGroupedTree(IReadOnlyList<Infobase> visible)
+    {
         var roots = GroupNodeViewModel.BuildTree(Groups);
 
         // Сортируем корневые группы и все подгруппы по имени согласно сохранённому направлению.
@@ -1044,20 +1082,6 @@ public partial class MainViewModel : ViewModelBase
             ExpandAllNodesWithContent(next);
         else
             ApplyExpandedState(next);
-
-        // Узлы групп пересоздаются при каждой пересборке: ссылка SelectedGroupNode иначе
-        // осталась бы на старый (выброшенный) узел, и после правки настроек группы её
-        // выделение не восстановилось бы. Перепривязываем выбранную группу по её идентификатору.
-        var selectedGroupId = SelectedGroupNode?.Group?.Id;
-        if (!string.IsNullOrEmpty(selectedGroupId)
-            && FindGroupNodeById(next, selectedGroupId) is { } remapped)
-            SelectedGroupNode = remapped;
-
-        ReplaceGroupNodes(next);
-
-        // Панель тегов обновляем только если набор тегов мог измениться
-        // (не на каждый символ поиска — там уже есть ранний выход, но лишний проход лишний).
-        RefreshTagFilterItems();
     }
 
     /// <summary>
@@ -1069,8 +1093,12 @@ public partial class MainViewModel : ViewModelBase
     private static GroupNodeViewModel? FindGroupNodeById(
         IEnumerable<GroupNodeViewModel> roots, string groupId)
     {
+        // Скрытые корни (issue #21, Этап F) остаются в GroupNodes, но не отображаются:
+        // восстановление выделения ищет только среди видимых узлов.
         foreach (var root in roots)
         {
+            if (!root.IsVisible)
+                continue;
             if (root.Group is not null
                 && string.Equals(root.Group.Id, groupId, StringComparison.OrdinalIgnoreCase))
                 return root;

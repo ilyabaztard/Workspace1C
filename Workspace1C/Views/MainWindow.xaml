@@ -2323,6 +2323,12 @@
                                             </Setter.Value>
                                         </Setter>
                                     </DataTrigger>
+                                    <!-- Стабильный набор корней (issue #21, Этап F): скрытые корни остаются
+                                         в GroupNodes, но не отображаются — переключение вкладки меняет только
+                                         видимость, а не состав коллекции (нет Reset, контейнеры не пересоздаются). -->
+                                    <DataTrigger Binding="{Binding IsVisible}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </controls:LeveledTreeView.ItemContainerStyle>

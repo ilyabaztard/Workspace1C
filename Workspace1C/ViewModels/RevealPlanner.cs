@@ -91,8 +91,12 @@ public static class RevealPlanner
     private static GroupNodeViewModel? FindNodeByInfobase(
         IEnumerable<GroupNodeViewModel> roots, Infobase infobase)
     {
+        // Скрытые корни (issue #21, Этап F) остаются в GroupNodes, но не отображаются:
+        // reveal обязан искать цель только среди видимых узлов.
         foreach (var root in roots)
         {
+            if (!root.IsVisible)
+                continue;
             var found = FindInNode(root, infobase);
             if (found is not null)
                 return found;
@@ -116,8 +120,12 @@ public static class RevealPlanner
     private static GroupNodeViewModel? FindGroupNodeById(
         IEnumerable<GroupNodeViewModel> roots, string id)
     {
+        // Скрытые корни (issue #21, Этап F) остаются в GroupNodes, но не отображаются:
+        // reveal обязан искать цель только среди видимых узлов.
         foreach (var root in roots)
         {
+            if (!root.IsVisible)
+                continue;
             var found = FindById(root, id);
             if (found is not null)
                 return found;

@@ -363,9 +363,9 @@ namespace Workspace1C
 
                 // Плоский режим (issue #31): «Все базы» без группировки/отбор — дерево из одного
                 // постоянного _flatNode, дублей нет, reveal обязан вести внутрь него.
-                if (revealToHome && _viewModel.GroupNodes.Count == 1 && _viewModel.GroupNodes[0] is { } onlyNode
-                    && (string.IsNullOrEmpty(onlyNode.Marker)
-                        || string.Equals(onlyNode.Marker, GroupNodeViewModel.AllBasesMarker, StringComparison.Ordinal)))
+                // (issue #21, Этап F: стабильный набор корней держит группы в GroupNodes
+                // скрытыми, поэтому плоский режим определяется по флагу, а не по Count==1.)
+                if (revealToHome && _viewModel.IsFlatModeActive)
                 {
                     RevealTrace.Log($"WPF Reveal: flat mode (GroupNodes==[_flatNode]), " +
                                     $"leaf={DescribeLeaf(leaf)}, target={DescribeRevealTarget(target)}");
@@ -775,8 +775,12 @@ namespace Workspace1C
         /// </summary>
         private GroupNodeViewModel? FindGroupNodeByInfobase(Infobase infobase)
         {
+            // Скрытые корни (issue #21, Этап F) остаются в GroupNodes, но не отображаются:
+            // ищем только среди видимых узлов.
             foreach (var root in _viewModel.GroupNodes)
             {
+                if (!root.IsVisible)
+                    continue;
                 var found = FindInNode(root, infobase);
                 if (found is not null)
                     return found;
@@ -1337,8 +1341,12 @@ namespace Workspace1C
         /// <summary>Присутствует ли копия базы в узле «Закреплённые» текущего дерева.</summary>
         private bool IsInfobaseInPinnedSection(Infobase ib)
         {
+            // Скрытые корни (issue #21, Этап F) остаются в GroupNodes, но не отображаются:
+            // в плоском режиме секция «Закреплённые» не видна.
             foreach (var root in _viewModel.GroupNodes)
             {
+                if (!root.IsVisible)
+                    continue;
                 if (FindPinnedNodeData(root) is { } pinned
                     && pinned.Infobases.Any(x => ReferenceEquals(x, ib)))
                 {

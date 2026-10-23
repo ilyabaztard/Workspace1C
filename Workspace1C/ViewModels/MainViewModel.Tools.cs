@@ -42,6 +42,12 @@ public partial class MainViewModel : ViewModelBase
         || !string.IsNullOrWhiteSpace(SearchText);
 
     /// <summary>
+    /// Активен ли плоский режим дерева (issue #21, Этап F): фильтр/поиск/«Избранное»/
+    /// «Недавние»/отключённая группировка — виден только плоский узел, группы скрыты.
+    /// </summary>
+    public bool IsFlatModeActive => !_groupByGroup || IsFilterModeActive();
+
+    /// <summary>
     /// Разворачивает узлы дерева, в которых есть базы (или вложенные с базами).
     /// Используется при поиске, фильтре по тегу, избранном и недавних.
     /// </summary>
@@ -87,13 +93,16 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Заменяет содержимое GroupNodes с минимумом лишних уведомлений UI.
+    /// События <see cref="TreeRebuilding"/>/<see cref="TreeRebuilt"/> поднимает
+    /// <c>RebuildGroupTreeCore</c> (issue #21, Этап F): стабильный набор корней не меняет
+    /// состав на переключении вкладки, но диагностике CM_TREESWITCH и окну нужны события
+    /// смены вкладки.
     /// </summary>
     private void ReplaceGroupNodes(List<GroupNodeViewModel> next)
     {
         // Ранний выход (issue #21, Этап A): состав корней не изменился (повторный клик
-        // на вкладку, переход с тем же набором корней — например, «Избранное»→«Недавние»
-        // с тем же постоянным плоским узлом) — не трогаем коллекцию и не поднимаем
-        // события: контейнеры строк не пересоздаются, окно не делает лишнюю работу.
+        // на вкладку, переход с тем же набором корней) — не трогаем коллекцию:
+        // контейнеры строк не пересоздаются.
         if (GroupNodes.Count == next.Count)
         {
             var same = true;
@@ -109,14 +118,51 @@ public partial class MainViewModel : ViewModelBase
                 return;
         }
 
-        // Пока дерево ещё на месте, даём окну запомнить позицию прокрутки до пересборки.
-        TreeRebuilding?.Invoke();
-
         // Поштучное обновление существующей коллекции (issue #21, Этап A): контейнеры
         // строк, оставшихся в списке, не пересоздаются (вместо Reset на каждое
         // переключение вкладки). OnPropertyChanged(GroupNodes) не нужен — коллекция та же.
         GroupNodes.ReplaceItemWise(next);
-        TreeRebuilt?.Invoke();
+    }
+
+    /// <summary>
+    /// Применяет стабильный набор корней дерева (issue #21, Этап F): GroupNodes всегда
+    /// содержит плоский узел и все корни кэша «Все» (<c>_groupedTreeCache</c>), а
+    /// переключение вкладки меняет только видимость узлов
+    /// (<see cref="GroupNodeViewModel.IsVisible"/>), а не состав коллекции. Так контейнеры
+    /// корней не пересоздаются (нет Reset GroupNodes) — источник роста heapAfterGcMb и
+    /// задержки переключения вкладок.
+    /// </summary>
+    /// <param name="flatMode">true — плоский режим (фильтр/поиск/«Избранное»/«Недавние»/
+    /// отключённая группировка): виден только плоский узел, группы скрыты.</param>
+    private void ApplyStableRoots(bool flatMode)
+    {
+        SyncStableRoots();
+
+        // SyncStableRoots гарантирует _flatNode != null (??= внутри).
+        _flatNode!.IsVisible = flatMode;
+        if (_groupedTreeCache is not null)
+        {
+            foreach (var root in _groupedTreeCache)
+                root.IsVisible = !flatMode && (_showEmptyGroups || root.ContainsInfobases);
+        }
+    }
+
+    /// <summary>
+    /// Синхронизирует <see cref="GroupNodes"/> со стабильным набором
+    /// [_flatNode, ..._groupedTreeCache]. На чистом переключении вкладки состав не
+    /// меняется — <see cref="ObservableRangeCollection{T}.ReplaceItemWise"/> ничего не
+    /// делает (событий нет). Состав меняется только при пересборке дерева или
+    /// добавлении/удалении узла «Закреплённые» — тогда поштучные события (пересечение
+    /// велико, Reset не нужен).
+    /// </summary>
+    private void SyncStableRoots()
+    {
+        _flatNode ??= new GroupNodeViewModel(null);
+        var desired = new List<GroupNodeViewModel>(1 + (_groupedTreeCache?.Count ?? 0)) { _flatNode };
+        if (_groupedTreeCache is not null)
+            desired.AddRange(_groupedTreeCache);
+        _groupNodes = desired;
+        ReplaceGroupNodes(desired);
     }
 
     /// <summary>

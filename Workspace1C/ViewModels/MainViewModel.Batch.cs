@@ -169,7 +169,9 @@ public partial class MainViewModel
     /// </summary>
     public IReadOnlyList<Infobase> BuildPinnedSectionVisibleOrder()
     {
-        var pinnedNode = GroupNodes.FirstOrDefault(n => n.Group is null
+        // Скрытые корни (issue #21, Этап F) остаются в GroupNodes, но не отображаются:
+        // в плоском режиме секция «Закреплённые» не видна.
+        var pinnedNode = GroupNodes.FirstOrDefault(n => n.IsVisible && n.Group is null
             && string.Equals(n.Marker, GroupNodeViewModel.PinnedMarker, StringComparison.Ordinal));
         return pinnedNode is null
             ? Array.Empty<Infobase>()

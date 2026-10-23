@@ -824,7 +824,6 @@ public partial class MainViewModel : ViewModelBase
                 root.Detach();
         }
         AllGroupNodes.Clear();
-        GroupNodes.Clear();
         FlatItems.Clear();
 
         var roots = GroupNodeViewModel.BuildTree(_groups);
@@ -833,12 +832,14 @@ public partial class MainViewModel : ViewModelBase
         foreach (var root in roots)
             AllGroupNodes.Add(root);
 
-        // Определяем, какие корневые группы реально показывать (содержат базы).
-        foreach (var root in AllGroupNodes)
-        {
-            if (_showEmptyGroups || root.ContainsInfobases)
-                GroupNodes.Add(root);
-        }
+        // Стабильный набор корней (issue #21, Этап F): плоский узел + все корни групп.
+        // Видимость узлов применяет ApplyFilterCore/ApplyStableRoots — переключение
+        // вкладки не меняет состав GroupNodes (нет Reset, контейнеры корней не
+        // пересоздаются).
+        _flatNode ??= new GroupNodeViewModel(null);
+        var stable = new List<GroupNodeViewModel>(AllGroupNodes.Count + 1) { _flatNode };
+        stable.AddRange(AllGroupNodes);
+        GroupNodes.ReplaceAll(stable);
 
         RebuildTagFilters();
         ApplyFilter();
@@ -1013,6 +1014,12 @@ public partial class MainViewModel : ViewModelBase
         !string.IsNullOrWhiteSpace(SearchText) || HasActiveTagFilter || _listMode != "All";
 
     /// <summary>
+    /// Активен ли плоский режим дерева (issue #21, Этап F): фильтр/поиск/«Избранное»/
+    /// «Недавние»/отключённая группировка — виден только плоский узел, группы скрыты.
+    /// </summary>
+    public bool IsFlatModeActive => !_groupByGroup || IsFilterModeActive();
+
+    /// <summary>
     /// true, если база должна показываться в списках с учётом приватности (0.3.9.85):
     /// не приватная — всегда; приватная — только когда активный профиль разблокирован
     /// паролем (или у профиля нет пароля). Сбой получения сервиса (тестовый контекст)
@@ -1054,12 +1061,13 @@ public partial class MainViewModel : ViewModelBase
         TreeRebuilding?.Invoke();
 
         var filterActive = IsFilterModeActive();
+        var flatMode = filterActive || !_groupByGroup;
 
         // Плоский список нужен в двух случаях: активен фильтр (поиск, теги,
         // «Избранное», «Недавние») либо пользователь отключил группировку.
         // Дерево привязано только к GroupNodes, поэтому результат кладётся
         // одним узлом туда же, иначе список остался бы пустым.
-        if (filterActive || !_groupByGroup)
+        if (flatMode)
         {
             // Для «Избранное»/«Недавние» берётся готовый кэш (не пересчитывается
             // при переключении вкладок без изменения данных, issue #21); для
@@ -1079,23 +1087,57 @@ public partial class MainViewModel : ViewModelBase
                 displayName: filterActive ? LocalizationManager.T("Main.FlatFound") : null,
                 marker: filterActive ? null : GroupNodeViewModel.AllBasesMarker);
             _flatNode.SetExpandedSilent(true);
-
-            GroupNodes.ReplaceItemWise(new[] { _flatNode });
         }
         else
         {
             FlatItems.ReplaceItemWise(Array.Empty<object>());
-            GroupNodes.ReplaceItemWise(
-                AllGroupNodes.Where(root => _showEmptyGroups || root.ContainsInfobases).ToList());
         }
 
-        // Выбранный узел мог исчезнуть из дерева: поиск и отключение группировки
-        // подменяют его плоским списком. Иначе правая панель продолжила бы
-        // показывать группу, которой в дереве уже нет.
-        if (SelectedGroupNode is { } selected && FindNode(node => ReferenceEquals(node, selected)) is null)
+        // Стабильный набор корней (issue #21, Этап F): GroupNodes всегда содержит
+        // плоский узел и все корни AllGroupNodes; переключение вкладки меняет только
+        // видимость узлов, а не состав коллекции — контейнеры корней не пересоздаются
+        // (нет Reset GroupNodes, collReset=0 в CM_TREESWITCH).
+        ApplyStableRoots(flatMode);
+
+        // Выбранный узел мог стать скрытым (плоский режим, пустая группа): иначе
+        // правая панель продолжила бы показывать группу, которой в дереве нет.
+        if (SelectedGroupNode is { } selected && !selected.IsVisible)
             SelectedGroupNode = null;
 
         TreeRebuilt?.Invoke();
+    }
+
+    /// <summary>
+    /// Применяет стабильный набор корней дерева (issue #21, Этап F): GroupNodes всегда
+    /// содержит плоский узел и все корни <see cref="AllGroupNodes"/>, а переключение
+    /// вкладки меняет только видимость узлов (<see cref="GroupNodeViewModel.IsVisible"/>),
+    /// а не состав коллекции. Так контейнеры корней не пересоздаются (нет Reset
+    /// GroupNodes) — источник роста heapAfterGcMb и задержки переключения вкладок.
+    /// </summary>
+    /// <param name="flatMode">true — плоский режим (фильтр/поиск/«Избранное»/«Недавние»/
+    /// отключённая группировка): виден только плоский узел, группы скрыты.</param>
+    private void ApplyStableRoots(bool flatMode)
+    {
+        SyncStableRoots();
+
+        _flatNode.IsVisible = flatMode;
+        foreach (var root in AllGroupNodes)
+            root.IsVisible = !flatMode && (_showEmptyGroups || root.ContainsInfobases);
+    }
+
+    /// <summary>
+    /// Синхронизирует <see cref="GroupNodes"/> со стабильным набором
+    /// [_flatNode, ...AllGroupNodes]. На чистом переключении вкладки состав не меняется —
+    /// <see cref="ObservableRangeCollection{T}.ReplaceItemWise"/> ничего не делает (событий
+    /// нет). Состав меняется только при пересборке дерева или добавлении/удалении узла
+    /// «Закреплённые» — тогда поштучные события (пересечение велико, Reset не нужен).
+    /// </summary>
+    private void SyncStableRoots()
+    {
+        _flatNode ??= new GroupNodeViewModel(null);
+        var desired = new List<GroupNodeViewModel>(AllGroupNodes.Count + 1) { _flatNode };
+        desired.AddRange(AllGroupNodes);
+        GroupNodes.ReplaceItemWise(desired);
     }
 
     /// <summary>

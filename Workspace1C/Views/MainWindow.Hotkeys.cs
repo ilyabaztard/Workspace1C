@@ -1696,7 +1696,9 @@ namespace Workspace1C
         /// </summary>
         private bool HandleArrowNavigation(Key key)
         {
-            if (MainTree is null || _viewModel.GroupNodes.Count == 0)
+            // Стабильный набор корней (issue #21, Этап F): GroupNodes не пуст даже в
+            // плоском режиме (скрытые группы), поэтому проверяем видимые корни.
+            if (MainTree is null || !_viewModel.GroupNodes.Any(n => n.IsVisible))
                 return false;
 
             var rows = GetVisibleTreeViewItems();
