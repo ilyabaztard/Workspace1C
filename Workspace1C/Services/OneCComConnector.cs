@@ -1029,7 +1029,10 @@ public sealed class OneCComConnector : IOneCComConnector
                 return string.Empty;
         }
 
-        InfobaseAuthResolver.Resolve(infobase, mode, out var authMode, out var authUser, out var authPassword);
+        // Общая авторизация для всех ИБ (issue #57): выбирается единым резолвингом
+        // с fallback при незаданной собственной авторизации (режима или базы).
+        InfobaseAuthResolver.Resolve(infobase, mode, out var authMode, out var authUser, out var authPassword,
+            OneCLauncher.CommonAuthorization);
         if (authMode == AuthenticationMode.Credentials
             && !string.IsNullOrWhiteSpace(authUser))
         {

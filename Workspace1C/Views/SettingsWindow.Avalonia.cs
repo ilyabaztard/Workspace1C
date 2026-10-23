@@ -666,6 +666,98 @@ namespace Workspace1C
             };
             settings.Children.Add(manageProfilesButton);
 
+            // ----- Общая авторизация для всех ИБ (issue #57) -----
+            // Fallback при незаданной собственной авторизации ИБ (InfobaseAuthResolver).
+            // Поля логина/пароля видны только в режиме «Автоматический вход».
+            settings.Children.Add(GroupSectionHeader("Settings.CommonAuth.GroupTitle"));
+            settings.Children.Add(Hint(LocalizationManager.T("Settings.CommonAuth.Hint"), bottom: 10));
+
+            var commonAuth = _viewModel.CommonAuthorization;
+            var commonAuthMode = commonAuth?.AuthenticationMode ?? AuthenticationMode.Prompt;
+
+            var commonAuthPromptRadio = new RadioButton
+            {
+                Content = LocalizationManager.T("Settings.CommonAuth.ModePrompt"),
+                GroupName = "CommonAuth",
+                IsChecked = commonAuthMode == AuthenticationMode.Prompt
+            };
+            var commonAuthCredentialsRadio = new RadioButton
+            {
+                Content = LocalizationManager.T("Settings.CommonAuth.ModeCredentials"),
+                GroupName = "CommonAuth",
+                IsChecked = commonAuthMode == AuthenticationMode.Credentials
+            };
+            var commonAuthOsRadio = new RadioButton
+            {
+                Content = LocalizationManager.T("Settings.CommonAuth.ModeOs"),
+                GroupName = "CommonAuth",
+                IsChecked = commonAuthMode == AuthenticationMode.Windows
+            };
+            var commonAuthModes = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 16,
+                Margin = new Thickness(0, 0, 0, 2)
+            };
+            commonAuthModes.Children.Add(commonAuthPromptRadio);
+            commonAuthModes.Children.Add(commonAuthCredentialsRadio);
+            commonAuthModes.Children.Add(commonAuthOsRadio);
+            settings.Children.Add(commonAuthModes);
+
+            var commonAuthUserRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 8, 0, 4)
+            };
+            commonAuthUserRow.Children.Add(new TextBlock
+            {
+                Text = LocalizationManager.T("Settings.CommonAuth.Login"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0)
+            });
+            var commonAuthUserBox = new TextBox
+            {
+                Text = commonAuth?.User ?? string.Empty,
+                Width = 260,
+                Height = 30,
+                VerticalContentAlignment = VerticalAlignment.Center
+            }.Styled(ControlThemes.ModernTextBox);
+            commonAuthUserRow.Children.Add(commonAuthUserBox);
+            settings.Children.Add(commonAuthUserRow);
+
+            var commonAuthPasswordRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            commonAuthPasswordRow.Children.Add(new TextBlock
+            {
+                Text = LocalizationManager.T("Settings.CommonAuth.Password"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0)
+            });
+            var commonAuthPasswordBox = new PasswordBox
+            {
+                Password = commonAuth?.Password ?? string.Empty,
+                Width = 260,
+                Height = 30,
+                VerticalContentAlignment = VerticalAlignment.Center
+            }.Styled(ControlThemes.ModernPasswordBox);
+            commonAuthPasswordRow.Children.Add(commonAuthPasswordBox);
+            settings.Children.Add(commonAuthPasswordRow);
+
+            void UpdateCommonAuthFieldsVisibility()
+            {
+                var visible = commonAuthCredentialsRadio.IsChecked == true;
+                commonAuthUserRow.IsVisible = visible;
+                commonAuthPasswordRow.IsVisible = visible;
+            }
+
+            commonAuthPromptRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
+            commonAuthCredentialsRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
+            commonAuthOsRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
+            UpdateCommonAuthFieldsVisibility();
+
             var tabGeneral = MainTab("IconApplicationCog", "Settings.TabGeneral",
                 new ScrollViewer
                 {
@@ -3291,6 +3383,18 @@ namespace Workspace1C
                 _viewModel.UtilitiesMenuEditingEnabled = _utilitiesMenuEditingCheck?.IsChecked == true;
                 // Правка структуры контекстного меню базы (issue #56).
                 _viewModel.ContextMenuEditingEnabled = _contextMenuEditingCheck?.IsChecked == true;
+                // Общая авторизация для всех ИБ (issue #57): собираем из блока вкладки
+                // «Настройки»; сеттер VM обновляет статик лаунчера и сохраняет настройки.
+                _viewModel.CommonAuthorization = new InfobaseAuthSettings
+                {
+                    AuthenticationMode = commonAuthPromptRadio.IsChecked == true
+                        ? AuthenticationMode.Prompt
+                        : commonAuthOsRadio.IsChecked == true
+                            ? AuthenticationMode.Windows
+                            : AuthenticationMode.Credentials,
+                    User = commonAuthUserBox.Text ?? string.Empty,
+                    Password = commonAuthPasswordBox.Password ?? string.Empty
+                };
 
                 // Порог предупреждения «Свободно на диске» в Центре обслуживания (0.3.9.96).
                 if (int.TryParse(freeSpaceWarningBox.Text, out var freeSpaceWarningGb))

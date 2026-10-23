@@ -124,6 +124,8 @@ namespace Workspace1C
             // Правка структуры контекстного меню базы (issue #56).
             if (ContextMenuEditingCheck != null)
                 ContextMenuEditingCheck.IsChecked = viewModel.ContextMenuEditingEnabled;
+            // Общая авторизация для всех ИБ (issue #57): значения из настроек.
+            InitCommonAuthSettings();
             // Блокировка сеансов ИБ (функция №20, Ctrl+Alt+L) и временная блокировка
             // приложения паролем (функция №19): показываем текущие значения сочетаний.
             if (HotkeySessionLockBox != null)
@@ -204,6 +206,46 @@ namespace Workspace1C
             // при клике в другое окно/приложение открытый тултип исчезает, а не «висит» поверх.
             // Application.Deactivated покрывает все окна приложения целиком.
             Deactivated += (_, _) => ToolTipCloser.CloseAll();
+        }
+
+        // ---- Общая авторизация для всех ИБ (issue #57) ----
+
+        /// <summary>
+        /// Заполняет блок «Общая авторизация» из настроек (<see cref="MainViewModel.CommonAuthorization"/>):
+        /// режим — соответствующей радиокнопкой, логин и пароль — текстовыми полями.
+        /// </summary>
+        private void InitCommonAuthSettings()
+        {
+            var mode = _viewModel.CommonAuthorization?.AuthenticationMode ?? AuthenticationMode.Prompt;
+            if (CommonAuthPromptRadio != null)
+                CommonAuthPromptRadio.IsChecked = mode == AuthenticationMode.Prompt;
+            if (CommonAuthCredentialsRadio != null)
+                CommonAuthCredentialsRadio.IsChecked = mode == AuthenticationMode.Credentials;
+            if (CommonAuthOsRadio != null)
+                CommonAuthOsRadio.IsChecked = mode == AuthenticationMode.Windows;
+            if (CommonAuthUserBox != null)
+                CommonAuthUserBox.Text = _viewModel.CommonAuthorization?.User ?? string.Empty;
+            if (CommonAuthPasswordBox != null)
+                CommonAuthPasswordBox.Password = _viewModel.CommonAuthorization?.Password ?? string.Empty;
+            UpdateCommonAuthFieldsVisibility();
+        }
+
+        /// <summary>Переключает видимость полей логина/пароля: только при «Автоматическом входе».</summary>
+        private void OnCommonAuthMode_Checked(object sender, RoutedEventArgs e)
+            => UpdateCommonAuthFieldsVisibility();
+
+        /// <summary>
+        /// Поля логина/пароля блока «Общая авторизация» показываются только в режиме
+        /// «Автоматический вход» (credentials), как в свойствах информационной базы.
+        /// </summary>
+        private void UpdateCommonAuthFieldsVisibility()
+        {
+            if (CommonAuthCredentialsGrid != null)
+            {
+                CommonAuthCredentialsGrid.Visibility = CommonAuthCredentialsRadio?.IsChecked == true
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
         }
 
         /// <summary>
@@ -669,6 +711,18 @@ namespace Workspace1C
             _viewModel.UtilitiesMenuEditingEnabled = UtilitiesMenuEditingCheck?.IsChecked ?? false;
             // Правка структуры контекстного меню базы (issue #56).
             _viewModel.ContextMenuEditingEnabled = ContextMenuEditingCheck?.IsChecked ?? false;
+            // Общая авторизация для всех ИБ (issue #57): собираем из блока вкладки
+            // «Настройки» ДО вызова SaveSettings (он сохраняет и статик лаунчера).
+            _viewModel.CommonAuthorization = new InfobaseAuthSettings
+            {
+                AuthenticationMode = CommonAuthPromptRadio?.IsChecked == true
+                    ? AuthenticationMode.Prompt
+                    : CommonAuthOsRadio?.IsChecked == true
+                        ? AuthenticationMode.Windows
+                        : AuthenticationMode.Credentials,
+                User = CommonAuthUserBox?.Text ?? string.Empty,
+                Password = CommonAuthPasswordBox?.Password ?? string.Empty
+            };
             _viewModel.SaveSettings();
 
             var templatePaths = TemplatePathsList?.Items.Cast<string>().Where(s => !string.IsNullOrWhiteSpace(s)).ToList()

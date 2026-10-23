@@ -253,6 +253,29 @@ public partial class MainViewModel : ViewModelBase
         set => SetProperty(ref _contextMenuEditingEnabled, value);
     }
 
+    /// <summary>
+    /// Общая авторизация для всех ИБ (issue #57): если у базы не задана собственная
+    /// (для режима или базы), при запуске подставляются эти учётные данные.
+    /// Значения по умолчанию (IsDefault) — авторизация не задана.
+    /// </summary>
+    private InfobaseAuthSettings? _commonAuthorization;
+
+    /// <summary>
+    /// Общая авторизация для всех ИБ (issue #57). Сеттер немедленно синхронизирует
+    /// значение со статиком <see cref="OneCLauncher.CommonAuthorization"/>, который
+    /// использует резолвер <see cref="InfobaseAuthResolver"/> при сборке аргументов
+    /// запуска и COM-строки подключения.
+    /// </summary>
+    public InfobaseAuthSettings? CommonAuthorization
+    {
+        get => _commonAuthorization;
+        set
+        {
+            _commonAuthorization = value;
+            OneCLauncher.CommonAuthorization = value;
+        }
+    }
+
     private string _sortField = "Name";
     private bool _sortAscending = true;
     /// <summary>Направление сортировки подгрупп по имени (true — А→Я, false — Я→А).</summary>
@@ -408,6 +431,10 @@ public partial class MainViewModel : ViewModelBase
         // Правка структуры контекстного меню базы (issue #56): по умолчанию выключена —
         // меню строится по стандартной компоновке (обратная совместимость).
         _contextMenuEditingEnabled = settings.ContextMenuEditingEnabled;
+        // Общая авторизация для всех ИБ (issue #57): fallback при незаданной авторизации
+        // базы. Передаётся резолверу (InfobaseAuthResolver) через статик лаунчера.
+        _commonAuthorization = settings.CommonAuthorization;
+        OneCLauncher.CommonAuthorization = settings.CommonAuthorization;
         _comConnectorNameTemplate = settings.ComConnectorNameTemplate ?? "";
         // Кэш шаблона в коннекторе заполняем сразу, а не ленивым чтением файла (issue #175):
         // иначе результат зависел бы от того, случилось ли COM-чтение до смены активного

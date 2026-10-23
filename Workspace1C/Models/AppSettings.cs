@@ -261,6 +261,13 @@ public class AppSettings
     public bool ContextMenuEditingEnabled { get; set; }
 
     /// <summary>
+    /// Общая авторизация для всех ИБ (issue #57): если у базы не задана
+    /// собственная (для режима или базы), при запуске подставляются эти
+    /// учётные данные. Значения по умолчанию (IsDefault) — авторизация не задана.
+    /// </summary>
+    public InfobaseAuthSettings? CommonAuthorization { get; set; }
+
+    /// <summary>
     /// Глобальная настройка действия по двойному щелчку на информационной базе
     /// (функция №28 StartManager). Каноническое строковое значение из
     /// <see cref="DoubleClickAction"/>: "Enterprise" (по умолчанию), "Configurator"

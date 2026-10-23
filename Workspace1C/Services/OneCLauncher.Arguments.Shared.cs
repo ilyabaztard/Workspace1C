@@ -17,6 +17,12 @@ namespace Workspace1C.Services;
 public static partial class OneCLauncher
 {
     /// <summary>
+    /// Общая авторизация для всех ИБ (issue #57): fallback при незаданной
+    /// авторизации ИБ. Устанавливается из настроек при старте и при сохранении.
+    /// </summary>
+    public static InfobaseAuthSettings? CommonAuthorization { get; set; }
+
+    /// <summary>
     /// Проверяет, можно ли безопасно подставить значение внутрь кавычек ключа командной строки
     /// 1С вида /Key"value".
     /// ВАЖНО: грамматика таких ключей — НЕ грамматика строки подключения. Внутри значения кавычку
@@ -145,9 +151,11 @@ public static partial class OneCLauncher
                 : ""
         };
 
-        // Учётные данные выбираются единым резолвингом (issue #236): раздельная авторизация
-        // Конфигуратора/Предприятия (EnterpriseAuth/ConfiguratorAuth), иначе авторизация базы.
-        InfobaseAuthResolver.Resolve(infobase, mode, out var authMode, out var authUser, out var authPassword);
+        // Учётные данные выбираются единым резолвингом (issue #236, #57): раздельная авторизация
+        // Конфигуратора/Предприятия (EnterpriseAuth/ConfiguratorAuth), иначе авторизация базы,
+        // а при незаданной — общая авторизация (CommonAuthorization, issue #57).
+        InfobaseAuthResolver.Resolve(infobase, mode, out var authMode, out var authUser, out var authPassword,
+            CommonAuthorization);
 
         // Запуск с аутентификацией (issue #48): ни сохранённых имени/пароля, ни входа
         // по учётной записи ОС — /WA- заставляет платформу спросить имя и пароль, даже

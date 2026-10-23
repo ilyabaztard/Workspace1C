@@ -87,6 +87,23 @@ public partial class MainViewModel : ViewModelBase
         set => _settings.ContextMenuEditingEnabled = value;
     }
 
+    /// <summary>
+    /// Общая авторизация для всех ИБ (issue #57): если у базы не задана собственная
+    /// (для режима или базы), при запуске подставляются эти учётные данные.
+    /// Сеттер немедленно синхронизирует значение со статиком
+    /// <see cref="OneCLauncher.CommonAuthorization"/>, который использует резолвер
+    /// <see cref="InfobaseAuthResolver"/> при сборке аргументов запуска.
+    /// </summary>
+    public InfobaseAuthSettings? CommonAuthorization
+    {
+        get => _settings.CommonAuthorization;
+        set
+        {
+            _settings.CommonAuthorization = value;
+            OneCLauncher.CommonAuthorization = value;
+        }
+    }
+
     /// <summary>Глобальное действие по двойному щелчку на базе (функция №28 StartManager).</summary>
     private string _defaultDoubleClickAction = DoubleClickAction.GlobalDefault;
 
@@ -688,6 +705,9 @@ public partial class MainViewModel : ViewModelBase
             // «Текущая сессия» учитывается лаунчером первым шагом приоритета
             // выбора разрядности (issue #146), даже для запусков напрямую.
             OneCLauncher.SessionArchitecture = SessionArchitectureMode();
+            // Общая авторизация для всех ИБ (issue #57): fallback при незаданной
+            // авторизации базы. Передаётся резолверу через статик лаунчера.
+            OneCLauncher.CommonAuthorization = _settings.CommonAuthorization;
             ApplyDefaultArchitecture();
             ApplyAdditionalSearchPaths();
             ApplyTemplateCatalogPaths();
