@@ -77,38 +77,48 @@ public sealed class UtilitiesMenuLayoutTests
         AssertSeparator(layout.Root[13]);
         AssertGroup(layout.Root[14], UtilitiesMenuCatalog.GroupOperations);
         var opsChildren = layout.Root[14].Children;
-        Assert.Equal(24, opsChildren.Count);
+        Assert.Equal(33, opsChildren.Count);
         AssertItem(opsChildren[0], "ConfigDiff");
         AssertItem(opsChildren[1], "MetadataExplorer");
-        AssertSeparator(opsChildren[2]);
-        AssertItem(opsChildren[3], "RepositoryBatchUpdate");
-        AssertItem(opsChildren[4], "RepositoryBrowser");
-        AssertSeparator(opsChildren[5]);
-        AssertItem(opsChildren[6], "ExportCsv");
-        AssertItem(opsChildren[7], "ExportHtml");
-        AssertItem(opsChildren[8], "ExportJson");
-        AssertItem(opsChildren[9], "ImportJson");
+        // Новые функции 1.0.0.69–1.0.0.69 — сразу после «Обозревателя метаданных».
+        AssertItem(opsChildren[2], "EventLog");
+        AssertItem(opsChildren[3], "ConfigExtensions");
+        AssertItem(opsChildren[4], "GitVersioning");
+        AssertItem(opsChildren[5], "TechLog");
+        AssertItem(opsChildren[6], "WebPublish");
+        AssertItem(opsChildren[7], "ServerAlerts");
+        AssertItem(opsChildren[8], "DbmsBackup");
+        AssertItem(opsChildren[9], "TelegramBot");
+        AssertItem(opsChildren[10], "SharedLists");
+        AssertSeparator(opsChildren[11]);
+        AssertItem(opsChildren[12], "RepositoryBatchUpdate");
+        AssertItem(opsChildren[13], "RepositoryBrowser");
+        AssertSeparator(opsChildren[14]);
+        AssertItem(opsChildren[15], "ExportCsv");
+        AssertItem(opsChildren[16], "ExportHtml");
+        AssertItem(opsChildren[17], "ExportJson");
+        AssertItem(opsChildren[18], "ImportJson");
         // Экспорт/импорт в произвольный файл *.v8i (issue #29): те же операции,
         // что в настройках (вкладка «Базы» → «Список баз»).
-        AssertItem(opsChildren[10], "ExportV8iFile");
-        AssertItem(opsChildren[11], "ImportV8iFile");
+        AssertItem(opsChildren[19], "ExportV8iFile");
+        AssertItem(opsChildren[20], "ImportV8iFile");
         // «Импорт из кластера 1С» и «Миграция между кластерами 1С» (issue #41):
         // отдельные пункты — миграция вынесена в самостоятельное окно.
-        AssertItem(opsChildren[12], "ClusterImport");
-        AssertItem(opsChildren[13], "ClusterMigration");
-        AssertSeparator(opsChildren[14]);
-        AssertItem(opsChildren[15], "ProcessInspector");
-        AssertItem(opsChildren[16], "KillOneCProcesses");
-        AssertSeparator(opsChildren[17]);
-        AssertItem(opsChildren[18], "ConnectionReplace");
-        AssertItem(opsChildren[19], "UndoConnectionReplace");
+        AssertItem(opsChildren[21], "ClusterImport");
+        AssertItem(opsChildren[22], "ClusterMigration");
+        AssertSeparator(opsChildren[23]);
+        AssertItem(opsChildren[24], "ProcessInspector");
+        AssertItem(opsChildren[25], "KillOneCProcesses");
+        AssertSeparator(opsChildren[26]);
+        AssertItem(opsChildren[27], "ConnectionReplace");
+        AssertItem(opsChildren[28], "UndoConnectionReplace");
         // Пункт «Блокировка сеансов ИБ» есть только в Avalonia/Linux: в стандартной
         // компоновке он присутствует с разделителем (как в статическом меню Linux),
         // а WPF-построитель отфильтрует его по LinuxOnly.
-        AssertSeparator(opsChildren[20]);
-        AssertItem(opsChildren[21], "SessionLock");
-        AssertSeparator(opsChildren[22]);
-        AssertItem(opsChildren[23], "RemoveMissingFileBases");
+        AssertSeparator(opsChildren[29]);
+        AssertItem(opsChildren[30], "SessionLock");
+        AssertSeparator(opsChildren[31]);
+        AssertItem(opsChildren[32], "RemoveMissingFileBases");
 
         // ---- «Проверить обновления» в конце, с разделителем ----
         AssertSeparator(layout.Root[15]);

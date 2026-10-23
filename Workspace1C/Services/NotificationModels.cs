@@ -43,7 +43,14 @@ public enum NotificationEvent
     /// действия, окна платформы) — выпуск 0.3.12.69. Показывается только системным каналом ОС,
     /// внешние каналы (Telegram, email) такие сообщения не получают.
     /// </summary>
-    General
+    General,
+
+    /// <summary>
+    /// Оповещения мониторинга (выпуск 1.0.0.69): превышения порогов на серверах 1С
+    /// и новые ошибки журнала регистрации. Во внешние каналы уходят при включённом
+    /// <see cref="NotificationChannelSettings.NotifyOnMonitoring"/>.
+    /// </summary>
+    Monitoring
 }
 
 /// <summary>

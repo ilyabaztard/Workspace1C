@@ -73,8 +73,43 @@ public sealed class SqliteLgdReader : ILgdReader
         if (skip < 0)
             throw new ArgumentOutOfRangeException(nameof(skip));
         if (take <= 0)
-            yield break;
+            return Array.Empty<EventLogEntry>();
 
+        return ReadRows(location, skip, take, null, null, newestFirst: false, progress, ct);
+    }
+
+    /// <summary>
+    /// Записи за период [<paramref name="from"/>; <paramref name="to"/>] от новых к старым
+    /// (выпуск 1.0.0.69): отбор по дате выполняет SQLite, поэтому большой журнал
+    /// не читается целиком.
+    /// </summary>
+    public IEnumerable<EventLogEntry> ReadNewestFirst(
+        JournalLocation location, DateTime from, DateTime to, CancellationToken ct = default)
+    {
+        EnsureCanRead(location);
+        return ReadRows(location, 0, -1, ToPlatformDate(from), ToPlatformDate(to), newestFirst: true, null, ct);
+    }
+
+    /// <summary>Обратное к <see cref="FromPlatformDate"/> преобразование (для условий отбора).</summary>
+    public static long ToPlatformDate(DateTime value)
+    {
+        if (value <= DateTime.MinValue)
+            return 0;
+        if (value >= DateTime.MaxValue)
+            return long.MaxValue;
+        return value.Ticks / 1000L;
+    }
+
+    private IEnumerable<EventLogEntry> ReadRows(
+        JournalLocation location,
+        int skip,
+        int take,
+        long? fromValue,
+        long? toValue,
+        bool newestFirst,
+        IProgress<double>? progress,
+        CancellationToken ct)
+    {
         using var conn = Open(location.MainFile);
         var eventTable = FindTable(conn, EventTableCandidates);
         if (eventTable is null)
@@ -91,10 +126,14 @@ public sealed class SqliteLgdReader : ILgdReader
         var computerIdx = cols.FindIndex("computercode", "com");
         var appIdx = cols.FindIndex("appcode", "app");
         var eventIdx = cols.FindIndex("eventcode", "evt", "event");
-        var sevIdx = cols.FindIndex("severitycode", "sev");
+        // В реальных файлах 1Cv8.lgd колонки называются «severity» и «metadataCodes»
+        // (1.0.0.69); прежние псевдонимы оставлены для совместимости.
+        var sevIdx = cols.FindIndex("severitycode", "sev", "severity");
         var commentIdx = cols.FindIndex("comment");
-        var metaCodeIdx = cols.FindIndex("metadatacode", "mdcode");
+        var metaCodeIdx = cols.FindIndex("metadatacode", "mdcode", "metadatacodes");
         var dataIdx = cols.FindIndex("data", "dta");
+        var dataPresentationIdx = cols.FindIndex("datapresentation");
+        var sessionIdx = cols.FindIndex("session");
 
         // Справочники кодов (могут отсутствовать — тогда используем «#код»).
         var userNames = ReadCodeNames(conn, UserTableCandidates);
@@ -121,15 +160,30 @@ public sealed class SqliteLgdReader : ILgdReader
         Need(commentIdx, "comment");
         Need(metaCodeIdx, "metadata");
         Need(dataIdx, "data");
+        Need(dataPresentationIdx, "dataPresentation");
+        Need(sessionIdx, "session");
 
         if (needed.Count == 0)
             yield break;
 
         var selectList = string.Join(", ", needed.Select(n => $"\"{cols.Order[n.Index]}\""));
+        var dateColumn = cols.Order[dateIdx];
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"SELECT rowid, {selectList} FROM \"{eventTable}\" ORDER BY rowid LIMIT @take OFFSET @skip";
-        cmd.Parameters.AddWithValue("@take", take);
-        cmd.Parameters.AddWithValue("@skip", skip);
+        var where = string.Empty;
+        if (fromValue is not null)
+        {
+            where = $" WHERE \"{dateColumn}\" >= @from AND \"{dateColumn}\" <= @to";
+            cmd.Parameters.AddWithValue("@from", fromValue.Value);
+            cmd.Parameters.AddWithValue("@to", toValue ?? long.MaxValue);
+        }
+        var order = newestFirst ? "DESC" : "ASC";
+        var limit = take > 0 ? " LIMIT @take OFFSET @skip" : string.Empty;
+        cmd.CommandText = $"SELECT rowid, {selectList} FROM \"{eventTable}\"{where} ORDER BY rowid {order}{limit}";
+        if (take > 0)
+        {
+            cmd.Parameters.AddWithValue("@take", take);
+            cmd.Parameters.AddWithValue("@skip", skip);
+        }
 
         var roleIndex = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < needed.Count; i++)
@@ -144,7 +198,7 @@ public sealed class SqliteLgdReader : ILgdReader
                 userNames, computerNames, appNames, eventNames, metadata);
 
             emitted++;
-            if (progress is not null)
+            if (progress is not null && take > 0)
                 progress.Report((double)emitted / take);
         }
     }
@@ -373,6 +427,8 @@ public sealed class SqliteLgdReader : ILgdReader
 
         entry.Comment = ReadString(reader, roleIndex, "comment");
         entry.Data = ReadString(reader, roleIndex, "data");
+        entry.DataPresentation = ReadString(reader, roleIndex, "dataPresentation");
+        entry.Session = ReadLong(reader, roleIndex, "session") ?? 0;
 
         var metaCode = ReadLong(reader, roleIndex, "metadata");
         if (metaCode is not null && metadata.TryGetValue(metaCode.Value, out var meta))

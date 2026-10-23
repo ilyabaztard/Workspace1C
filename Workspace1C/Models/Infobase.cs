@@ -49,6 +49,13 @@ public class Infobase : INotifyPropertyChanged
     public string Group { get; set; } = string.Empty;
 
     /// <summary>
+    /// Имя общего списка баз отдела, из которого получена база (выпуск 1.0.0.69);
+    /// пусто — база добавлена пользователем. Базы общего списка обновляются
+    /// и удаляются синхронизацией <c>SharedListService</c>.
+    /// </summary>
+    public string SharedSource { get; set; } = string.Empty;
+
+    /// <summary>
     /// Порядок отображения базы внутри группы (меньше — выше в списке).
     /// Используется при перетаскивании между базами.
     /// </summary>

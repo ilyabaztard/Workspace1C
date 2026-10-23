@@ -369,8 +369,12 @@ public sealed class ScheduledTaskEditWindow : ModalWindowBase
         _infobasePanel.IsVisible = kind is ScheduledTaskKind.Backup
             or ScheduledTaskKind.UpdateConfig
             or ScheduledTaskKind.BackupThenUpdateConfig
-            or ScheduledTaskKind.CheckIntegrity;
-        _cfgPanel.IsVisible = kind is ScheduledTaskKind.UpdateConfig or ScheduledTaskKind.BackupThenUpdateConfig;
+            or ScheduledTaskKind.CheckIntegrity
+            or ScheduledTaskKind.InstallExtension
+            or ScheduledTaskKind.GitCommitConfig
+            or ScheduledTaskKind.DbmsBackup;
+        _cfgPanel.IsVisible = kind is ScheduledTaskKind.UpdateConfig or ScheduledTaskKind.BackupThenUpdateConfig
+            or ScheduledTaskKind.InstallExtension;
         _platformPanel.IsVisible = kind is ScheduledTaskKind.PlatformUpdateCheck;
         _configPanel.IsVisible = kind is ScheduledTaskKind.ConfigurationUpdateCheck;
         // Повтор с интервалом (issue #366/#367/#5): для заданий-проверок и «Обновить

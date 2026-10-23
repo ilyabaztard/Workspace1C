@@ -150,6 +150,16 @@ public static class AppServices
         services.AddSingleton<INotificationChannel>(sp => sp.GetRequiredService<TelegramNotificationChannel>());
         services.AddSingleton<INotificationChannel>(sp => sp.GetRequiredService<EmailNotificationChannel>());
         services.AddSingleton<INotificationService, NotificationDispatcher>();
+        // Новые фоновые функции 1.0.0.69: оповещения мониторинга серверов/журналов
+        // регистрации и команды Telegram-бота (запускаются BackgroundFeatures.Start).
+        services.AddSingleton<ServerAlertsService>(sp => new ServerAlertsService(
+            sp.GetRequiredService<IRacClient>(), sp.GetRequiredService<IServerListStore>(),
+            sp.GetRequiredService<INotificationService>(), sp.GetService<IInfobaseRepository>(),
+            sp.GetService<IAppLogger>()));
+        services.AddSingleton<TelegramBotCommandService>(sp => new TelegramBotCommandService(
+            sp.GetRequiredService<INotificationSettingsStore>(), sp.GetRequiredService<IScheduledTaskStore>(),
+            sp.GetRequiredService<SchedulerService>(), sp.GetRequiredService<ServerAlertsService>(),
+            sp.GetService<IAppLogger>()));
         // Интерактивные подтверждения Telegram (выпуск 1.0.0.36+): HTTP-клиент Bot API
         // с long polling (TelegramBotApiClient) и реестр обработанных update_id
         // (telegram.offset в каталоге профиля). Используются headless CLI-командами

@@ -328,6 +328,8 @@ namespace Workspace1C
                 {
                     var scheduler = AppServices.GetRequiredService<SchedulerService>();
                     scheduler.Start();
+                    // Фоновые функции 1.0.0.69 (мониторинг, Telegram-бот, общий список баз).
+                    BackgroundFeatures.Start();
                     // Догоняющее выполнение пропущенных заданий (функция №7): задания,
                     // чьё плановое время наступило, пока приложение было выключено,
                     // выполняются сразу — один раз (если включено в настройках).
@@ -540,6 +542,7 @@ namespace Workspace1C
             try
             {
                 AppServices.GetRequiredService<SchedulerService>().Stop();
+                BackgroundFeatures.Stop();
             }
             catch
             {

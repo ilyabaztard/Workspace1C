@@ -1938,6 +1938,24 @@ namespace Workspace1C
                     item.Command = _vm!.ConfigDiffCommand; break;
                 case UtilitiesMenuCommandKind.MetadataExplorer:
                     item.Command = _vm!.MetadataExplorerCommand; break;
+                case UtilitiesMenuCommandKind.EventLog:
+                    item.Command = _vm!.EventLogCommand; break;
+                case UtilitiesMenuCommandKind.SharedLists:
+                    item.Command = _vm!.SharedListsCommand; break;
+                case UtilitiesMenuCommandKind.TelegramBot:
+                    item.Command = _vm!.TelegramBotCommand; break;
+                case UtilitiesMenuCommandKind.DbmsBackup:
+                    item.Command = _vm!.DbmsBackupCommand; break;
+                case UtilitiesMenuCommandKind.ServerAlerts:
+                    item.Command = _vm!.ServerAlertsCommand; break;
+                case UtilitiesMenuCommandKind.WebPublish:
+                    item.Command = _vm!.WebPublishCommand; break;
+                case UtilitiesMenuCommandKind.TechLog:
+                    item.Command = _vm!.TechLogCommand; break;
+                case UtilitiesMenuCommandKind.GitVersioning:
+                    item.Command = _vm!.GitVersioningCommand; break;
+                case UtilitiesMenuCommandKind.ConfigExtensions:
+                    item.Command = _vm!.ExtensionsCommand; break;
                 case UtilitiesMenuCommandKind.RepositoryBatchUpdate:
                     item.Command = _vm!.RepositoryBatchUpdateCommand; break;
                 case UtilitiesMenuCommandKind.RepositoryBrowser:

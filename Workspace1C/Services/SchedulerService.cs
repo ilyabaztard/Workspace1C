@@ -296,6 +296,9 @@ public class SchedulerService : IDisposable
         ScheduledTaskKind.UpdateApp => LocalizationManager.T("Schedule.Kind.UpdateApp"),
         ScheduledTaskKind.PlatformUpdateCheck => LocalizationManager.T("Schedule.Kind.PlatformUpdateCheck"),
         ScheduledTaskKind.ConfigurationUpdateCheck => LocalizationManager.T("Schedule.Kind.ConfigurationUpdateCheck"),
+        ScheduledTaskKind.InstallExtension => LocalizationManager.T("Schedule.Kind.InstallExtension"),
+        ScheduledTaskKind.GitCommitConfig => LocalizationManager.T("Schedule.Kind.GitCommitConfig"),
+        ScheduledTaskKind.DbmsBackup => LocalizationManager.T("Schedule.Kind.DbmsBackup"),
         _ => LocalizationManager.T("Schedule.Kind.Backup")
     };
 
@@ -312,6 +315,9 @@ public class SchedulerService : IDisposable
                 ScheduledTaskKind.UpdateApp => await RunUpdateAppAsync(task).ConfigureAwait(false),
                 ScheduledTaskKind.PlatformUpdateCheck => await RunPlatformUpdateCheckAsync(task).ConfigureAwait(false),
                 ScheduledTaskKind.ConfigurationUpdateCheck => await RunConfigurationUpdateCheckAsync(task).ConfigureAwait(false),
+                ScheduledTaskKind.InstallExtension => await RunInstallExtensionAsync(task).ConfigureAwait(false),
+                ScheduledTaskKind.GitCommitConfig => await RunGitCommitAsync(task).ConfigureAwait(false),
+                ScheduledTaskKind.DbmsBackup => await RunDbmsBackupAsync(task).ConfigureAwait(false),
                 _ => null
             };
         }
@@ -345,6 +351,54 @@ public class SchedulerService : IDisposable
             return Fail(LocalizationManager.T("Schedule.CfgFileRequired"));
 
         return await _configUpdate.UpdateConfigAsync(infobase, task.ConfigFilePath!).ConfigureAwait(false);
+    }
+
+    /// <summary>Установка расширения из .cfe (выпуск 1.0.0.69): имя — имя файла без расширения.</summary>
+    private async Task<BackupRunResult?> RunInstallExtensionAsync(ScheduledTask task)
+    {
+        var infobase = ResolveInfobase(task.InfobaseId);
+        if (infobase is null)
+            return Fail(LocalizationManager.T("Schedule.BaseNotFound"));
+        if (string.IsNullOrWhiteSpace(task.ConfigFilePath))
+            return Fail(LocalizationManager.T("Schedule.CfgFileRequired"));
+
+        var name = ConfigExtensionService.SuggestName(task.ConfigFilePath);
+        var run = await ConfigExtensionService.InstallAsync(infobase, task.ConfigFilePath!, name).ConfigureAwait(false);
+        return run.Success
+            ? new BackupRunResult { Success = true, ScenarioName = name }
+            : Fail(run.Error ?? LocalizationManager.T("Extensions.Failed"));
+    }
+
+    /// <summary>Выгрузка конфигурации в Git (выпуск 1.0.0.69) по сохранённым настройкам базы.</summary>
+    private async Task<BackupRunResult?> RunGitCommitAsync(ScheduledTask task)
+    {
+        var infobase = ResolveInfobase(task.InfobaseId);
+        if (infobase is null)
+            return Fail(LocalizationManager.T("Schedule.BaseNotFound"));
+        var settings = GitVersioningService.Load().Find(infobase.Id);
+        if (settings is null)
+            return Fail(LocalizationManager.T("Git.NotConfigured"));
+
+        var result = await GitVersioningService.RunAsync(infobase, settings,
+            message => _logger?.Info($"Git «{infobase.Name}»: {message}")).ConfigureAwait(false);
+        return result.Success
+            ? new BackupRunResult { Success = true, ScenarioName = result.Message, SuppressNotification = !result.Committed }
+            : Fail(result.Message);
+    }
+
+    /// <summary>Копия средствами СУБД (выпуск 1.0.0.69) по профилю базы.</summary>
+    private async Task<BackupRunResult?> RunDbmsBackupAsync(ScheduledTask task)
+    {
+        var infobase = ResolveInfobase(task.InfobaseId);
+        if (infobase is null)
+            return Fail(LocalizationManager.T("Schedule.BaseNotFound"));
+        var profile = DbmsBackupService.Load().Find(infobase.Id);
+        if (profile is null)
+            return Fail(LocalizationManager.T("Dbms.NotConfigured"));
+        var result = await DbmsBackupService.RunAsync(profile,
+            message => _logger?.Info($"СУБД «{infobase.Name}»: {message}")).ConfigureAwait(false);
+        result.ScenarioName = string.IsNullOrEmpty(result.ScenarioName) ? profile.Database : result.ScenarioName;
+        return result;
     }
 
     private async Task<BackupRunResult?> RunCheckIntegrityAsync(ScheduledTask task)

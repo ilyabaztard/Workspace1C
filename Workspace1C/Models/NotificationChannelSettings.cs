@@ -63,6 +63,9 @@ public sealed class NotificationChannelSettings
     /// <summary>Отправлять сообщение о новой версии приложения.</summary>
     public bool NotifyOnUpdates { get; set; } = true;
 
+    /// <summary>Отправлять оповещения мониторинга серверов и журналов регистрации (1.0.0.69).</summary>
+    public bool NotifyOnMonitoring { get; set; } = true;
+
     /// <summary>Отправлять только ошибки и предупреждения (успешные операции пропускаются).</summary>
     public bool OnlyProblems { get; set; }
 

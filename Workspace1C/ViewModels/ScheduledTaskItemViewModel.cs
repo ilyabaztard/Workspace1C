@@ -98,6 +98,9 @@ public class ScheduledTaskItemViewModel : ViewModelBase
         ScheduledTaskKind.UpdateApp => LocalizationManager.T("Schedule.Kind.UpdateApp"),
         ScheduledTaskKind.PlatformUpdateCheck => LocalizationManager.T("Schedule.Kind.PlatformUpdateCheck"),
         ScheduledTaskKind.ConfigurationUpdateCheck => LocalizationManager.T("Schedule.Kind.ConfigurationUpdateCheck"),
+        ScheduledTaskKind.InstallExtension => LocalizationManager.T("Schedule.Kind.InstallExtension"),
+        ScheduledTaskKind.GitCommitConfig => LocalizationManager.T("Schedule.Kind.GitCommitConfig"),
+        ScheduledTaskKind.DbmsBackup => LocalizationManager.T("Schedule.Kind.DbmsBackup"),
         _ => LocalizationManager.T("Schedule.Kind.Backup")
     };
 

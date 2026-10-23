@@ -35,7 +35,27 @@ public enum ScheduledTaskKind
     /// версия по списку баз сравнивается с доступными релизами — без установки,
     /// только уведомление о версиях выше установленной (issue #367).
     /// </summary>
-    ConfigurationUpdateCheck
+    ConfigurationUpdateCheck,
+
+    /// <summary>
+    /// Установка (обновление) расширения конфигурации из файла .cfe в базу
+    /// (<c>/LoadCfg -Extension</c> + <c>/UpdateDBCfg -Extension</c>, выпуск 1.0.0.69).
+    /// Путь к файлу — в <see cref="ScheduledTask.ConfigFilePath"/>, имя расширения —
+    /// имя файла без расширения.
+    /// </summary>
+    InstallExtension,
+
+    /// <summary>
+    /// Выгрузка конфигурации базы в XML и коммит в Git по настройкам окна
+    /// «Версионирование в Git» (выпуск 1.0.0.69).
+    /// </summary>
+    GitCommitConfig,
+
+    /// <summary>
+    /// Резервная копия клиент-серверной базы средствами СУБД (pg_dump / BACKUP DATABASE)
+    /// по профилю окна «Резервные копии СУБД» (выпуск 1.0.0.69).
+    /// </summary>
+    DbmsBackup
 }
 
 /// <summary>

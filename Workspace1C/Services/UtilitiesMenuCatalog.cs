@@ -121,7 +121,34 @@ public enum UtilitiesMenuCommandKind
     CheckForUpdates,
 
     /// <summary>Блокировка сеансов информационной базы (только Avalonia/Linux).</summary>
-    SessionLock
+    SessionLock,
+
+    /// <summary>Журнал регистрации информационной базы (1.0.0.69).</summary>
+    EventLog,
+
+    /// <summary>Расширения конфигурации (.cfe) (1.0.0.69).</summary>
+    ConfigExtensions,
+
+    /// <summary>Версионирование конфигурации в Git (1.0.0.69).</summary>
+    GitVersioning,
+
+    /// <summary>Технологический журнал (1.0.0.69).</summary>
+    TechLog,
+
+    /// <summary>Публикация на веб-сервере (1.0.0.69).</summary>
+    WebPublish,
+
+    /// <summary>Мониторинг и оповещения (1.0.0.69).</summary>
+    ServerAlerts,
+
+    /// <summary>Резервные копии средствами СУБД (1.0.0.69).</summary>
+    DbmsBackup,
+
+    /// <summary>Команды Telegram-бота (1.0.0.69).</summary>
+    TelegramBot,
+
+    /// <summary>Общие списки баз отдела (1.0.0.69).</summary>
+    SharedLists
 }
 
 /// <summary>
@@ -420,6 +447,42 @@ public static class UtilitiesMenuCatalog
                 "Compare", "IconCompare", "#06B6D4", UtilitiesMenuCommandKind.ConfigDiff),
             new("MetadataExplorer", "MetadataExplorer.Title", GroupOperations,
                 "Sitemap", "IconCompare", "#06B6D4", UtilitiesMenuCommandKind.MetadataExplorer),
+            // «Журнал регистрации» (1.0.0.69): просмотр журнала файловой базы или каталога 1Cv8Log.
+            new("EventLog", "EventLog.MenuItem", GroupOperations,
+                "IconLogs", "IconLogs", "#EF4444", UtilitiesMenuCommandKind.EventLog,
+                isNew: true),
+            // «Расширения конфигурации» (1.0.0.69): пакетная установка .cfe в отмеченные базы.
+            new("ConfigExtensions", "Extensions.MenuItem", GroupOperations,
+                "IconExtension", "IconExtension", "#8B5CF6", UtilitiesMenuCommandKind.ConfigExtensions,
+                isNew: true),
+            // «Версионирование конфигурации в Git (1.0.0.69)».
+            new("GitVersioning", "Git.MenuItem", GroupOperations,
+                "IconMerge", "IconMerge", "#F97316", UtilitiesMenuCommandKind.GitVersioning,
+                isNew: true),
+            // «Технологический журнал (1.0.0.69)».
+            new("TechLog", "TechLog.MenuItem", GroupOperations,
+                "IconMonitoring", "IconMonitoring", "#0EA5E9", UtilitiesMenuCommandKind.TechLog,
+                isNew: true),
+            // «Публикация на веб-сервере (1.0.0.69)».
+            new("WebPublish", "WebPublish.MenuItem", GroupOperations,
+                "IconWeb", "IconWeb", "#22C55E", UtilitiesMenuCommandKind.WebPublish,
+                isNew: true),
+            // «Мониторинг и оповещения (1.0.0.69)».
+            new("ServerAlerts", "Alerts.MenuItem", GroupOperations,
+                "IconMonitoring", "IconMonitoring", "#EF4444", UtilitiesMenuCommandKind.ServerAlerts,
+                isNew: true),
+            // «Резервные копии средствами СУБД (1.0.0.69)».
+            new("DbmsBackup", "Dbms.MenuItem", GroupOperations,
+                "IconBackup", "IconBackup", "#16A34A", UtilitiesMenuCommandKind.DbmsBackup,
+                isNew: true),
+            // «Команды Telegram-бота (1.0.0.69)».
+            new("TelegramBot", "Bot.MenuItem", GroupOperations,
+                "IconPublish", "IconPublish", "#0EA5E9", UtilitiesMenuCommandKind.TelegramBot,
+                isNew: true),
+            // «Общие списки баз отдела (1.0.0.69)».
+            new("SharedLists", "Shared.MenuItem", GroupOperations,
+                "IconUsers", "IconUsers", "#3B82F6", UtilitiesMenuCommandKind.SharedLists,
+                isNew: true),
             new("RepositoryBatchUpdate", "RepoUpdate.Title", GroupOperations,
                 "SourceBranch", "IconCloudDownload", "#06B6D4", UtilitiesMenuCommandKind.RepositoryBatchUpdate),
             new("RepositoryBrowser", "RepositoryBrowser.Title", GroupOperations,
@@ -526,6 +589,15 @@ public static class UtilitiesMenuLayouts
             {
                 Item("ConfigDiff"),
                 Item("MetadataExplorer"),
+                Item("EventLog"),
+                Item("ConfigExtensions"),
+                Item("GitVersioning"),
+                Item("TechLog"),
+                Item("WebPublish"),
+                Item("ServerAlerts"),
+                Item("DbmsBackup"),
+                Item("TelegramBot"),
+                Item("SharedLists"),
                 Separator(),
                 Item("RepositoryBatchUpdate"),
                 Item("RepositoryBrowser"),

@@ -30,6 +30,7 @@ public static class NotificationEventFilter
             NotificationEvent.Backup => settings.NotifyOnBackup,
             NotificationEvent.ScheduledTask => settings.NotifyOnScheduledTasks,
             NotificationEvent.Update => settings.NotifyOnUpdates,
+            NotificationEvent.Monitoring => settings.NotifyOnMonitoring,
             _ => false
         };
         if (!byEvent)

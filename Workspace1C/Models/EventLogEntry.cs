@@ -58,6 +58,15 @@ public sealed class EventLogEntry
     public string Data { get; set; } = string.Empty;
 
     /// <summary>
+    /// Представление данных события, записанное платформой (например «Реализация
+    /// товаров 000123 от 01.10.2026»), если есть (выпуск 1.0.0.69).
+    /// </summary>
+    public string DataPresentation { get; set; } = string.Empty;
+
+    /// <summary>Номер сеанса (0 — неизвестен; выпуск 1.0.0.69).</summary>
+    public long Session { get; set; }
+
+    /// <summary>
     /// Файл журнала, из которого прочитана запись (для трассировки и экспорта).
     /// </summary>
     public string SourceFile { get; set; } = string.Empty;

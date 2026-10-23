@@ -11,6 +11,78 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.69] — 2026-10-23
+
+### Добавлено
+
+Девять новых инструментов в меню **«Утилиты» → «Операции»** (сразу после «Обозревателя
+метаданных»); при сохранённой пользовательской компоновке меню они попадают в подменю
+**«Новинки программы»**. Все окна есть на Windows (WPF) и Linux (Avalonia).
+
+- **Журнал регистрации** (завершение функции, начатой в 0.3.9.161) — окно просмотра журнала
+  файловой базы (каталог `1Cv8Log`) или любого указанного каталога журнала (для
+  клиент-серверной базы — `srvinfo\reg_<порт>\<id базы>\1Cv8Log` на сервере). Новый ридер
+  последовательного формата `.lgf`/`.lgp` ([`SequentialLgfReader.cs`](Workspace1C/Services/EventLog/SequentialLgfReader.cs),
+  потоковый разбор скобочного формата — [`LgfBracketParser.cs`](Workspace1C/Services/EventLog/LgfBracketParser.cs)),
+  отбор по периоду (час / сегодня / вчера / 7 / 30 дней / весь журнал), важности, пользователю,
+  событию и тексту, лимит записей, подробности записи, экспорт в CSV для Excel
+  ([`EventLogQuery.cs`](Workspace1C/Services/EventLog/EventLogQuery.cs),
+  [`EventLogViewModel.cs`](Workspace1C/ViewModels/EventLogViewModel.cs)). Имена событий
+  и приложений показываются по-русски («Сеанс. Начало», «Тонкий клиент»). SQLite-ридер
+  (`1Cv8.lgd`) получил выборку за период на стороне SQLite и поддержку реальных имён колонок
+  `severity`, `metadataCodes`, `dataPresentation`, `session`.
+- **Расширения конфигурации (.cfe)** — пакетная установка/обновление одного расширения в
+  отмеченные базы (`/LoadCfg -Extension` + `/UpdateDBCfg -Extension`), список расширений
+  базы (`/DumpDBCfgList -AllExtensions`), выгрузка расширения в файл и удаление
+  ([`ConfigExtensionService.cs`](Workspace1C/Services/ConfigExtensionService.cs)). Новый тип
+  задания по расписанию **«Установить расширение (.cfe)»** (имя расширения — имя файла).
+  Общий запуск конфигуратора с произвольными ключами —
+  [`DesignerCommandRunner.cs`](Workspace1C/Services/DesignerCommandRunner.cs).
+- **Версионирование конфигурации в Git** — выгрузка конфигурации базы в XML
+  (`/DumpConfigToFiles`) в подкаталог репозитория, `git add -A`, коммит с шаблоном сообщения
+  (`{base}`, `{date}`, `{version}`) и, при желании, `git push`
+  ([`GitVersioningService.cs`](Workspace1C/Services/GitVersioningService.cs)). Настройки
+  хранятся по базам в `git_versioning.json`; тип задания по расписанию **«Выгрузить
+  конфигурацию в Git»**. Нужен установленный Git.
+- **Технологический журнал** — готовые шаблоны `logcfg.xml`: исключения (EXCP), блокировки
+  (TLOCK/TTIMEOUT/TDEADLOCK), долгие запросы к СУБД и долгие серверные вызовы с порогом в мс;
+  срок хранения логов (`history`), предпросмотр, включение с резервной копией прежнего файла
+  и отключение ([`TechLogService.cs`](Workspace1C/Services/TechLogService.cs)).
+- **Публикация на веб-сервере** — публикация базы утилитой `webinst` из каталога платформы
+  базы на IIS, Apache 2.4 или 2.2, удаление публикации, имя публикации по умолчанию —
+  транслитерация имени базы ([`WebPublishService.cs`](Workspace1C/Services/WebPublishService.cs)).
+- **Мониторинг и оповещения** — фоновая проверка серверов из справочника «Серверы 1С»
+  (порог числа сеансов, памяти рабочего процесса, ожидающих блокировок) и новых ошибок
+  в журналах регистрации файловых баз; оповещения системным уведомлением, в Telegram и на
+  почту с подавлением повторов ([`ServerAlertsService.cs`](Workspace1C/Services/ServerAlertsService.cs)).
+  Новое событие уведомлений `Monitoring` и настройка `NotifyOnMonitoring` (по умолчанию включена).
+- **Резервные копии средствами СУБД** — PostgreSQL (`pg_dump -Fc`) и MS SQL Server
+  (`BACKUP DATABASE … WITH COPY_ONLY` через `sqlcmd`), ротация копий, выгрузка в облако
+  по WebDAV (Яндекс.Диск, Nextcloud) ([`DbmsBackupService.cs`](Workspace1C/Services/DbmsBackupService.cs));
+  тип задания по расписанию **«Копия средствами СУБД»**.
+- **Команды Telegram-бота** — бот уведомлений принимает команды `/status`, `/tasks`,
+  `/run N` (запуск задания по расписанию, включается отдельно), `/alerts`, `/help`; только
+  из разрешённых чатов, по умолчанию выключено
+  ([`TelegramBotCommandService.cs`](Workspace1C/Services/TelegramBotCommandService.cs)).
+- **Общие списки баз отдела** — подписка на общий `ibases.v8i` (сетевая папка или
+  http-адрес): базы источника появляются в группе с именем списка и синхронизируются при
+  запуске и по интервалу — новые добавляются, изменённые обновляются, удалённые из файла
+  убираются; личные базы не затрагиваются ([`SharedListService.cs`](Workspace1C/Services/SharedListService.cs),
+  новое поле базы `SharedSource`).
+
+### Технические изменения
+
+- Окна новых функций собираются в коде по общим помощникам
+  [`WpfUi.cs`](Workspace1C/Views/WpfUi.cs) / [`AvaloniaUi.Avalonia.cs`](Workspace1C/Views/AvaloniaUi.Avalonia.cs)
+  с кистями и стилями активной темы; команды — в
+  [`MainViewModel.Features.cs`](Workspace1C/ViewModels/MainViewModel.Features.cs) и
+  [`MainViewModel.Avalonia.Features.cs`](Workspace1C/ViewModels/MainViewModel.Avalonia.Features.cs).
+- Фоновые функции запускаются после планировщика ([`BackgroundFeatures.cs`](Workspace1C/Services/BackgroundFeatures.cs)),
+  настройки — JSON-файлы профиля ([`FeatureDataStore.cs`](Workspace1C/Services/FeatureDataStore.cs)),
+  внешние утилиты — [`ProcessRunner.cs`](Workspace1C/Services/ProcessRunner.cs).
+- Юнит-тесты: `EventLogSequentialReaderTests`, `ConfigExtensionServiceTests`,
+  `NewFeaturesServicesTests`; обновлён `UtilitiesMenuLayoutTests` (состав подменю «Операции»).
+
 ## [1.0.0.68] — 2026-10-23
 
 ### Изменено

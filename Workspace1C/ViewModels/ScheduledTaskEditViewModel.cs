@@ -158,10 +158,14 @@ public class ScheduledTaskEditViewModel : ViewModelBase
     public bool NeedsInfobase => Kind is ScheduledTaskKind.Backup
         or ScheduledTaskKind.UpdateConfig
         or ScheduledTaskKind.BackupThenUpdateConfig
-        or ScheduledTaskKind.CheckIntegrity;
+        or ScheduledTaskKind.CheckIntegrity
+        or ScheduledTaskKind.InstallExtension
+        or ScheduledTaskKind.GitCommitConfig
+        or ScheduledTaskKind.DbmsBackup;
 
     /// <summary>Нужен ли путь к файлу .cf (для обновления конфигурации).</summary>
-    public bool NeedsCfgFile => Kind is ScheduledTaskKind.UpdateConfig or ScheduledTaskKind.BackupThenUpdateConfig;
+    public bool NeedsCfgFile => Kind is ScheduledTaskKind.UpdateConfig or ScheduledTaskKind.BackupThenUpdateConfig
+        or ScheduledTaskKind.InstallExtension;
 
     /// <summary>Доступные единицы интервала повтора (issue #366/#367; кэш — issue #372).</summary>
     public IReadOnlyList<ScheduledTaskOption> RepeatUnitOptions => _repeatUnitOptions;
@@ -185,7 +189,10 @@ public class ScheduledTaskEditViewModel : ViewModelBase
             new ScheduledTaskOption("CheckIntegrity", LocalizationManager.T("Schedule.Kind.CheckIntegrity")),
             new ScheduledTaskOption("UpdateApp", LocalizationManager.T("Schedule.Kind.UpdateApp")),
             new ScheduledTaskOption("PlatformUpdateCheck", LocalizationManager.T("Schedule.Kind.PlatformUpdateCheck")),
-            new ScheduledTaskOption("ConfigurationUpdateCheck", LocalizationManager.T("Schedule.Kind.ConfigurationUpdateCheck"))
+            new ScheduledTaskOption("ConfigurationUpdateCheck", LocalizationManager.T("Schedule.Kind.ConfigurationUpdateCheck")),
+            new ScheduledTaskOption("InstallExtension", LocalizationManager.T("Schedule.Kind.InstallExtension")),
+            new ScheduledTaskOption("GitCommitConfig", LocalizationManager.T("Schedule.Kind.GitCommitConfig")),
+            new ScheduledTaskOption("DbmsBackup", LocalizationManager.T("Schedule.Kind.DbmsBackup"))
         };
 #if DEBUG
         // Диагностика локализации опций (issue #372): язык и текст первой опции — чтобы

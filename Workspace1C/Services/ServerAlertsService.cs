@@ -1,0 +1,261 @@
+using System.Globalization;
+using Workspace1C.Localization;
+using Workspace1C.Models;
+using Workspace1C.Services.EventLog;
+
+namespace Workspace1C.Services;
+
+/// <summary>Правило оповещения для сервера 1С из справочника «Серверы 1С».</summary>
+public sealed class ServerAlertRule
+{
+    /// <summary>Идентификатор сервера (<see cref="ManagementServer.Id"/>).</summary>
+    public string ServerId { get; set; } = string.Empty;
+
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Порог числа сеансов в кластере (0 — не проверять).</summary>
+    public int MaxSessions { get; set; }
+
+    /// <summary>Порог памяти одного рабочего процесса, МБ (0 — не проверять).</summary>
+    public int MaxProcessMemoryMb { get; set; }
+
+    /// <summary>Порог числа ожидающих блокировок (0 — не проверять).</summary>
+    public int MaxWaitingLocks { get; set; }
+}
+
+/// <summary>Наблюдение за ошибками журнала регистрации файловой базы.</summary>
+public sealed class EventLogWatch
+{
+    public string InfobaseId { get; set; } = string.Empty;
+
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Порог числа новых ошибок за интервал (1 — о каждой ошибке).</summary>
+    public int MinErrors { get; set; } = 1;
+}
+
+/// <summary>Настройки мониторинга (<c>server_alerts.json</c>).</summary>
+public sealed class ServerAlertSettings
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Интервал проверки, минут.</summary>
+    public int IntervalMinutes { get; set; } = 5;
+
+    /// <summary>Не повторять одинаковое оповещение чаще, чем раз в N минут.</summary>
+    public int RepeatMinutes { get; set; } = 60;
+
+    public List<ServerAlertRule> Rules { get; set; } = new();
+
+    public List<EventLogWatch> EventLogWatches { get; set; } = new();
+}
+
+/// <summary>
+/// Оповещения мониторинга (выпуск 1.0.0.69): фоновая проверка кластеров серверов 1С
+/// (число сеансов, память рабочих процессов, ожидающие блокировки) и новых ошибок
+/// в журналах регистрации файловых баз. Превышения отправляются через
+/// <see cref="INotificationService"/> (системное уведомление, Telegram, email)
+/// с подавлением повторов. Правила проверки — чистые функции (тесты).
+/// </summary>
+public sealed class ServerAlertsService : IDisposable
+{
+    public const string FileName = "server_alerts.json";
+
+    private readonly IRacClient _rac;
+    private readonly IServerListStore _servers;
+    private readonly INotificationService _notifications;
+    private readonly IInfobaseRepository? _infobases;
+    private readonly IAppLogger? _logger;
+    private readonly Dictionary<string, DateTime> _lastSent = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTime> _eventLogChecked = new(StringComparer.Ordinal);
+    private Timer? _timer;
+    private int _running;
+
+    public ServerAlertsService(IRacClient rac, IServerListStore servers, INotificationService notifications,
+        IInfobaseRepository? infobases = null, IAppLogger? logger = null)
+    {
+        _rac = rac;
+        _servers = servers;
+        _notifications = notifications;
+        _infobases = infobases;
+        _logger = logger;
+    }
+
+    public static ServerAlertSettings Load() => FeatureDataStore.Load<ServerAlertSettings>(FileName);
+
+    public static void Save(ServerAlertSettings settings) => FeatureDataStore.Save(FileName, settings);
+
+    /// <summary>Запускает фоновые проверки (перечитывает настройки на каждом цикле).</summary>
+    public void Start()
+    {
+        _timer?.Dispose();
+        _timer = new Timer(_ => _ = TickAsync(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+    }
+
+    public void Stop()
+    {
+        _timer?.Dispose();
+        _timer = null;
+    }
+
+    public void Dispose() => Stop();
+
+    private DateTime _nextRun = DateTime.MinValue;
+
+    private async Task TickAsync()
+    {
+        if (Interlocked.Exchange(ref _running, 1) == 1)
+            return;
+        try
+        {
+            var settings = Load();
+            if (!settings.Enabled || DateTime.Now < _nextRun)
+                return;
+            _nextRun = DateTime.Now.AddMinutes(Math.Max(1, settings.IntervalMinutes));
+            await CheckNowAsync(settings, notify: true).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("Ошибка проверки мониторинга серверов", ex);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _running, 0);
+        }
+    }
+
+    /// <summary>
+    /// Выполняет все проверки один раз. Возвращает тексты найденных превышений
+    /// (для кнопки «Проверить сейчас»); при <paramref name="notify"/> отправляет оповещения.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> CheckNowAsync(ServerAlertSettings settings, bool notify,
+        CancellationToken ct = default)
+    {
+        var alerts = new List<(string Key, string Text)>();
+        var servers = _servers.Load();
+        foreach (var rule in settings.Rules.Where(r => r.Enabled))
+        {
+            var server = servers.FirstOrDefault(s => s.Id == rule.ServerId);
+            if (server is null)
+                continue;
+            try
+            {
+                alerts.AddRange(await CheckServerAsync(server, rule, ct).ConfigureAwait(false));
+            }
+            catch (Exception ex)
+            {
+                alerts.Add(($"unreachable:{server.Id}", string.Format(
+                    LocalizationManager.T("Alerts.Unreachable"), server, ex.Message)));
+            }
+        }
+
+        if (_infobases is not null)
+        {
+            var all = _infobases.Load();
+            foreach (var watch in settings.EventLogWatches.Where(w => w.Enabled))
+            {
+                var ib = all.FirstOrDefault(b => b.Id == watch.InfobaseId);
+                if (ib is null)
+                    continue;
+                var text = CheckEventLog(ib, watch);
+                if (text is not null)
+                    alerts.Add(($"eventlog:{ib.Id}:{DateTime.Now:yyyyMMddHHmm}", text));
+            }
+        }
+
+        if (notify)
+        {
+            var repeat = TimeSpan.FromMinutes(Math.Max(1, settings.RepeatMinutes));
+            foreach (var (key, text) in alerts)
+            {
+                if (_lastSent.TryGetValue(key, out var last) && DateTime.Now - last < repeat)
+                    continue;
+                _lastSent[key] = DateTime.Now;
+                _notifications.Show(LocalizationManager.T("Alerts.NotificationTitle"), text,
+                    NotificationKind.Warning, NotificationEvent.Monitoring);
+            }
+        }
+        return alerts.Select(a => a.Text).ToList();
+    }
+
+    private async Task<List<(string Key, string Text)>> CheckServerAsync(ManagementServer server, ServerAlertRule rule,
+        CancellationToken ct)
+    {
+        var (host, port) = RacConnectionAddress.Split(server.Address, server.Port);
+        var parameters = new RacConnectionParams
+        {
+            Address = host,
+            Port = port,
+            User = server.User ?? string.Empty,
+            Password = server.Password ?? string.Empty
+        };
+        var result = new List<(string, string)>();
+        var clusters = await _rac.GetClustersAsync(parameters, ct).ConfigureAwait(false);
+        foreach (var cluster in clusters)
+        {
+            IReadOnlyList<RacSessionInfo> sessions = rule.MaxSessions > 0
+                ? await _rac.GetSessionsAsync(parameters, cluster.Id, null, ct).ConfigureAwait(false)
+                : Array.Empty<RacSessionInfo>();
+            IReadOnlyList<RacProcessInfo> processes = rule.MaxProcessMemoryMb > 0
+                ? await _rac.GetProcessesAsync(parameters, cluster.Id, ct).ConfigureAwait(false)
+                : Array.Empty<RacProcessInfo>();
+            IReadOnlyList<RacLockInfo> locks = rule.MaxWaitingLocks > 0
+                ? await _rac.GetLocksAsync(parameters, cluster.Id, null, ct).ConfigureAwait(false)
+                : Array.Empty<RacLockInfo>();
+
+            var where = $"{server} / {(string.IsNullOrWhiteSpace(cluster.Name) ? cluster.Host : cluster.Name)}";
+            foreach (var text in Evaluate(rule, where, sessions.Count, processes, locks))
+                result.Add(($"{server.Id}:{cluster.Id}:{text.GetHashCode()}", text));
+        }
+        return result;
+    }
+
+    /// <summary>Проверка порогов правила по данным кластера (чистая функция).</summary>
+    public static IReadOnlyList<string> Evaluate(ServerAlertRule rule, string where, int sessionCount,
+        IEnumerable<RacProcessInfo> processes, IEnumerable<RacLockInfo> locks)
+    {
+        var result = new List<string>();
+        if (rule.MaxSessions > 0 && sessionCount > rule.MaxSessions)
+            result.Add(string.Format(LocalizationManager.T("Alerts.TooManySessions"), where, sessionCount, rule.MaxSessions));
+
+        if (rule.MaxProcessMemoryMb > 0)
+        {
+            foreach (var p in processes)
+            {
+                // memory-size в rac — килобайты.
+                var mb = p.MemorySize / 1024;
+                if (mb > rule.MaxProcessMemoryMb)
+                    result.Add(string.Format(LocalizationManager.T("Alerts.ProcessMemory"), where,
+                        string.IsNullOrWhiteSpace(p.Host) ? "?" : p.Host, p.Pid,
+                        mb.ToString(CultureInfo.InvariantCulture), rule.MaxProcessMemoryMb));
+            }
+        }
+
+        if (rule.MaxWaitingLocks > 0)
+        {
+            var waiting = locks.Count(l => l.Waiting);
+            if (waiting > rule.MaxWaitingLocks)
+                result.Add(string.Format(LocalizationManager.T("Alerts.WaitingLocks"), where, waiting, rule.MaxWaitingLocks));
+        }
+        return result;
+    }
+
+    /// <summary>Новые ошибки журнала регистрации базы с прошлой проверки.</summary>
+    private string? CheckEventLog(Infobase ib, EventLogWatch watch)
+    {
+        var now = DateTime.Now;
+        if (!_eventLogChecked.TryGetValue(ib.Id, out var since))
+        {
+            // Первая проверка после запуска — только с текущего момента, без «старых» ошибок.
+            _eventLogChecked[ib.Id] = now;
+            return null;
+        }
+        _eventLogChecked[ib.Id] = now;
+        var location = LgdJournalLocator.Resolve(ib);
+        var count = EventLogQueryService.CountErrors(location, since, now, 1000);
+        if (count is null || count.Value < Math.Max(1, watch.MinErrors))
+            return null;
+        return string.Format(LocalizationManager.T("Alerts.EventLogErrors"), ib.Name, count.Value,
+            since.ToString("HH:mm", CultureInfo.InvariantCulture));
+    }
+}

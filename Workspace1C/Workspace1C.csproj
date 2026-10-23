@@ -59,10 +59,10 @@
          поэтому AssemblyVersion/FileVersion/Version ограничены 4 частями, а точная
          пользовательская версия «0.3.1.1» задаётся через InformationalVersion
          и выводится в заголовок окна. -->
-    <Version>1.0.0.68</Version>
-    <AssemblyVersion>1.0.0.68</AssemblyVersion>
-    <FileVersion>1.0.0.68</FileVersion>
-    <InformationalVersion>1.0.0.68</InformationalVersion>
+    <Version>1.0.0.69</Version>
+    <AssemblyVersion>1.0.0.69</AssemblyVersion>
+    <FileVersion>1.0.0.69</FileVersion>
+    <InformationalVersion>1.0.0.69</InformationalVersion>
     <!-- RID/SelfContained только при publish, чтобы обычный dotnet run/build не ломался -->
     <PublishReadyToRun>false</PublishReadyToRun>
     <DebugType>embedded</DebugType>
@@ -579,6 +579,17 @@
          платформенных зависимостей, используются обеими платформами — на Linux
          подключаются явно (имена не совпадают с глобом *.Avalonia.cs). -->
     <Compile Include="ViewModels\UsageStatisticsViewModel.cs" />
+    <!-- Новые функции 1.0.0.69+: общий partial команд MainViewModel (Linux) и ViewModel окон. -->
+    <Compile Include="ViewModels\MainViewModel.Avalonia.Features.cs" />
+    <Compile Include="ViewModels\EventLogViewModel.cs" />
+    <Compile Include="ViewModels\SharedListsViewModel.cs" />
+    <Compile Include="ViewModels\TelegramBotViewModel.cs" />
+    <Compile Include="ViewModels\DbmsBackupViewModel.cs" />
+    <Compile Include="ViewModels\ServerAlertsViewModel.cs" />
+    <Compile Include="ViewModels\WebPublishViewModel.cs" />
+    <Compile Include="ViewModels\TechLogViewModel.cs" />
+    <Compile Include="ViewModels\GitVersioningViewModel.cs" />
+    <Compile Include="ViewModels\ExtensionsViewModel.cs" />
     <Compile Include="ViewModels\UsageStatisticsRowViewModel.cs" />
     <!-- ViewModels окна «Сравнение конфигураций» (0.3.9.99, функция №9): чистый .NET
          без платформенных зависимостей, используется обеими платформами — на Linux

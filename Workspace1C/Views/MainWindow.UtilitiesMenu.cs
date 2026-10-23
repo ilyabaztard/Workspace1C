@@ -312,6 +312,24 @@ public partial class MainWindow
                 item.Click += (_, _) => OnCheckForUpdatesMenuClick(item, null); break;
             case UtilitiesMenuCommandKind.SessionLock:
                 item.Command = _viewModel.ShowSessionLockCommand; break;
+            case UtilitiesMenuCommandKind.EventLog:
+                item.Command = _viewModel.EventLogCommand; break;
+            case UtilitiesMenuCommandKind.SharedLists:
+                item.Command = _viewModel.SharedListsCommand; break;
+            case UtilitiesMenuCommandKind.TelegramBot:
+                item.Command = _viewModel.TelegramBotCommand; break;
+            case UtilitiesMenuCommandKind.DbmsBackup:
+                item.Command = _viewModel.DbmsBackupCommand; break;
+            case UtilitiesMenuCommandKind.ServerAlerts:
+                item.Command = _viewModel.ServerAlertsCommand; break;
+            case UtilitiesMenuCommandKind.WebPublish:
+                item.Command = _viewModel.WebPublishCommand; break;
+            case UtilitiesMenuCommandKind.TechLog:
+                item.Command = _viewModel.TechLogCommand; break;
+            case UtilitiesMenuCommandKind.GitVersioning:
+                item.Command = _viewModel.GitVersioningCommand; break;
+            case UtilitiesMenuCommandKind.ConfigExtensions:
+                item.Command = _viewModel.ExtensionsCommand; break;
         }
     }
 

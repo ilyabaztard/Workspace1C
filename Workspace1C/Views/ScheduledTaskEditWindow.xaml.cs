@@ -209,8 +209,12 @@ public partial class ScheduledTaskEditWindow : Window
         var needsInfobase = kind is ScheduledTaskKind.Backup
             or ScheduledTaskKind.UpdateConfig
             or ScheduledTaskKind.BackupThenUpdateConfig
-            or ScheduledTaskKind.CheckIntegrity;
-        var needsCfg = kind is ScheduledTaskKind.UpdateConfig or ScheduledTaskKind.BackupThenUpdateConfig;
+            or ScheduledTaskKind.CheckIntegrity
+            or ScheduledTaskKind.InstallExtension
+            or ScheduledTaskKind.GitCommitConfig
+            or ScheduledTaskKind.DbmsBackup;
+        var needsCfg = kind is ScheduledTaskKind.UpdateConfig or ScheduledTaskKind.BackupThenUpdateConfig
+            or ScheduledTaskKind.InstallExtension;
         var needsPlatformCheck = kind is ScheduledTaskKind.PlatformUpdateCheck;
         var needsConfigCheck = kind is ScheduledTaskKind.ConfigurationUpdateCheck;
 

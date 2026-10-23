@@ -351,6 +351,9 @@ namespace Workspace1C
             // Монитор запущенных баз (индикатор «зелёная точка»): первый опрос
             // сразу, далее раз в 10 секунд, пока окно открыто.
             _viewModel.StartRunningBasesMonitor();
+
+            // Общие списки баз отдела (1.0.0.69): синхронизация при запуске и по интервалу.
+            _viewModel.StartSharedListsAutoSync();
         }
 
         /// <summary>
