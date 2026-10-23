@@ -81,6 +81,18 @@
   ([`MainWindow.Avalonia.cs`](Workspace1C/Views/MainWindow.Avalonia.cs:1342)) — правка не
   требовалась. Покрыто тестами `Issue60SearchIconColorTests` (WPF-разметка с кистью и без
   прозрачности, WPF-инвариант одной кисти у обеих иконок, Avalonia-фрагменты).
+- **Окно «Сменить платформу» закрывается по Esc (issue #54, Windows и Linux)** — в
+  массовых действиях окно смены платформы у выделенных баз закрывается по Esc, как
+  остальные диалоги. Для новых диалоговых окон WPF добавлено общее правило — базовый
+  класс [`EscClosableWindow`](Workspace1C/Views/EscClosableWindow.cs) (закрытие по Esc
+  без модификаторов в `PreviewKeyDown`; инвариант «сначала подсказка, потом окно»
+  сохраняет глобальный перехватчик [`ToolTipCloser`](Workspace1C/Views/ToolTipCloser.cs)),
+  окно переведено на него, кнопка «Отмена» — `IsCancel`
+  ([`PlatformChangeWindow.xaml`](Workspace1C/Views/PlatformChangeWindow.xaml:46)). На
+  Linux (Avalonia) правило уже даёт общий [`ModalWindowBase`](Workspace1C/Views/ModalWindowBase.cs),
+  от которого окно наследуется, — правка не требовалась. Покрыто тестами
+  `Issue54EscapeCloseTests` (наследование WPF, разметка `IsCancel` и корневого элемента,
+  Avalonia-наследование, подписка `PreviewKeyDown`).
 
 ### Технические изменения
 

@@ -11,7 +11,7 @@ namespace Workspace1C
     /// в чистой <see cref="PlatformChangeViewModel"/>; окно — тонкая обёртка: поля
     /// привязаны к VM, по «Сменить» выполняет команду, закрывается с ОК.
     /// </summary>
-    public partial class PlatformChangeWindow : Window
+    public partial class PlatformChangeWindow : EscClosableWindow
     {
         private readonly PlatformChangeViewModel _vm;
 
