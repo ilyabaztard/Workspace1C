@@ -73,7 +73,7 @@ public static class BuiltInConfigTypes
                     },
                 },
             },
-            // Документооборот ПРОФ.
+            // Документооборот ПРОФ
             new OneCConfigType
             {
                 Code = "DOPROF",
@@ -97,7 +97,7 @@ public static class BuiltInConfigTypes
                     },
                 },
             },
-            // Документооборот КОРП.
+            // Документооборот КОРП
             new OneCConfigType
             {
                 Code = "DOCORP",
@@ -222,7 +222,7 @@ public static class BuiltInConfigTypes
                     },
                 },
             },
-            // Рабочее место кассира.
+            // Рабочее место кассира
             new OneCConfigType
             {
                 Code = "RMK",
@@ -266,7 +266,7 @@ public static class BuiltInConfigTypes
                     },
                 },
             },
-            // Управление нашей фирмой.
+            // Управление нашей фирмой
             new OneCConfigType
             {
                 Code = "UNF",
@@ -290,7 +290,7 @@ public static class BuiltInConfigTypes
                     },
                 },
             },
-            // Управление производственным предприятием.
+            // Управление производственным предприятием
             new OneCConfigType
             {
                 Code = "UTP",
@@ -325,17 +325,11 @@ public static class BuiltInConfigTypes
                 IsBuiltIn = true,
                 Editions =
                 {
-                    new OneCConfigEdition
-                    {
-                        Name = "1.x", Red = "1",
-                        UrlOverride = "StateAccounting",
-                    },
-                    new OneCConfigEdition
-                    {
-                        Name = "2.x", Red = "2",
+                    new OneCConfigEdition { Name = "1.x", Red = "1",
+                        UrlOverride = "StateAccounting", },
+                    new OneCConfigEdition { Name = "2.x", Red = "2",
                         UrlOverride = "StateAccounting20",
-                        IsDefault = true,
-                    },
+                        IsDefault = true },
                 },
             },
         };
