@@ -1,0 +1,93 @@
+using System.IO;
+using Xunit;
+
+namespace Workspace1C.Tests;
+
+/// <summary>
+/// Issue #51 «Цвет подчеркивания»: подчёркивание полей/ссылок берёт цвет из темы,
+/// а не из жёстких цветов (Brushes.Blue, Color.Parse("#0B6BCB") и т.п.).
+/// Файловые проверки исходников (по образцу ButtonThemeBindingTests):
+/// жёсткие цвета рядом с TextDecorations.Underline заменены на кисти темы
+/// (AccentBrush в WPF через TryFindResource, ThemeBrushes.Bind в Avalonia).
+/// </summary>
+public sealed class UnderlineThemeBindingTests
+{
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, "Workspace1C", "Views")) &&
+                Directory.Exists(Path.Combine(dir.FullName, "Workspace1C.Tests")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Корень репозитория не найден из тестового каталога.");
+    }
+
+    private static string ReadProjectFile(string relativePath)
+    {
+        var fullPath = Path.Combine(FindRepoRoot(), relativePath);
+        Assert.True(File.Exists(fullPath), $"Файл проекта не найден: {relativePath}");
+        return File.ReadAllText(fullPath);
+    }
+
+    [Fact]
+    public void UpdateCheckWindow_NoHardcodedBlueUnderline()
+    {
+        // Issue #51: fallback Brushes.Blue у ссылки с подчёркиванием заменён
+        // на нейтральный серый (как в остальном коде); основной цвет — AccentBrush из темы.
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "UpdateCheckWindow.xaml.cs"));
+        Assert.DoesNotContain("Brushes.Blue", code);
+        Assert.Contains("FindResource(\"AccentBrush\") as Brush ?? Brushes.Gray", code);
+    }
+
+    [Fact]
+    public void MarkdownRenderer_NoHardcodedLinkBrush()
+    {
+        // Issue #51: жёсткий синий LinkBrush (#0B6BCB) убран из Avalonia-рендера.
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Services", "MarkdownRenderer.cs"));
+        Assert.DoesNotContain("LinkBrush", code);
+        Assert.DoesNotContain("#0B6BCB", code);
+    }
+
+    [Fact]
+    public void MarkdownRenderer_AvaloniaLinks_AreThemed()
+    {
+        // Оба места создания ссылок (Span) в Avalonia-рендере привязаны к AccentBrush темы.
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Services", "MarkdownRenderer.cs"));
+        var count = System.Text.RegularExpressions.Regex.Matches(
+            code, "ThemeBrushes\\.Bind\\(link, Span\\.ForegroundProperty, \"AccentBrush\"\\)").Count;
+        Assert.True(count >= 2, $"Ожидалось не менее 2 привязок ссылок к теме, найдено: {count}");
+    }
+
+    [Fact]
+    public void MarkdownRenderer_WpfLinks_AreThemed()
+    {
+        // WPF-рендер: Hyperlink получает цвет из темы, а не системный синий.
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Services", "MarkdownRenderer.cs"));
+        Assert.Contains("TryFindResource(\"AccentBrush\") is Brush accent", code);
+        Assert.Contains("link.Foreground = accent", code);
+    }
+
+    [Fact]
+    public void AvaloniaUnderlinePlaces_UseThemeBrushes()
+    {
+        // Все Avalonia-места с TextDecorations.Underline привязаны к кистям темы.
+        var files = new[]
+        {
+            Path.Combine("Workspace1C", "Views", "UpdateCheckWindow.Avalonia.cs"),
+            Path.Combine("Workspace1C", "Views", "SettingsWindow.Avalonia.Schemes.cs"),
+            Path.Combine("Workspace1C", "Views", "SettingsWindow.Avalonia.cs"),
+            Path.Combine("Workspace1C", "Services", "ManualUpdateWindow.Avalonia.cs")
+        };
+        foreach (var file in files)
+        {
+            var code = ReadProjectFile(file);
+            Assert.Contains("TextDecorations.Underline", code);
+            Assert.Contains("ThemeBrushes.Bind", code);
+            Assert.DoesNotContain("new SolidColorBrush(Color.Parse(\"#0B6BCB\"))", code);
+        }
+    }
+}

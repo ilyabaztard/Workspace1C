@@ -16,6 +16,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Workspace1C.Themes;
 #endif
 
 namespace Workspace1C.Services
@@ -510,6 +511,10 @@ namespace Workspace1C.Services
                         link.NavigateUri = uri;
                         link.RequestNavigate += OnRequestNavigate;
                     }
+                    // Цвет ссылки из темы (issue #51): системный синий Hyperlink
+                    // не следует теме приложения.
+                    if (Application.Current?.TryFindResource("AccentBrush") is Brush accent)
+                        link.Foreground = accent;
                     AddChildren(link, i.Children);
                     return link;
 
@@ -564,7 +569,6 @@ namespace Workspace1C.Services
         private static readonly FontFamily MonospaceFont = new("Consolas, monospace");
         private static readonly IBrush CodeBrush = new SolidColorBrush(Color.Parse("#22000000"));
         private static readonly IBrush RuleBrush = new SolidColorBrush(Color.Parse("#40000000"));
-        private static readonly IBrush LinkBrush = new SolidColorBrush(Color.Parse("#0B6BCB"));
 
         public static StackPanel Render(string markdown)
         {
@@ -680,11 +684,8 @@ namespace Workspace1C.Services
                     break;
 
                 case MdInlineKind.Link:
-                    var link = new Span
-                    {
-                        Foreground = LinkBrush,
-                        TextDecorations = TextDecorations.Underline
-                    };
+                    var link = new Span { TextDecorations = TextDecorations.Underline };
+                    ThemeBrushes.Bind(link, Span.ForegroundProperty, "AccentBrush");
                     AddChildren(link, i.Children);
                     inlines.Add(link);
                     break;
@@ -727,7 +728,8 @@ namespace Workspace1C.Services
                     span.Inlines.Add(new Run(i.Text) { FontFamily = MonospaceFont, Background = CodeBrush });
                     break;
                 case MdInlineKind.Link:
-                    var link = new Span { Foreground = LinkBrush, TextDecorations = TextDecorations.Underline };
+                    var link = new Span { TextDecorations = TextDecorations.Underline };
+                    ThemeBrushes.Bind(link, Span.ForegroundProperty, "AccentBrush");
                     AddChildren(link, i.Children);
                     span.Inlines.Add(link);
                     break;

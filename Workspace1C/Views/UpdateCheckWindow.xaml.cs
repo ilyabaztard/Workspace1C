@@ -275,7 +275,7 @@ public partial class UpdateCheckWindow : Window
             _urlLinkEnabled = true;
             UrlLink.NavigateUri = uri;
             UrlLink.IsEnabled = true;
-            UrlLink.Foreground = FindResource("AccentBrush") as Brush ?? Brushes.Blue;
+            UrlLink.Foreground = FindResource("AccentBrush") as Brush ?? Brushes.Gray;
             UrlLink.TextDecorations = TextDecorations.Underline;
             System.Windows.Controls.ToolTipService.SetToolTip(UrlLink, LocalizationManager.T("Updates.OpenCatalog"));
         }
