@@ -32,7 +32,14 @@ public partial class MainViewModel
     {
         var canShowPrivate = CanShowPrivateBasesForConnectionReplace();
         var visible = ConnectionReplacementPlanner.FilterVisibleInfobases(Infobases, canShowPrivate);
-        return ConnectionReplacementPlanner.SelectCandidates(visible, BatchSelectedIds, SelectedGroupNode?.FullPath, scope);
+        // Область «Выделенные» (issue #53): при пустом мультивыделении целью служит
+        // одна выделенная база без Ctrl (SelectedInfobase) — кандидаты такие же.
+        var ids = scope != ConnectionReplaceScope.BatchSelected || _batchSelectedIds.Count > 0
+            ? BatchSelectedIds
+            : SelectedInfobase is { Id: { Length: > 0 } } single
+                ? (IReadOnlyCollection<string>)new[] { single.Id }
+                : Array.Empty<string>();
+        return ConnectionReplacementPlanner.SelectCandidates(visible, ids, SelectedGroupNode?.FullPath, scope);
     }
 
     /// <summary>

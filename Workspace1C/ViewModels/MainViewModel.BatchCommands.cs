@@ -18,17 +18,17 @@ namespace Workspace1C.ViewModels;
 /// </summary>
 public partial class MainViewModel
 {
-    /// <summary>Число баз в мультивыделении (для заголовка блока меню).</summary>
+    /// <summary>Число целевых баз блока «Для выделенных» (для заголовка меню, issue #53).</summary>
     public string BatchMenuTitle => string.Format(
         LocalizationManager.T("Main.BatchForSelected"),
-        _batchSelectedIds.Count);
+        BatchOperationTargetCount);
 
     /// <summary>Назначает введённый тег всем базам мультивыделения.</summary>
     public void AssignTagToBatch(string? tag)
     {
         if (string.IsNullOrWhiteSpace(tag))
             return;
-        var bases = BatchSelectedInfobases.ToList();
+        var bases = BatchOperationTargets.ToList();
         if (bases.Count == 0)
             return;
 
@@ -60,7 +60,7 @@ public partial class MainViewModel
             .ToList();
         if (list is null || list.Count == 0)
             return;
-        var bases = BatchSelectedInfobases.ToList();
+        var bases = BatchOperationTargets.ToList();
         if (bases.Count == 0)
             return;
 
@@ -86,7 +86,7 @@ public partial class MainViewModel
     /// <summary>Добавляет все базы мультивыделения в избранное (без снятия).</summary>
     public void AddBatchToFavorites()
     {
-        foreach (var ib in BatchSelectedInfobases.ToList())
+        foreach (var ib in BatchOperationTargets.ToList())
         {
             if (ib.IsFavorite)
                 continue;
@@ -112,7 +112,7 @@ public partial class MainViewModel
     /// <summary>Перемещает все базы мультивыделения в выбранную группу.</summary>
     public void MoveBatchToGroup(string groupFullPath)
     {
-        foreach (var ib in BatchSelectedInfobases.ToList())
+        foreach (var ib in BatchOperationTargets.ToList())
             MoveInfobaseToGroup(ib, groupFullPath);
     }
 
@@ -123,7 +123,7 @@ public partial class MainViewModel
     /// </summary>
     public async Task RunBatchBackupAsync()
     {
-        var bases = BatchSelectedInfobases.ToList();
+        var bases = BatchOperationTargets.ToList();
         if (bases.Count == 0)
             return;
 
@@ -155,7 +155,7 @@ public partial class MainViewModel
         if (_availabilityCheckRunning)
             return;
 
-        var targets = BatchSelectedInfobases.ToList();
+        var targets = BatchOperationTargets.ToList();
         if (targets.Count == 0)
         {
             _dialogs.ShowInfo(LocalizationManager.T("Main.ConfigListEmpty"),
@@ -180,7 +180,7 @@ public partial class MainViewModel
     /// </summary>
     public void DeleteBatch()
     {
-        var bases = BatchSelectedInfobases.ToList();
+        var bases = BatchOperationTargets.ToList();
         if (bases.Count == 0)
             return;
 

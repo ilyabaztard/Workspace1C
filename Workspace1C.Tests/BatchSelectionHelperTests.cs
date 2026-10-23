@@ -1323,4 +1323,38 @@ public sealed class BatchSelectionHelperTests
         Assert.False(BatchSelectionHelper.IsTreeLikeMenu(false, "OtherMenu"));
         Assert.False(BatchSelectionHelper.IsTreeLikeMenu(false, null));
     }
+
+    // ---------- Issue #53: пункт «Для выделенных» для одной базы без Ctrl ----------
+
+    [Fact]
+    public void EffectiveBatchCount_NoBatchNoSingle_Zero()
+    {
+        // Ни мультивыделения, ни выделенной базы (например, выбрана только группа) —
+        // пакетный блок меню скрыт.
+        Assert.Equal(0, BatchSelectionHelper.EffectiveBatchCount(0, hasSingleSelected: false));
+    }
+
+    [Fact]
+    public void EffectiveBatchCount_SingleSelectedWithoutCtrl_One()
+    {
+        // Одна выделенная база без Ctrl (SelectedInfobase) — цель одна: пункт
+        // «Для выделенных» виден и для одной базы (требование ArtyoZ, issue #53).
+        Assert.Equal(1, BatchSelectionHelper.EffectiveBatchCount(0, hasSingleSelected: true));
+    }
+
+    [Fact]
+    public void EffectiveBatchCount_BatchSetHasPriority_ReturnsBatchSize()
+    {
+        // Непустое мультивыделение (Ctrl/Shift) имеет приоритет над одиночным
+        // выбором: счётчик показывает размер набора, как и раньше.
+        Assert.Equal(3, BatchSelectionHelper.EffectiveBatchCount(3, hasSingleSelected: true));
+        Assert.Equal(2, BatchSelectionHelper.EffectiveBatchCount(2, hasSingleSelected: false));
+    }
+
+    [Fact]
+    public void EffectiveBatchCount_ThousandBatch_ReturnsThousand()
+    {
+        // Большой набор не ограничивается одиночной базой.
+        Assert.Equal(1000, BatchSelectionHelper.EffectiveBatchCount(1000, hasSingleSelected: true));
+    }
 }

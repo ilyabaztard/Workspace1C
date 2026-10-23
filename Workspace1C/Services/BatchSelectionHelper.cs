@@ -188,6 +188,18 @@ public static class BatchSelectionHelper
         return new HashSet<string>(batchIds ?? Array.Empty<string>(), StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// Счётчик блока «Для выделенных (N)…» (issue #53): при непустом
+    /// мультивыделении (Ctrl/Shift) берётся его размер; иначе одна выделенная
+    /// база без Ctrl (<c>hasSingleSelected</c>) считается целью — пункт меню
+    /// виден и для одной базы, как просил ArtyoZ. 0 — нет ни мультивыделения,
+    /// ни выделенной базы (например, выбрана только группа).
+    /// </summary>
+    /// <param name="batchMarkedCount">Размер набора «для выделенных» (Ctrl/Shift).</param>
+    /// <param name="hasSingleSelected">Есть ли одиночная выделенная база без Ctrl.</param>
+    public static int EffectiveBatchCount(int batchMarkedCount, bool hasSingleSelected) =>
+        batchMarkedCount > 0 ? batchMarkedCount : hasSingleSelected ? 1 : 0;
+
 
     /// <summary>
     /// Снимок клика, которым закрыли контекстное меню дерева (issue #340, новый подход):

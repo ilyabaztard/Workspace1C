@@ -2026,9 +2026,9 @@ namespace Workspace1C
             menu.Items.Add(MenuSeparator());
             menu.Items.Add(MenuAction("Main.AddBase", _vm.AddInfobaseCommand, _vm.HotkeyAdd, "IconAdd", "#22C55E"));
 
-            // Мультивыделение (0.3.9.90): блок пакетных операций над базами,
-            // помеченными Ctrl/Shift-кликом. Виден при N > 1; заголовок и
-            // видимость обновляет Opening меню.
+            // Мультивыделение (0.3.9.90): блок пакетных операций. Виден при N >= 1:
+            // кроме Ctrl/Shift-набора цель — одна выделенная база без Ctrl (issue #53).
+            // Заголовок и видимость обновляет Opening меню.
             var batchMenu = new MenuItem
             {
                 Header = _vm.BatchMenuTitle,
@@ -2053,10 +2053,12 @@ namespace Workspace1C
             // В режиме «Пользователь» пакетные операции — системные, как в WPF.
             menu.Opening += (_, _) =>
             {
-                var count = _vm?.BatchSelectedCount ?? 0;
+                // Счёт целей включает и одну выделенную базу без Ctrl (issue #53):
+                // пакетный блок виден при count >= 1 (в режиме «Пользователь» — системный).
+                var count = _vm?.BatchOperationTargetCount ?? 0;
                 var restricted = _vm?.IsSystemMenuRestricted ?? false;
                 batchMenu.Header = _vm?.BatchMenuTitle ?? batchMenu.Header;
-                batchMenu.IsVisible = !restricted && count > 1;
+                batchMenu.IsVisible = !restricted && count >= 1;
 
                 // Пользовательские действия (0.3.9.198): контекст/действия/цели могли
                 // измениться с прошлого открытия (выделение, приватность, правки окна
@@ -2254,7 +2256,7 @@ namespace Workspace1C
         /// <summary>Назначить теги всем базам мультивыделения (issue #315).</summary>
         private void OnBatchAssignTagClick()
         {
-            if (_vm is null || _vm.BatchSelectedCount == 0)
+            if (_vm is null || _vm.BatchOperationTargetCount == 0)
                 return;
             var dlg = new TagPickWindow(_vm.TagFilterItems.Select(t => t.Name));
             // Пустой выбор (ничего не отмечено и новый тег не добавлен)
@@ -2268,7 +2270,7 @@ namespace Workspace1C
         /// <summary>Переместить все базы мультивыделения в выбранную группу.</summary>
         private void OnBatchMoveToGroupClick()
         {
-            if (_vm is null || _vm.BatchSelectedCount == 0)
+            if (_vm is null || _vm.BatchOperationTargetCount == 0)
                 return;
             var picker = new GroupPickerWindow(_vm.Groups, allowNone: true);
             if (!picker.ShowDialogSync(this))
@@ -2280,7 +2282,7 @@ namespace Workspace1C
         /// <summary>Добавить все базы мультивыделения в избранное.</summary>
         private void OnBatchAddFavoritesClick()
         {
-            if (_vm is null || _vm.BatchSelectedCount == 0)
+            if (_vm is null || _vm.BatchOperationTargetCount == 0)
                 return;
             _vm.AddBatchToFavorites();
             _vm.ClearBatchSelection();
@@ -2289,7 +2291,7 @@ namespace Workspace1C
         /// <summary>Выполнить сценарий резервирования для всех баз мультивыделения.</summary>
         private async void OnBatchRunBackupClick()
         {
-            if (_vm is null || _vm.BatchSelectedCount == 0)
+            if (_vm is null || _vm.BatchOperationTargetCount == 0)
                 return;
             await _vm.RunBatchBackupAsync();
             _vm.ClearBatchSelection();
@@ -2298,7 +2300,7 @@ namespace Workspace1C
         /// <summary>Проверить доступность баз мультивыделения.</summary>
         private void OnBatchCheckAvailabilityClick()
         {
-            if (_vm is null || _vm.BatchSelectedCount == 0)
+            if (_vm is null || _vm.BatchOperationTargetCount == 0)
                 return;
             _vm.CheckBatchAvailability();
             _vm.ClearBatchSelection();
@@ -2307,7 +2309,7 @@ namespace Workspace1C
         /// <summary>Удалить все базы мультивыделения (общее окно подтверждения по каждой).</summary>
         private void OnBatchDeleteClick()
         {
-            if (_vm is null || _vm.BatchSelectedCount == 0)
+            if (_vm is null || _vm.BatchOperationTargetCount == 0)
                 return;
             _vm.DeleteBatch();
             _vm.ClearBatchSelection();
@@ -2320,7 +2322,7 @@ namespace Workspace1C
         /// </summary>
         private void OnBatchConnectionReplaceClick()
         {
-            if (_vm is null || _vm.BatchSelectedCount == 0)
+            if (_vm is null || _vm.BatchOperationTargetCount == 0)
                 return;
             var candidates = _vm.GetConnectionReplaceCandidates(ConnectionReplaceScope.BatchSelected);
             if (candidates.Count == 0)

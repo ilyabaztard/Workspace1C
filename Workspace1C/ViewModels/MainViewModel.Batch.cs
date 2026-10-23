@@ -227,4 +227,30 @@ public partial class MainViewModel
     {
         BatchSelectionChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Число целевых баз блока «Для выделенных» (issue #53): при непустом
+    /// мультивыделении — его размер; иначе одна выделенная база без Ctrl
+    /// (<see cref="SelectedInfobase"/>) считается целью, чтобы пункт «Для
+    /// выделенных» был виден и для одной базы. 0 — нет ни мультивыделения,
+    /// ни выделенной базы (например, выбрана группа).
+    /// </summary>
+    public int BatchOperationTargetCount =>
+        BatchSelectionHelper.EffectiveBatchCount(
+            _batchSelectedIds.Count,
+            SelectedInfobase is { Id: { Length: > 0 } });
+
+    /// <summary>
+    /// Целевые базы блока «Для выделенных» (issue #53): при непустом
+    /// мультивыделении — его базы; иначе одна выделенная база без Ctrl
+    /// (<see cref="SelectedInfobase"/>). Пусто, если нет ни того, ни другого.
+    /// Одиночный набор сам мультивыделение (<see cref="_batchSelectedIds"/>)
+    /// не трогает — это вычисление целей для команд и заголовка меню.
+    /// </summary>
+    public IReadOnlyList<Infobase> BatchOperationTargets =>
+        _batchSelectedIds.Count > 0
+            ? BatchSelectedInfobases
+            : SelectedInfobase is { } single
+                ? new[] { single }
+                : Array.Empty<Infobase>();
 }

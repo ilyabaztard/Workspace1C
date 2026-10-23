@@ -79,18 +79,19 @@ namespace Workspace1C
             var restricted = _viewModel.IsSystemMenuRestricted;
             var items = menu.Items.Cast<object>().ToList();
 
-            // Мультивыделение (0.3.9.90): блок «Для выделенных (N)…» виден только
-            // при N > 1, заголовок показывает текущее число помеченных баз.
+            // Мультивыделение (0.3.9.90): блок «Для выделенных (N)…» — заголовок
+            // показывает текущее число целевых баз. Счёт цели включает и одну
+            // выделенную базу без Ctrl (issue #53): пункт виден при N >= 1.
             // В режиме «Пользователь» пакетные операции — системные, скрываются
             // общим правилом ниже (пункт помечен Tag="Batch", не "User").
             var batchMenu = items.OfType<MenuItem>()
                 .FirstOrDefault(m => string.Equals(m.Tag as string, "Batch", StringComparison.Ordinal));
             if (batchMenu is not null)
             {
-                var batchCount = _viewModel.BatchSelectedCount;
+                var batchCount = _viewModel.BatchOperationTargetCount;
                 batchMenu.Header = string.Format(
                     LocalizationManager.T("Main.BatchForSelected"), batchCount);
-                batchMenu.Visibility = batchCount > 1 && !restricted
+                batchMenu.Visibility = batchCount >= 1 && !restricted
                     ? Visibility.Visible
                     : Visibility.Collapsed;
             }
@@ -104,7 +105,7 @@ namespace Workspace1C
             // прохода (в не-restricted режиме общий проход делает все пункты видимыми).
             if (batchMenu is not null && !restricted)
             {
-                batchMenu.Visibility = _viewModel.BatchSelectedCount > 1
+                batchMenu.Visibility = _viewModel.BatchOperationTargetCount >= 1
                     ? Visibility.Visible
                     : Visibility.Collapsed;
             }
