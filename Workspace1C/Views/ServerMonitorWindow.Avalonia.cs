@@ -1116,13 +1116,23 @@ namespace Workspace1C
             ThemeBrushes.Bind(migrateButton, Button.BackgroundProperty, "ItemHoverBrush");
             migrateButton.Click += (_, _) => OpenInfobaseMigration();
 
-            var bottomButtons = new StackPanel
+            // Кнопки растягиваются и делят ширину колонки пополам с учётом отступа
+            // (issue #41, комментарий 7OH): в горизонтальном StackPanel Stretch не
+            // работает, контейнер — Grid с двумя звездными колонками.
+            var bottomButtons = new Grid
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6,
-                Margin = new Thickness(0, 8, 0, 0),
-                Children = { importButton, migrateButton }
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition(GridLength.Star),
+                    new ColumnDefinition(new GridLength(8, GridUnitType.Pixel)),
+                    new ColumnDefinition(GridLength.Star)
+                },
+                Margin = new Thickness(0, 8, 0, 0)
             };
+            Grid.SetColumn(importButton, 0);
+            Grid.SetColumn(migrateButton, 2);
+            bottomButtons.Children.Add(importButton);
+            bottomButtons.Children.Add(migrateButton);
             DockPanel.SetDock(bottomButtons, Dock.Bottom);
 
             var dock = new DockPanel { LastChildFill = true };

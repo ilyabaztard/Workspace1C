@@ -349,17 +349,25 @@
                  с «Службы» под списком серверов; открывают «Импорт из кластера 1С» /
                  «Миграцию между кластерами 1С» с текущим сервером (SelectedServer,
                  иначе ConnectedServer, иначе первый). -->
-            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
-                <Button x:Name="InfobasesImportButton"
+            <!-- Кнопки растягиваются на ширину панели баз и делят её пополам с учётом
+                 отступа (issue #41, комментарий 7OH): в горизонтальном StackPanel
+                 HorizontalAlignment=Stretch не работает, поэтому контейнер — Grid. -->
+            <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="InfobasesImportButton" Grid.Column="0"
                         Style="{StaticResource ModernButton}"
                         Background="{DynamicResource ItemHoverBrush}"
-                        Padding="0,8" Margin="0,0,6,0" HorizontalAlignment="Stretch"
+                        Padding="0,8" HorizontalAlignment="Stretch"
                         Click="OnImport_Click">
                     <TextBlock Text="{loc:Loc ServerMonitor.Infobase.Import}"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                FontWeight="SemiBold"/>
                 </Button>
-                <Button x:Name="InfobasesMigrateButton"
+                <Button x:Name="InfobasesMigrateButton" Grid.Column="2"
                         Style="{StaticResource ModernButton}"
                         Background="{DynamicResource ItemHoverBrush}"
                         Padding="0,8" HorizontalAlignment="Stretch"
@@ -368,7 +376,7 @@
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                FontWeight="SemiBold"/>
                 </Button>
-            </StackPanel>
+            </Grid>
             <!-- Список баз: одна колонка с именем; клик по строке включает фильтр. -->
             <ListBox x:Name="InfobasesList" ItemsSource="{Binding Infobases}"
                      SelectedItem="{Binding SelectedInfobase}"

@@ -156,6 +156,115 @@ public sealed class UtilitiesMenuLayoutTests
         Assert.Equal(importIndex + 1, migrationIndex);
     }
 
+    /// <summary>
+    /// «Миграция между кластерами 1С» помечена «новинкой» (issue #58): иначе
+    /// при сохранённой пользовательской компоновке пункт не попадает в подменю
+    /// «Новинки программы», а сам пункт теряется из виду.
+    /// </summary>
+    [Fact]
+    public void ClusterMigration_IsMarkedAsNew()
+    {
+        var item = UtilitiesMenuCatalog.Find("ClusterMigration");
+        Assert.NotNull(item);
+        Assert.True(item!.IsNew);
+    }
+
+    /// <summary>
+    /// «Новинки программы» (issue #4): пункт-новинка, отсутствующий в пользовательской
+    /// компоновке, собирается <see cref="UtilitiesMenuResolver.CollectNewItems"/> — из него
+    /// построитель меню добавляет пункт в группу «Новинки» (issue #58).
+    /// </summary>
+    [Fact]
+    public void CollectNewItems_ReturnsClusterMigration_WhenAbsentFromCustomLayout()
+    {
+        var layout = UtilitiesMenuLayouts.Default();
+        RemoveItem(layout, "ClusterMigration"); // пользовательская компоновка короче каталога
+
+        var newItems = UtilitiesMenuResolver.CollectNewItems(layout);
+
+        Assert.Contains(newItems, i => string.Equals(i.Id, "ClusterMigration", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// <see cref="UtilitiesMenuResolver.EnsureNewItemsGroup"/> создаёт/включает видимую группу
+    /// «Новинки программы» с неразмещённым пунктом миграции — видимость группы определяется
+    /// наличием новинок, а не галочкой в редакторе (issue #4, регресс #58).
+    /// </summary>
+    [Fact]
+    public void EnsureNewItemsGroup_AddsClusterMigrationIntoVisibleGroup()
+    {
+        var layout = UtilitiesMenuLayouts.Default();
+        RemoveItem(layout, "ClusterMigration");
+
+        var result = UtilitiesMenuResolver.EnsureNewItemsGroup(layout);
+        Assert.NotNull(result);
+
+        var newGroup = FindGroupById(result!.Root, UtilitiesMenuCatalog.GroupNewItems);
+        Assert.NotNull(newGroup);
+        Assert.True(newGroup!.Visible);
+        Assert.Contains(newGroup.Children, c => string.Equals(c.ItemId, "ClusterMigration", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Регресс-инвариант: каждый пункт каталога, который НЕ помечен «новинкой», обязан
+    /// присутствовать в стандартной компоновке — иначе пункт может «потеряться» и из
+    /// рабочего меню, и из «Новинок» (issue #58).
+    /// </summary>
+    [Fact]
+    public void DefaultLayout_ContainsAllNonNewCatalogItems()
+    {
+        var layout = UtilitiesMenuLayouts.Default();
+        var ids = new HashSet<string>();
+        UtilitiesMenuResolver.CollectItemIds(layout.Root, ids);
+
+        foreach (var item in UtilitiesMenuCatalog.All)
+        {
+            if (item.IsNew)
+                continue;
+            Assert.Contains(item.Id, ids);
+        }
+    }
+
+    private static void RemoveItem(UtilitiesMenuLayout layout, string itemId)
+    {
+        static bool RemoveFrom(List<UtilitiesMenuNode> nodes, string id)
+        {
+            for (var i = nodes.Count - 1; i >= 0; i--)
+            {
+                if (string.Equals(nodes[i].ItemId, id, StringComparison.Ordinal))
+                {
+                    nodes.RemoveAt(i);
+                    return true;
+                }
+                if (nodes[i].Children?.Count > 0 && RemoveFrom(nodes[i].Children, id))
+                    return true;
+            }
+            return false;
+        }
+
+        RemoveFrom(layout.Root, itemId);
+    }
+
+    private static UtilitiesMenuNode? FindGroupById(IEnumerable<UtilitiesMenuNode>? nodes, string groupId)
+    {
+        if (nodes is null)
+            return null;
+        foreach (var node in nodes)
+        {
+            if (string.Equals(node.Kind, "group", StringComparison.Ordinal) &&
+                string.Equals(node.GroupId, groupId, StringComparison.Ordinal))
+            {
+                return node;
+            }
+            if (node.Children?.Count > 0 &&
+                FindGroupById(node.Children, groupId) is { } nested)
+            {
+                return nested;
+            }
+        }
+        return null;
+    }
+
     /// <summary>JSON-сериализация и обратная десериализация сохраняют структуру компоновки.</summary>
     [Fact]
     public void Json_RoundTrip_PreservesStructure()

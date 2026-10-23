@@ -166,7 +166,12 @@ public static class IbasesV8iImporter
                 // явно указана суффиксом версии «(32)/(64)».
                 if (imported.Architecture is "32" or "64")
                     existing.Architecture = imported.Architecture;
-                if (!string.IsNullOrWhiteSpace(imported.LaunchMode))
+                // Режим запуска переносим ТОЛЬКО если в файле задан явный режим
+                // (App/DefaultApp распознаны): «Auto»/пусто не должны затирать режим,
+                // заданный пользователем в приложении (issue #59). MapLaunchMode всегда
+                // возвращал «Автоматический», из-за чего стартовая синхронизация сбрасывала
+                // «Толстый клиент» обратно в «Авто».
+                if (entry.HasExplicitLaunchMode)
                     existing.LaunchMode = imported.LaunchMode;
                 if (!string.IsNullOrWhiteSpace(imported.LaunchParameters))
                     existing.LaunchParameters = imported.LaunchParameters;

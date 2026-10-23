@@ -332,6 +332,9 @@ public partial class MainWindow
         batchMenu.Items.Add(CreateBatchAction("Main.BatchCheckAvailability", "CloudCheck", "#3B82F6", OnBatchCheckAvailability_Click));
         // Массовая замена строк подключения (0.3.9.191, функция 6).
         batchMenu.Items.Add(CreateBatchAction("Main.BatchConnectionReplace", "FindReplace", "#F59E0B", OnBatchConnectionReplace_Click));
+        // Смена платформы выделенных баз (issue #54, переработка по комментарию 7OH):
+        // отдельное окно «Сменить платформу» вместо встроенной галочки в «Замене строк…».
+        batchMenu.Items.Add(CreateBatchAction("Main.BatchChangePlatform", "PackageVariant", "#22C55E", OnBatchChangePlatform_Click));
         batchMenu.Items.Add(CreateBatchAction("Main.BatchDelete", "Delete", "#EF4444", OnBatchDelete_Click));
     }
 

@@ -460,6 +460,140 @@ public sealed class ClusterMigrationViewModelTests
         Assert.Equal(2, vm.CheckedCount);
     }
 
+    // ---------- Issue #41: сводка выделения ----------
+
+    [Fact]
+    public async Task SelectionSummary_AfterLoad_ShowsCheckedAndToMigrate()
+    {
+        var vm = new ClusterMigrationViewModel(
+            new FakeRacClient(singleCluster: true), Array.Empty<Infobase>(),
+            new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        // После получения баз — ВСЕ галочки: «Выделено: 2 из 2 · будет перенесено: 2».
+        Assert.Equal(
+            string.Format(LocalizationManager.T("ClusterMigration.Summary.SelectedFormat"), 2, 2, 2),
+            vm.SelectionSummaryText);
+    }
+
+    [Fact]
+    public async Task ManualUncheck_UpdatesSummary_AndFollowsCheckedCount()
+    {
+        var vm = new ClusterMigrationViewModel(
+            new FakeRacClient(singleCluster: true), Array.Empty<Infobase>(),
+            new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        // Пользователь снимает одну галочку вручную — сводка обновляется через подписку
+        // VM на PropertyChanged строки (issue #41), без повторного нажатия «Получить базы».
+        vm.SourceRows[0].IsChecked = false;
+
+        Assert.Equal(1, vm.CheckedCount);
+        Assert.Equal(
+            string.Format(LocalizationManager.T("ClusterMigration.Summary.SelectedFormat"), 1, 2, 1),
+            vm.SelectionSummaryText);
+
+        vm.SourceRows[0].IsChecked = false;
+        vm.SourceRows[1].IsChecked = false;
+        Assert.Equal(0, vm.CheckedCount);
+        // Сводка остаётся информативной («Выделено: 0 из 2 · будет перенесено: 0»),
+        // а не пустой: строим ожидание теми же вызовами локализации, что и VM.
+        Assert.Equal(
+            string.Format(
+                LocalizationManager.T("ClusterMigration.Summary.SelectedFormat"), 0, 2, 0),
+            vm.SelectionSummaryText);
+    }
+
+    [Fact]
+    public async Task SelectionSummary_AfterStatuses_ExcludesInTargetBases()
+    {
+        var client = new FakeRacClient(singleCluster: true, targetBaseNames: new[] { "База1" });
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(),
+            new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        // «База1» уже в приёмнике — галочка снята: «Выделено: 1 из 2 · будет перенесено: 1».
+        Assert.Equal(1, vm.CheckedCount);
+        Assert.Equal(
+            string.Format(LocalizationManager.T("ClusterMigration.Summary.SelectedFormat"), 1, 2, 1),
+            vm.SelectionSummaryText);
+        Assert.DoesNotContain(
+            LocalizationManager.T("ClusterMigration.Summary.InTargetPending"),
+            vm.SelectionSummaryText);
+    }
+
+    [Fact]
+    public async Task SelectionSummary_HintsPendingWhenCheckedRowIsInTarget()
+    {
+        var client = new FakeRacClient(singleCluster: true, targetBaseNames: new[] { "База1" });
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(),
+            new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        // Пользователь вручную отмечает базу, которая есть в приёмнике: сводка считает
+        // «будет перенесено» только свободные базы и добавляет подсказку (issue #41).
+        vm.SourceRows.First(r => r.Name == "База1").IsChecked = true;
+
+        Assert.Equal(2, vm.CheckedCount);
+        // Ожидаемая строка собирается теми же вызовами локализации, что и VM, —
+        // сравнение детерминировано и в тестовом процессе (словари не загружены,
+        // T() возвращает ключ), и в приложении (загруженный перевод).
+        var selected = string.Format(
+            LocalizationManager.T("ClusterMigration.Summary.SelectedFormat"), 2, 2, 1);
+        var pendingHint = LocalizationManager.T("ClusterMigration.Summary.InTargetPending");
+        Assert.Equal(selected + " " + pendingHint, vm.SelectionSummaryText);
+    }
+
+    // ---------- Issue #41: маршалинг миграции в UI-поток ----------
+
+    [Fact]
+    public async Task Migrate_WithUiDispatch_CompletesAndGoesThroughDispatcher()
+    {
+        // Регресс кросс-потоковой InvalidOperationException (issue #41): окно подписано
+        // на PropertyChanged и трогает UI напрямую. VM обязан доставлять обновления
+        // прогресса и финальный блок (Result/MigrationCompleted) через dispatch-колбэк.
+        var dispatches = 0;
+        var client = new FakeRacClient();
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(),
+            new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") },
+            action => { dispatches++; action(); }); // синхронный аналог Dispatcher.Post
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        await vm.MigrateAsync();
+
+        Assert.True(vm.MigrationCompleted);
+        Assert.NotNull(vm.Result);
+        Assert.Equal(2, vm.Result!.MigratedBaseNames.Count);
+        // Прогресс (общий + по итерациям) и финал уходят через диспетчер.
+        Assert.True(dispatches >= 3, $"Ожидались dispatch-вызовы, получено {dispatches}");
+        Assert.False(vm.IsBusy);
+        Assert.Empty(vm.ErrorMessage);
+    }
+
     // ===================== Хелперы =====================
 
     private static async Task AwaitSourceClusters(ClusterMigrationViewModel vm)

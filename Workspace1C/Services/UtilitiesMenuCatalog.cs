@@ -444,8 +444,12 @@ public static class UtilitiesMenuCatalog
             // не частая операция (комментарий 7OH).
             new("ClusterImport", "ClusterImport.MenuItem", GroupOperations,
                 "DatabaseImport", "IconImport", "#06B6D4", UtilitiesMenuCommandKind.ImportClusterInfobases),
+            // «Миграция между кластерами 1С» (issue #41, 1.0.0.66): флаг новинки,
+            // чтобы при сохранённой пользовательской компоновке пункт попал в
+            // «Новинки программы», пока пользователь не разместит его явно (issue #58).
             new("ClusterMigration", "ClusterMigration.MenuItem", GroupOperations,
-                "DatabaseExport", "IconDatabaseExport", "#16A34A", UtilitiesMenuCommandKind.MigrateClusterInfobases),
+                "DatabaseExport", "IconDatabaseExport", "#16A34A", UtilitiesMenuCommandKind.MigrateClusterInfobases,
+                isNew: true),
             new("ProcessInspector", "ProcessInspector.Title", GroupOperations,
                 "ApplicationCog", "IconApplicationCog", "#0EA5E9", UtilitiesMenuCommandKind.ProcessInspector),
             new("KillOneCProcesses", "Settings.Bases.KillProcesses", GroupOperations,

@@ -69,40 +69,6 @@ namespace Workspace1C
             var findButton = BuildActionButton(LocalizationManager.T("ConnectionReplace.FindButton"), "🔍",
                 () => _vm.RefreshPreviewCommand.Execute(null));
 
-            // ---- Смена платформы (issue #54): галочка + ComboBox версий (неактивен без галочки). ----
-            var changePlatformCheck = new CheckBox
-            {
-                Content = LocalizationManager.T("ConnectionReplace.ChangePlatform"),
-                VerticalAlignment = VerticalAlignment.Center,
-                IsChecked = _vm.ChangePlatform
-            };
-            changePlatformCheck.IsCheckedChanged += (_, _) =>
-                _vm.ChangePlatform = changePlatformCheck.IsChecked == true;
-
-            var platformCombo = new ComboBox
-            {
-                Width = 220,
-                VerticalContentAlignment = VerticalAlignment.Center
-            };
-            platformCombo.Styled(ControlThemes.ModernComboBox);
-            platformCombo.ItemsSource = _vm.InstalledPlatformVersions;
-            platformCombo.Bind(ComboBox.SelectedItemProperty,
-                new Binding("SelectedPlatform", BindingMode.TwoWay));
-
-            var platformPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            platformPanel.Bind(Control.IsEnabledProperty, new Binding("CanSelectPlatform"));
-            platformPanel.Children.Add(new TextBlock
-            {
-                Text = LocalizationManager.T("ConnectionReplace.PlatformLabel"),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            platformPanel.Children.Add(platformCombo);
-
             // Панель параметров — ДВЕ СТРОКИ (issue #357): на первой только «Найти» и
             // «Заменить на», на второй — Поле / Область / Режим / регистр + «Найти».
             var paramsRow1 = new StackPanel
@@ -130,18 +96,11 @@ namespace Workspace1C
                     findButton
                 }
             };
-            var platformRow = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 12,
-                Margin = new Thickness(0, 0, 0, 8),
-                Children = { changePlatformCheck, platformPanel }
-            };
 
             var paramsPanel = new StackPanel
             {
                 Orientation = Orientation.Vertical,
-                Children = { paramsRow1, paramsRow2, platformRow }
+                Children = { paramsRow1, paramsRow2 }
             };
 
             // ---- Предпросмотр «База | Поле | Было | Станет». ----
@@ -349,10 +308,8 @@ namespace Workspace1C
             AddCell(grid, CellText("Infobase.Name"), 0);
             AddCell(grid, new TextBlock
             {
-                // Для смены платформы (issue #54) — «Платформа», иначе имя поля строки.
-                Text = row.IsPlatformChange
-                    ? LocalizationManager.T("ConnectionReplace.Fields.Platform")
-                    : ConnectionReplaceViewModel.FieldDisplayText(row.Field),
+                // Локализованное имя поля строки подключения (ConnectionReplace.Fields.*).
+                Text = ConnectionReplaceViewModel.FieldDisplayText(row.Field),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0),
                 TextTrimming = TextTrimming.CharacterEllipsis

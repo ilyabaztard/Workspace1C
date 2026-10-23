@@ -69,7 +69,7 @@
                         <TextBlock Text="{loc:Loc ClusterMigration.SourceServer}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <ComboBox x:Name="SourceServerCombo" Width="300" Style="{StaticResource ModernComboBox}"
                                   ItemsSource="{Binding AvailableSourceServers}"
-                                  SelectedItem="{Binding SelectedSourceServer}"
+                                  SelectedItem="{Binding SelectedSourceServer, Mode=TwoWay}"
                                   VerticalContentAlignment="Center" Padding="6,2">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
@@ -141,7 +141,7 @@
                         <TextBlock Text="{loc:Loc ClusterMigration.TargetServer}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <ComboBox x:Name="TargetServerCombo" Width="300" Style="{StaticResource ModernComboBox}"
                                   ItemsSource="{Binding AvailableTargetServers}"
-                                  SelectedItem="{Binding SelectedTargetServer}"
+                                  SelectedItem="{Binding SelectedTargetServer, Mode=TwoWay}"
                                   VerticalContentAlignment="Center" Padding="6,2">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
@@ -283,8 +283,12 @@
                        Margin="0,6,0,0" Text="{Binding ErrorMessage}"/>
         </StackPanel>
 
-        <!-- Действия: выделить все / снять все, «Мигрировать», «Отмена». -->
+        <!-- Сводка выделения + действия: выделить все / снять все, «Мигрировать», «Отмена». -->
         <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,10,0,0">
+            <!-- «Выделено: N из M · будет перенесено: N» (issue #41, комментарий 7OH). -->
+            <TextBlock Text="{Binding SelectionSummaryText}" FontSize="12" Opacity="0.8"
+                       VerticalAlignment="Center" Margin="0,0,14,0" TextWrapping="Wrap"
+                       MaxWidth="380"/>
             <Button x:Name="SelectAllButton" Style="{StaticResource ModernButton}"
                     Background="{DynamicResource ItemHoverBrush}" Padding="12,5"
                     Click="OnSelectAll_Click">

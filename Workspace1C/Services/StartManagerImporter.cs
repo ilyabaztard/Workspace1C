@@ -343,8 +343,15 @@ public static class StartManagerImporter
             target.PlatformVersion = imported.PlatformVersion;
         if (imported.Architecture is "32" or "64")
             target.Architecture = imported.Architecture;
-        if (!string.IsNullOrWhiteSpace(imported.LaunchMode))
+        // Режим запуска переносим только если он в файле задан явно: «Автоматический»
+        // приходит и как штатное значение ключа App (режима пользователь не задавал),
+        // и не должен затирать «Толстый клиент», поставленный в приложении (issue #59;
+        // в IbasesV8iImporter для этого используется IbaseEntry.HasExplicitLaunchMode).
+        if (!string.IsNullOrWhiteSpace(imported.LaunchMode)
+            && !string.Equals(imported.LaunchMode, "Автоматический", StringComparison.OrdinalIgnoreCase))
+        {
             target.LaunchMode = imported.LaunchMode;
+        }
         if (!string.IsNullOrWhiteSpace(imported.LaunchParameters))
             target.LaunchParameters = imported.LaunchParameters;
 

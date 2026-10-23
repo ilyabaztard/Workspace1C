@@ -11,6 +11,63 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.68] — 2026-10-23
+
+### Изменено
+
+- **Подменю «Новинки программы» снова появляется: пункт «Миграция между кластерами 1С»
+  помечен как новый (issue #58, Windows и Linux)** — в каталоге меню «Утилиты» пункту
+  «Миграция между кластерами 1С» выставлен флаг «новый» (`isNew: true`,
+  [`UtilitiesMenuCatalog.cs`](Workspace1C/Services/UtilitiesMenuCatalog.cs)), поэтому подменю
+  «Новинки программы» автоматически появляется и содержит новый пункт; из редактора
+  структуры меню подменю можно скрывать/показывать как обычно. Добавлены юнит-тесты
+  `UtilitiesMenuLayoutTests` (+4).
+- **Массовые действия: смена платформы возвращена в прежний вид (issue #54, Windows
+  и Linux)** — окно **«Замена строк подключения»** снова меняет только строки подключения:
+  без опции смены платформы и с прежними названиями пунктов меню
+  ([`ConnectionReplaceViewModel.cs`](Workspace1C/ViewModels/ConnectionReplaceViewModel.cs),
+  [`ConnectionReplaceWindow.xaml`](Workspace1C/Views/ConnectionReplaceWindow.xaml)); смена
+  платформы вынесена в отдельное новое окно **«Сменить платформу»** (пункт в контекстном
+  подменю «Для выделенных»): выбор платформы из установленных, по «ОК» — замена у выделенных
+  баз, поддерживается откат «Отменить последнюю замену»
+  ([`PlatformChangeViewModel.cs`](Workspace1C/ViewModels/PlatformChangeViewModel.cs),
+  [`PlatformChangeWindow.xaml`](Workspace1C/Views/PlatformChangeWindow.xaml),
+  [`PlatformChangeWindow.Avalonia.cs`](Workspace1C/Views/PlatformChangeWindow.Avalonia.cs)).
+  Добавлены юнит-тесты `PlatformChangeViewModelTests` (+5), обновлены
+  `ConnectionReplaceViewModelTests` / `ConnectionReplaceLocalizationTests`.
+- **Миграция между кластерами 1С: доработки окна (issue #41, Windows и Linux)**: кнопки
+  «Импорт» и «Миграция» в окне «Серверы 1С» растягиваются и делят ширину колонки пополам
+  с отступом ([`ServerMonitorWindow.xaml`](Workspace1C/Views/ServerMonitorWindow.xaml),
+  [`ServerMonitorWindow.Avalonia.cs`](Workspace1C/Views/ServerMonitorWindow.Avalonia.cs));
+  в окне миграции сервер источника/приёмника подставляется в поле при выборе (двусторонняя
+  привязка ComboBox, [`ClusterMigrationWindow.xaml`](Workspace1C/Views/ClusterMigrationWindow.xaml),
+  [`ClusterMigrationWindow.Avalonia.cs`](Workspace1C/Views/ClusterMigrationWindow.Avalonia.cs));
+  добавлена сводка «Выделено: N из M · будет перенесено: N» с пояснением про «Есть в кластере»
+  ([`ClusterMigrationViewModel.cs`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs),
+  [`ClusterMigrationRow.cs`](Workspace1C/ViewModels/ClusterMigrationRow.cs)). Добавлены
+  юнит-тесты `ClusterMigrationViewModelTests` (+5), новый разметочный `Issue41WindowLayoutTests`
+  (+3).
+
+### Исправлено
+
+- **Режим запуска информационной базы не теряется при импорте/синхронизации из ibases.v8i
+  (issue #59, Windows и Linux)** — режим запуска (Авто/Тонкий/Толстый и т.п.) больше не
+  перезаписывается значением «Автоматический», если в файле нет явного режима: `MapLaunchMode`
+  возвращает `string?` и распознаёт токены штатного стартера `1cv8`/`1cv8c`/`1cv8s`, добавлен
+  признак `HasExplicitLaunchMode`, перезапись выполняется только при явном значении в файле
+  ([`IbasesV8iEntry.cs`](Workspace1C/Services/IbasesV8iEntry.cs),
+  [`IbasesV8iImporter.cs`](Workspace1C/Services/IbasesV8iImporter.cs),
+  [`StartManagerImporter.cs`](Workspace1C/Services/StartManagerImporter.cs)).
+  Добавлены юнит-тесты `LaunchModePreservationTests` (+4).
+- **Миграция между кластерами 1С: устранена кросс-потоковая ошибка (issue #41, Windows
+  и Linux)** — при запуске миграции больше не возникает `InvalidOperationException:
+  «Вызывающий поток не может получить доступ к данному объекту»`: прогресс и результат
+  доставляются на UI-поток через `Dispatch`
+  ([`ClusterMigrationViewModel.cs`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs)).
+  Покрыто юнит-тестами `ClusterMigrationViewModelTests` (+5).
+
+---
+
 ## [1.0.0.67] — 2026-10-23
 
 ### Добавлено

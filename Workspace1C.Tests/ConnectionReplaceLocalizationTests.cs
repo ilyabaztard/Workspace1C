@@ -116,37 +116,60 @@ public sealed class ConnectionReplaceLocalizationTests
         Assert.Contains(key, en);
     }
 
-    // ---------- Issue #54: смена платформы ----------
+    // ---------- Issue #54 (переработка): смена платформы вынесена в отдельное окно ----------
 
     [Theory]
     [InlineData("ConnectionReplace.ChangePlatform")]
     [InlineData("ConnectionReplace.PlatformLabel")]
     [InlineData("ConnectionReplace.Fields.Platform")]
     [InlineData("ConnectionReplace.Summary.PlatformSuffixFormat")]
-    public void ConnectionReplace_PlatformKeys_PresentInBothDictionaries(string key)
+    public void ConnectionReplace_PlatformKeys_RemovedInBothDictionaries(string key)
     {
-        // Ключи смены платформы используются окном (галочка, выбор версии, строка
-        // предпросмотра «Платформа», суффикс сводки) — обязаны быть в обоих словарях.
+        // Откат (issue #54, комментарий 7OH): смена платформы убрана из окна «Заменить
+        // в строках подключения…» — ключи старого функционала не должны остаться ни в одном словаре.
         var ru = CollectDictionaryKeys(Path.Combine("Workspace1C", "Localization", "Languages", "ru.json"));
         var en = CollectDictionaryKeys(Path.Combine("Workspace1C", "Localization", "Languages", "en.json"));
-        Assert.Contains(key, ru);
-        Assert.Contains(key, en);
+        Assert.DoesNotContain(key, ru);
+        Assert.DoesNotContain(key, en);
+    }
+
+    [Theory]
+    [InlineData("PlatformChange.Title")]
+    [InlineData("PlatformChange.PlatformLabel")]
+    [InlineData("PlatformChange.SummaryFormat")]
+    [InlineData("PlatformChange.AppliedFormat")]
+    [InlineData("PlatformChange.ApplyButton")]
+    [InlineData("PlatformChange.EmptyList")]
+    [InlineData("Main.BatchChangePlatform")]
+    public void PlatformChange_Keys_PresentInBothDictionaries(string key)
+    {
+        // Ключи НОВОГО отдельного окна «Сменить платформу» (issue #54, переработка)
+        // и пункта «Для выделенных» обязаны быть в обоих словарях.
+        var ru = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "ru.json"));
+        var en = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "en.json"));
+        Assert.Contains(string.Format("\"{0}\":", key), ru);
+        Assert.Contains(string.Format("\"{0}\":", key), en);
     }
 
     [Fact]
-    public void ConnectionReplace_MenuItemKeys_MentionPlatformInBothLanguages()
+    public void ConnectionReplace_Names_RevertedToConnectionStringsOnly()
     {
-        // Пункт меню переименован (issue #54): отражает обе возможности — замену строк
-        // подключения И смену платформы.
+        // Откат названий (issue #54, комментарий 7OH): «Замене строк подключения» возвращён
+        // прежний вид — без «и платформу» (как было до 1.0.0.66).
         var ru = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "ru.json"));
         var en = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "en.json"));
-        Assert.Contains("\"Main.BatchConnectionReplace\": \"Заменить строки подключения и платформу…\"", ru);
-        Assert.Contains("\"Main.UtilitiesConnectionReplace\": \"Заменить строки подключения и платформу…\"", ru);
-        Assert.Contains("\"Main.BatchConnectionReplace\": \"Replace connection strings and platform…\"", en);
-        Assert.Contains("\"Main.UtilitiesConnectionReplace\": \"Replace connection strings and platform…\"", en);
-        Assert.DoesNotContain("\"Заменить в строках подключения…\"", ru);
-        Assert.DoesNotContain("\"Replace in connection strings…\"", en);
-        Assert.DoesNotContain("\"Replace in base connection strings…\"", en);
+
+        Assert.Contains("\"Main.BatchConnectionReplace\": \"Заменить в строках подключения…\"", ru);
+        Assert.Contains("\"Main.UtilitiesConnectionReplace\": \"Заменить в строках подключения…\"", ru);
+        Assert.Contains("\"ConnectionReplace.Title\": \"Заменить в строках подключения…\"", ru);
+
+        Assert.Contains("\"Main.BatchConnectionReplace\": \"Replace in connection strings…\"", en);
+        Assert.Contains("\"Main.UtilitiesConnectionReplace\": \"Replace in connection strings…\"", en);
+        Assert.Contains("\"ConnectionReplace.Title\": \"Replace in base connection strings…\"", en);
+
+        // Старые названия (с упоминанием платформы) не должны встречаться в словарях.
+        Assert.DoesNotContain("\"Заменить строки подключения и платформу…\"", ru);
+        Assert.DoesNotContain("\"Replace connection strings and platform…\"", en);
     }
 
     [Fact]

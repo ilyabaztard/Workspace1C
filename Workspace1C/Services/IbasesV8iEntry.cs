@@ -59,11 +59,19 @@ internal sealed class IbaseEntry
     /// <summary>ID базы 1С (GUID).</summary>
     public string Id { get; set; } = string.Empty;
 
-    /// <summary>Режим запуска из файла ibases.v8i (Auto, ThinClient, ThickClient, WebClient).</summary>
+    /// <summary>Режим запуска из файла ibases.v8i (Auto, ThinClient, ThickClient, WebClient, 1CV8, 1cv8c, 1cv8s).</summary>
     public string App { get; set; } = string.Empty;
 
     /// <summary>Режим запуска по умолчанию из файла ibases.v8i (DefaultApp).</summary>
     public string DefaultApp { get; set; } = string.Empty;
+
+    /// <summary>
+    /// true — запись несёт ЯВНЫЙ режим запуска (App или DefaultApp распознаётся
+    /// <see cref="MapSingleLaunchMode"/> как «Тонкий клиент»/«Толстый клиент»/«Веб-клиент»).
+    /// Если в файле стоит «Auto»/пусто/иное нераспознанное значение, свойство равно false:
+    /// импортёру разрешено НЕ затирать режим, заданный пользователем в приложении (issue #59).
+    /// </summary>
+    public bool HasExplicitLaunchMode => MapLaunchMode(App, DefaultApp) is not null;
 
     /// <summary>Версия платформы 1С.</summary>
     public string Version { get; set; } = string.Empty;
@@ -538,6 +546,7 @@ internal sealed class IbaseEntry
             }
         }
 
+        var launchMode = MapLaunchMode(App, DefaultApp);
         return new Infobase
         {
             Name = Name,
@@ -545,7 +554,7 @@ internal sealed class IbaseEntry
             Connection = connection,
             PlatformVersion = version,
             Architecture = architecture,
-            LaunchMode = MapLaunchMode(App, DefaultApp),
+            LaunchMode = launchMode ?? "Автоматический",
             LaunchParameters = AdditionalParameters,
             Description = string.Empty,
             Id = Id
@@ -558,7 +567,12 @@ internal sealed class IbaseEntry
     /// используется режим запуска по умолчанию (DefaultApp). Признак WA (доступность
     /// веб-клиента) не влияет на режим запуска.
     /// </summary>
-    private static string MapLaunchMode(string app, string defaultApp)
+    /// <returns>
+    /// Канонический режим запуска, либо null, если в записи НЕТ явного режима
+    /// (App и DefaultApp — «Auto»/пусто/нераспознанное значение). По null вызывающая
+    /// сторона отличает «режим не задан» от «Автоматический» (issue #59).
+    /// </returns>
+    private static string? MapLaunchMode(string app, string defaultApp)
     {
         // Явно заданный режим запуска имеет приоритет.
         var mapped = MapSingleLaunchMode(app);
@@ -570,22 +584,24 @@ internal sealed class IbaseEntry
         if (mapped != null)
             return mapped;
 
-        return "Автоматический";
+        return null;
     }
 
     /// <summary>
     /// Сопоставляет одно значение ключа App/DefaultApp из ibases.v8i каноническому
     /// русскому режиму запуска. Возвращает null, если значение не распознано
     /// (пусто, Auto или иное) — в этом случае применяется режим по умолчанию.
-    /// Канонические значения используются для хранения и сравнения и НЕ локализуются.
+    /// Распознаются и токены приложения (ThinClient/ThickClient/WebClient), и значения
+    /// штатного стартера 1С («1cv8» — толстый клиент, «1cv8c» — тонкий, «1cv8s» — веб,
+    /// issue #59). Канонические значения используются для хранения и сравнения и НЕ локализуются.
     /// </summary>
     private static string? MapSingleLaunchMode(string value)
     {
         return value.Trim().ToLowerInvariant() switch
         {
-            "thinclient" => "Тонкий клиент",
-            "thickclient" => "Толстый клиент",
-            "webclient" => "Веб-клиент",
+            "thinclient" or "1cv8c" => "Тонкий клиент",
+            "thickclient" or "1cv8" => "Толстый клиент",
+            "webclient" or "1cv8s" => "Веб-клиент",
             _ => null
         };
     }

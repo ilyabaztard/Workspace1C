@@ -93,11 +93,10 @@ namespace Workspace1C
                         new TextBlock { Text = $"{server.Address}:{server.Port}", Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center }
                     }
                 });
-            _sourceServerCombo.SelectionChanged += (_, _) =>
-            {
-                if (_sourceServerCombo.SelectedItem is ManagementServer server)
-                    _vm.SelectedSourceServer = server;
-            };
+            // Двусторонняя привязка (issue #41): сервер, подставленный из окна «Серверы 1С»
+            // (SelectedSourceServer), отображается в поле, а выбор пользователем пишется в VM.
+            _sourceServerCombo.Bind(ComboBox.SelectedItemProperty,
+                new Binding("SelectedSourceServer", BindingMode.TwoWay));
 
             _sourceClusterCombo = new ComboBox { Width = 300, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(6, 2) };
             _sourceClusterCombo.Bind(ItemsControl.ItemsSourceProperty, new Binding("SourceClusters"));
@@ -166,11 +165,9 @@ namespace Workspace1C
                         new TextBlock { Text = $"{server.Address}:{server.Port}", Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center }
                     }
                 });
-            _targetServerCombo.SelectionChanged += (_, _) =>
-            {
-                if (_targetServerCombo.SelectedItem is ManagementServer server)
-                    _vm.SelectedTargetServer = server;
-            };
+            // Двусторонняя привязка (issue #41): как у сервера-источника.
+            _targetServerCombo.Bind(ComboBox.SelectedItemProperty,
+                new Binding("SelectedTargetServer", BindingMode.TwoWay));
 
             _targetClusterCombo = new ComboBox { Width = 300, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(6, 2) };
             _targetClusterCombo.Bind(ItemsControl.ItemsSourceProperty, new Binding("TargetClusters"));
@@ -265,6 +262,19 @@ namespace Workspace1C
                 () => _vm.SelectAllCommand.Execute(null));
             _selectNoneButton = BuildSecondaryButton(LocalizationManager.T("Selection.None"),
                 () => _vm.SelectNoneCommand.Execute(null));
+            // Сводка выделения «Выделено: N из M · будет перенесено: N» (issue #41,
+            // комментарий 7OH): слева от кнопок, привязана к SelectionSummaryText.
+            var selectionSummary = new TextBlock
+            {
+                FontSize = 12,
+                Opacity = 0.75,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 12, 0),
+                MaxWidth = 380,
+                TextWrapping = TextWrapping.Wrap
+            };
+            selectionSummary.Bind(TextBlock.TextProperty, new Binding("SelectionSummaryText"));
+            bulk.Children.Insert(0, selectionSummary);
             bulk.Children.Add(_selectAllButton);
             bulk.Children.Add(_selectNoneButton);
             this.FindControl<ContentControl>("BulkHost")!.Content = bulk;

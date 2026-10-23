@@ -1147,8 +1147,7 @@ namespace Workspace1C
                 candidates,
                 ConnectionReplaceScope.BatchSelected,
                 onApplied: _viewModel.ApplyConnectionReplace,
-                onUndone: _viewModel.UndoLastConnectionReplace,
-                installedPlatformVersions: _viewModel.InstalledPlatformVersions);
+                onUndone: _viewModel.UndoLastConnectionReplace);
             var win = new ConnectionReplaceWindow(vm) { Owner = this };
             win.ShowDialog();
             _viewModel.ClearBatchSelection();
@@ -1170,10 +1169,32 @@ namespace Workspace1C
                 candidates,
                 ConnectionReplaceScope.AllBases,
                 onApplied: _viewModel.ApplyConnectionReplace,
-                onUndone: _viewModel.UndoLastConnectionReplace,
-                installedPlatformVersions: _viewModel.InstalledPlatformVersions);
+                onUndone: _viewModel.UndoLastConnectionReplace);
             var win = new ConnectionReplaceWindow(vm) { Owner = this };
             win.ShowDialog();
+        }
+
+        /// <summary>
+        /// «Сменить платформу» («Для выделенных (N)…», issue #54, переработка): открывает
+        /// отдельное окно выбора версии платформы из установленных; по «ОК» заменяет её
+        /// выделенным базам через <see cref="ConnectionReplacementPlanner.ApplyPlatform"/> и
+        /// мост MainViewModel (та же undo-история и персистентность, что у замены строк).
+        /// После закрытия окна выделение снимается (как у остальных пакетных операций).
+        /// </summary>
+        private void OnBatchChangePlatform_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel is null || _viewModel.BatchOperationTargetCount == 0)
+                return;
+            var candidates = _viewModel.GetConnectionReplaceCandidates(ConnectionReplaceScope.BatchSelected);
+            if (candidates.Count == 0)
+                return;
+            var vm = new PlatformChangeViewModel(
+                candidates,
+                installedPlatformVersions: _viewModel.InstalledPlatformVersions,
+                onApplied: _viewModel.ApplyConnectionReplace);
+            var win = new PlatformChangeWindow(vm) { Owner = this };
+            win.ShowDialog();
+            _viewModel.ClearBatchSelection();
         }
 
         /// <summary>

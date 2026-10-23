@@ -2300,6 +2300,9 @@ namespace Workspace1C
             // Массовая замена строк подключения (0.3.9.191, функция 6): окно с правилом
             // «найти → заменить на» по полям строк подключения выделенных баз.
             batchMenu.Items.Add(BatchMenuAction("Main.BatchConnectionReplace", OnBatchConnectionReplaceClick, "IconFindReplace", "#F59E0B"));
+            // Смена платформы выделенных баз (issue #54, переработка по комментарию 7OH):
+            // отдельное окно выбора установленной версии вместо галочки в «Замене строк…».
+            batchMenu.Items.Add(BatchMenuAction("Main.BatchChangePlatform", OnBatchChangePlatformClick, "IconPackageVariant", "#22C55E"));
             batchMenu.Items.Add(BatchMenuAction("Main.BatchDelete", OnBatchDeleteClick, "IconDelete", "#EF4444"));
             _batchMenu = batchMenu;
         }
@@ -2471,8 +2474,7 @@ namespace Workspace1C
                 candidates,
                 ConnectionReplaceScope.BatchSelected,
                 onApplied: _vm.ApplyConnectionReplace,
-                onUndone: _vm.UndoLastConnectionReplace,
-                installedPlatformVersions: _vm.InstalledPlatformVersions);
+                onUndone: _vm.UndoLastConnectionReplace);
             var win = new ConnectionReplaceWindow(vm);
             win.ShowDialogSync(this);
             _vm.ClearBatchSelection();
@@ -2494,10 +2496,32 @@ namespace Workspace1C
                 candidates,
                 ConnectionReplaceScope.AllBases,
                 onApplied: _vm.ApplyConnectionReplace,
-                onUndone: _vm.UndoLastConnectionReplace,
-                installedPlatformVersions: _vm.InstalledPlatformVersions);
+                onUndone: _vm.UndoLastConnectionReplace);
             var win = new ConnectionReplaceWindow(vm);
             win.ShowDialogSync(this);
+        }
+
+        /// <summary>
+        /// «Сменить платформу» («Для выделенных (N)…», issue #54, переработка): отдельное
+        /// окно выбора версии платформы из установленных; по «Сменить» заменяет её
+        /// выделенным базам через <see cref="ConnectionReplacementPlanner.ApplyPlatform"/> и
+        /// мост MainViewModel (та же undo-история и персистентность, что у замены строк).
+        /// После закрытия окна выделение снимается (как у остальных пакетных операций).
+        /// </summary>
+        private void OnBatchChangePlatformClick()
+        {
+            if (_vm is null || _vm.BatchOperationTargetCount == 0)
+                return;
+            var candidates = _vm.GetConnectionReplaceCandidates(ConnectionReplaceScope.BatchSelected);
+            if (candidates.Count == 0)
+                return;
+            var vm = new PlatformChangeViewModel(
+                candidates,
+                installedPlatformVersions: _vm.InstalledPlatformVersions,
+                onApplied: _vm.ApplyConnectionReplace);
+            var win = new PlatformChangeWindow(vm);
+            win.ShowDialogSync(this);
+            _vm.ClearBatchSelection();
         }
 
         /// <summary>

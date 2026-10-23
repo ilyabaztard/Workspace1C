@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Windows.Input;
@@ -320,6 +321,28 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     public int CheckedCount => SourceRows.Count(r => r.IsChecked);
 
     /// <summary>
+    /// Сводка чеклиста «сколько выделено и сколько будет перенесено» (issue #41,
+    /// комментарий 7OH, п. «сводка выделения»): «Выделено: {0} из {1} · будет
+    /// перенесено: {2}». «Будет перенесено» — отмеченные базы без статуса приёмника
+    /// «Есть в кластере» (такие Мигрировать не переносит). Пустой чеклист — пустая строка.
+    /// </summary>
+    public string SelectionSummaryText
+    {
+        get
+        {
+            if (SourceRows.Count == 0)
+                return string.Empty;
+            var toMigrate = SourceRows.Count(r => r.IsChecked && string.IsNullOrEmpty(r.TargetStatus));
+            var summary = string.Format(
+                LocalizationManager.T("ClusterMigration.Summary.SelectedFormat"),
+                CheckedCount, SourceRows.Count, toMigrate);
+            if (CheckedCount > toMigrate)
+                summary += " " + LocalizationManager.T("ClusterMigration.Summary.InTargetPending");
+            return summary;
+        }
+    }
+
+    /// <summary>
     /// Есть ли отмеченная строка со статусом приёмника «Есть в кластере» (issue #41):
     /// если да — «Мигрировать» недоступна (перенос такой базы rac не выполнит).
     /// </summary>
@@ -613,9 +636,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         SourceStatusText = rows.Count == 0
             ? LocalizationManager.T("ClusterMigration.Error.NoBases")
             : string.Format(LocalizationManager.T("ClusterMigration.Status.LoadedBasesFormat"), rows.Count);
-        OnPropertyChanged(nameof(CheckedCount));
-        OnPropertyChanged(nameof(CanMigrate));
-        OnPropertyChanged(nameof(MigrateHint));
+        NotifyCheckedState();
     }
 
     // ===================== Действия: приёмник =====================
@@ -749,10 +770,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         TargetStatusText = string.Format(
             LocalizationManager.T("ClusterMigration.Status.StatusesAppliedFormat"),
             SourceRows.Count(r => !string.IsNullOrEmpty(r.TargetStatus)));
-        OnPropertyChanged(nameof(CheckedCount));
-        OnPropertyChanged(nameof(HasCheckedInTarget));
-        OnPropertyChanged(nameof(CanMigrate));
-        OnPropertyChanged(nameof(MigrateHint));
+        NotifyCheckedState();
     }
 
     // ===================== Галочки =====================
@@ -762,10 +780,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     {
         foreach (var row in SourceRows)
             row.IsChecked = true;
-        OnPropertyChanged(nameof(CheckedCount));
-        OnPropertyChanged(nameof(HasCheckedInTarget));
-        OnPropertyChanged(nameof(CanMigrate));
-        OnPropertyChanged(nameof(MigrateHint));
+        NotifyCheckedState();
     }
 
     /// <summary>«Снять все»: снять отметки со всех строк чеклиста.</summary>
@@ -773,10 +788,34 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     {
         foreach (var row in SourceRows)
             row.IsChecked = false;
+        NotifyCheckedState();
+    }
+
+    /// <summary>
+    /// Пересчитывает всё, что зависит от галочек/статусов чеклиста: число отмеченных,
+    /// признак «отмечена база из приёмника», доступность и подсказку «Мигрировать»,
+    /// сводку выделения. Вызывается и массовыми операциями, и при переключении галочки
+    /// отдельной строки (см. <see cref="OnRowPropertyChanged"/>, issue #41).
+    /// </summary>
+    private void NotifyCheckedState()
+    {
         OnPropertyChanged(nameof(CheckedCount));
         OnPropertyChanged(nameof(HasCheckedInTarget));
         OnPropertyChanged(nameof(CanMigrate));
         OnPropertyChanged(nameof(MigrateHint));
+        OnPropertyChanged(nameof(SelectionSummaryText));
+    }
+
+    /// <summary>
+    /// Строка чеклиста поменяла свойство <see cref="ClusterMigrationRow.IsChecked"/>
+    /// (например, пользователь снял галочку вручную): пересчитываем доступность,
+    /// подсказки и сводку (issue #41).
+    /// </summary>
+    private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!string.Equals(e.PropertyName, nameof(ClusterMigrationRow.IsChecked), StringComparison.Ordinal))
+            return;
+        NotifyCheckedState();
     }
 
     // ===================== Миграция =====================
@@ -875,15 +914,25 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             var newPort = targetCluster.Port > 0 ? targetCluster.Port : IRacClient.DefaultPort;
             var groupName = UseClusterGrouping ? (targetCluster.Name ?? string.Empty).Trim() : string.Empty;
 
-            ProgressTotal = rows.Count;
             var migrated = new List<string>(rows.Count);
             var addedInfobases = new List<Infobase>(rows.Count);
+
+            // Обновления прогресса доставляются в UI-поток: окно подписано на
+            // PropertyChanged и напрямую трогает элементы управления (ProgressText →
+            // UpdateCommandStates), а продолжение после ConfigureAwait(false) —
+            // в пуле потоков (issue #41, кросс-потоковая InvalidOperationException).
+            Dispatch(() => ProgressTotal = rows.Count);
 
             for (var i = 0; i < rows.Count; i++)
             {
                 var row = rows[i];
-                ProgressIndex = i + 1;
-                CurrentBaseName = row.Name;
+                var index = i + 1;
+                var name = row.Name;
+                Dispatch(() =>
+                {
+                    ProgressIndex = index;
+                    CurrentBaseName = name;
+                });
 
                 // 1) Добавляем базу с теми же данными в новый кластер (rac «infobase create»).
                 var request = ClusterMigrationService.BuildCreateRequest(row.Source!, DbUser, DbPassword);
@@ -915,9 +964,15 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                 migrated.Add(row.Name);
             }
 
-            Result = new ClusterMigrationResult(migrated, addedInfobases, newServer, newPort, ReplaceConnectionStrings: false);
-            StatusText = string.Format(LocalizationManager.T("ClusterMigration.SuccessFormat"), migrated.Count);
-            MigrationCompleted = true;
+            // Финальный блок (Result/MigrationCompleted) — ТОЛЬКО в UI-потоке: по
+            // MigrationCompleted окно показывает диалог и закрывается (issue #41).
+            var result = new ClusterMigrationResult(migrated, addedInfobases, newServer, newPort, ReplaceConnectionStrings: false);
+            Dispatch(() =>
+            {
+                Result = result;
+                StatusText = string.Format(LocalizationManager.T("ClusterMigration.SuccessFormat"), migrated.Count);
+                MigrationCompleted = true;
+            });
         }
         catch (OperationCanceledException)
         {
@@ -951,6 +1006,8 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             connection.Connection?.ToConnectionString() ?? string.Empty,
             source);
         row.SourceStatus = duplicate ? LocalizationManager.T("ClusterImport.AlreadyExists") : string.Empty;
+        // Переключение галочки строки вручную пересчитывает доступность/сводку (issue #41).
+        row.PropertyChanged += OnRowPropertyChanged;
         return row;
     }
 
