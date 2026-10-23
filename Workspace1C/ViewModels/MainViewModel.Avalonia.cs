@@ -1456,7 +1456,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             dialog = new Workspace1C.ConnectionSettingsWindow(
-                ib, _groups, InstalledPlatformVersions(), ib.Group,
+                ib, _groups, FindInstalledPlatformVersions(), ib.Group,
                 AvailableServers(), AvailablePorts(), AvailableConfigurations(),
                 // Существующие теги всех баз — для автодополнения при добавлении (issue #283).
                 _allInfobases.SelectMany(i => i.Tags)
@@ -1553,7 +1553,7 @@ public partial class MainViewModel : ViewModelBase
         {
             dialog = new Workspace1C.CreateInfobaseWindow(
                 fromTemplate,
-                InstalledPlatformVersions(),
+                FindInstalledPlatformVersions(),
                 defaultGroupPath,
                 _groups,
                 CreateInfobaseServers());
@@ -1584,7 +1584,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             dialog = new Workspace1C.ConnectionSettingsWindow(
-                null, _groups, InstalledPlatformVersions(), defaultGroupPath,
+                null, _groups, FindInstalledPlatformVersions(), defaultGroupPath,
                 AvailableServers(), AvailablePorts(), AvailableConfigurations(),
                 // Существующие теги всех баз — для автодополнения при добавлении (issue #283).
                 _allInfobases.SelectMany(i => i.Tags)

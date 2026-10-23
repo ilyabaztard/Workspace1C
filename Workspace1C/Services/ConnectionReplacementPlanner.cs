@@ -25,12 +25,18 @@ public enum ConnectionReplaceScope
 /// <param name="BeforeText">Текущее значение поля (или вся строка для <see cref="ConnectionField.Any"/>).</param>
 /// <param name="AfterText">Новое значение после замены.</param>
 /// <param name="Changed">true — значение реально изменится.</param>
+/// <param name="IsPlatformChange">
+/// true — строка описывает смену версии платформы (issue #54): <paramref name="Field"/>
+/// не используется, <paramref name="BeforeText"/>/<paramref name="AfterText"/> — старая
+/// и новая версии платформы. Отображается в колонке «Поле» как «Платформа».
+/// </param>
 public sealed record ConnectionReplacePreviewRow(
     Infobase Infobase,
     ConnectionField Field,
     string BeforeText,
     string AfterText,
-    bool Changed);
+    bool Changed,
+    bool IsPlatformChange = false);
 
 /// <summary>
 /// План замены: затронутые строки предпросмотра и сводка счётчиков.
@@ -46,17 +52,25 @@ public sealed record ConnectionReplacePlan(
     int EmptyConnectionCount);
 
 /// <summary>
-/// Запись для отката одной замены: прежние и новые настройки подключения базы.
+/// Запись для отката одной замены: прежние и новые настройки подключения базы и
+/// (при смене платформы, issue #54) прежняя/новая версии платформы.
 /// <see cref="Before"/> — глубокая копия прежних настроек (снята до мутации), чтобы
 /// откат не зависел от последующих правок полей базы.
 /// </summary>
-/// <param name="Infobase">База, чьё подключение было изменено.</param>
+/// <param name="Infobase">База, чьё подключение/платформа были изменены.</param>
 /// <param name="Before">Глубокая копия прежних настроек подключения.</param>
 /// <param name="After">Копия новых настроек подключения.</param>
+/// <param name="BeforePlatform">
+/// Прежняя версия платформы (заполняется только при смене платформы; null — запись
+/// не трогает <see cref="Infobase.PlatformVersion"/>).
+/// </param>
+/// <param name="AfterPlatform">Новая версия платформы (см. <paramref name="BeforePlatform"/>).</param>
 public sealed record ConnectionReplaceUndoEntry(
     Infobase Infobase,
     ConnectionSettings Before,
-    ConnectionSettings After);
+    ConnectionSettings After,
+    string? BeforePlatform = null,
+    string? AfterPlatform = null);
 
 /// <summary>
 /// Чистый планировщик массовой замены в строках подключения (0.3.9.188, функция 6
@@ -246,9 +260,139 @@ public static class ConnectionReplacementPlanner
     }
 
     /// <summary>
+    /// План смены платформы БЕЗ мутации баз (issue #54): для каждого кандидата, чья
+    /// <see cref="Infobase.PlatformVersion"/> отличается от целевой (без учёта регистра
+    /// и хвостовых пробелов), возвращает строку предпросмотра с признаком
+    /// <see cref="ConnectionReplacePreviewRow.IsPlatformChange"/>. Применяется и к базам
+    /// без строки подключения (платформа не связана с подключением). Пустая версия в
+    /// правиле — пустой результат.
+    /// </summary>
+    /// <param name="candidates">Кандидаты области (результат <see cref="SelectCandidates"/>).</param>
+    /// <param name="rule">Правило смены платформы.</param>
+    /// <returns>Строки предпросмотра (только с реальным изменением).</returns>
+    public static IReadOnlyList<ConnectionReplacePreviewRow> PlanPlatform(
+        IReadOnlyList<Infobase> candidates,
+        PlatformReplaceRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(rule);
+
+        var rows = new List<ConnectionReplacePreviewRow>();
+        if (string.IsNullOrWhiteSpace(rule.Platform))
+            return rows;
+
+        var target = rule.Platform.Trim();
+        foreach (var infobase in candidates)
+        {
+            if (infobase is null)
+                continue;
+            if (string.Equals((infobase.PlatformVersion ?? string.Empty).Trim(), target, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            rows.Add(new ConnectionReplacePreviewRow(
+                infobase,
+                ConnectionField.Any,
+                infobase.PlatformVersion ?? string.Empty,
+                target,
+                Changed: true,
+                IsPlatformChange: true));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Применяет смену платформы (issue #54): мутирует <see cref="Infobase.PlatformVersion"/>
+    /// затронутых кандидатов и возвращает записи отката (<see cref="ConnectionReplaceUndoEntry.BeforePlatform"/>
+    /// — прежняя версия, <see cref="ConnectionReplaceUndoEntry.AfterPlatform"/> — новая; настройки
+    /// подключения не изменяются — Before/After — независимые копии текущего состояния).
+    /// Пустая версия в правиле — no-op (пустой список). Сравнение версий — без учёта регистра
+    /// и хвостовых пробелов.
+    /// </summary>
+    /// <param name="candidates">Кандидаты области.</param>
+    /// <param name="rule">Правило смены платформы.</param>
+    /// <returns>Записи отката для затронутых баз.</returns>
+    public static IReadOnlyList<ConnectionReplaceUndoEntry> ApplyPlatform(
+        IReadOnlyList<Infobase> candidates,
+        PlatformReplaceRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(rule);
+
+        var entries = new List<ConnectionReplaceUndoEntry>();
+        if (string.IsNullOrWhiteSpace(rule.Platform))
+            return entries;
+
+        var target = rule.Platform.Trim();
+        foreach (var infobase in candidates)
+        {
+            if (infobase is null)
+                continue;
+            if (string.Equals((infobase.PlatformVersion ?? string.Empty).Trim(), target, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var beforeConnection = DeepCopy(infobase.Connection);
+            var beforePlatform = infobase.PlatformVersion ?? string.Empty;
+            infobase.PlatformVersion = target;
+            entries.Add(new ConnectionReplaceUndoEntry(
+                infobase,
+                beforeConnection,
+                DeepCopy(infobase.Connection),
+                beforePlatform,
+                target));
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// Объединяет записи отката по базе (issue #54): если одна и та же база изменилась
+    /// и по строке подключения, и по платформе (две записи), результатом становится одна
+    /// запись с полным снапшотом «до/после» (Before/After — подключение; BeforePlatform/
+    /// AfterPlatform — платформа). Объединение корректно при любом порядке входных записей.
+    /// Порядок уникальных баз сохраняется по первому вхождению. Null-записи и записи без
+    /// базы пропускаются.
+    /// </summary>
+    /// <param name="entries">Записи отката (из <see cref="Apply"/> и/или <see cref="ApplyPlatform"/>).</param>
+    /// <returns>Новый список записей — не более одной на базу.</returns>
+    public static IReadOnlyList<ConnectionReplaceUndoEntry> MergeUndoEntries(
+        IEnumerable<ConnectionReplaceUndoEntry>? entries)
+    {
+        if (entries is null)
+            return Array.Empty<ConnectionReplaceUndoEntry>();
+
+        var result = new List<ConnectionReplaceUndoEntry>();
+        var byBase = new Dictionary<Infobase, int>(ReferenceEqualityComparer.Instance);
+        foreach (var entry in entries)
+        {
+            if (entry?.Infobase is null)
+                continue;
+
+            if (!byBase.TryGetValue(entry.Infobase, out var index))
+            {
+                byBase.Add(entry.Infobase, result.Count);
+                result.Add(entry);
+                continue;
+            }
+
+            var existing = result[index];
+            result[index] = new ConnectionReplaceUndoEntry(
+                entry.Infobase,
+                existing.Before,
+                entry.After,
+                existing.BeforePlatform ?? entry.BeforePlatform,
+                existing.AfterPlatform ?? entry.AfterPlatform);
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Откат последней замены: для каждой записи восстанавливает прежние настройки
     /// (мутация объектов баз на месте — свойству <see cref="Infobase.Connection"/> присваивается
-    /// снапшот <see cref="ConnectionReplaceUndoEntry.Before"/>). Пустой/null список — no-op.
+    /// снапшот <see cref="ConnectionReplaceUndoEntry.Before"/>); при смене платформы
+    /// (<see cref="ConnectionReplaceUndoEntry.BeforePlatform"/> не null) восстанавливает и
+    /// <see cref="Infobase.PlatformVersion"/>. Пустой/null список — no-op.
     /// </summary>
     /// <param name="entries">Записи отката из <see cref="Apply"/>.</param>
     public static void Undo(IEnumerable<ConnectionReplaceUndoEntry> entries)
@@ -262,6 +406,8 @@ public static class ConnectionReplacementPlanner
                 continue;
 
             entry.Infobase.Connection = entry.Before;
+            if (entry.BeforePlatform is not null)
+                entry.Infobase.PlatformVersion = entry.BeforePlatform;
         }
     }
 

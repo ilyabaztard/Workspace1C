@@ -1035,7 +1035,7 @@ public partial class MainViewModel : ViewModelBase
             return;
 
         SelectedInfobase = infobase;
-        var dialog = new PlatformVersionPickerWindow(InstalledPlatformVersions(), infobase.PlatformVersion);
+        var dialog = new PlatformVersionPickerWindow(FindInstalledPlatformVersions(), infobase.PlatformVersion);
         if (!dialog.ShowDialogSync(OwnerWindow()))
             return;
 
@@ -1063,7 +1063,15 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    private List<string> InstalledPlatformVersions()
+    /// <summary>
+    /// Список установленных версий платформы 1С (issue #54): публичное свойство для окон
+    /// (в WPF-сборке аналогичное свойство в MainViewModel.cs). Linux: живой запрос к
+    /// сервису поиска <see cref="FindInstalledPlatformVersions"/>, как было до переименования
+    /// метода (все прежние вызовы метода сохранены).
+    /// </summary>
+    public IReadOnlyList<string> InstalledPlatformVersions => FindInstalledPlatformVersions();
+
+    private List<string> FindInstalledPlatformVersions()
     {
         try { return _platformService.FindInstalledVersions(_settings.AdditionalPlatformSearchPaths); }
         catch (Exception ex)
@@ -1965,7 +1973,7 @@ public partial class MainViewModel : ViewModelBase
         var window = new Workspace1C.ConfigDiffSetupWindow(
             _allInfobases.ToList(),
             SelectedInfobase,
-            InstalledPlatformVersions(),
+            FindInstalledPlatformVersions(),
             _settings.LastFileCreatePlatformVersion ?? string.Empty);
         window.ShowDialogSync(OwnerWindow());
     }

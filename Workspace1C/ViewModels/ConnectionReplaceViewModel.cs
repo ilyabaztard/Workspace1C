@@ -29,6 +29,8 @@ public sealed class ConnectionReplaceViewModel : ViewModelBase
     private ConnectionReplaceScope _selectedScope;
     private ConnectionMatchMode _selectedMatchMode = ConnectionMatchMode.Substring;
     private bool _ignoreCase = true;
+    private bool _changePlatform;
+    private string _selectedPlatform = string.Empty;
     private bool _isPreviewDirty = true;
     private int _affectedCount;
     private int _noMatchCount;
@@ -40,6 +42,7 @@ public sealed class ConnectionReplaceViewModel : ViewModelBase
     private string _errorMessage = string.Empty;
 
     private ConnectionStringReplaceRule? _lastRule;
+    private PlatformReplaceRule? _lastPlatformRule;
     private IReadOnlyList<ConnectionReplaceUndoEntry>? _lastEntries;
 
     private ICommand? _refreshPreviewCommand;
@@ -57,18 +60,24 @@ public sealed class ConnectionReplaceViewModel : ViewModelBase
     /// Доставка применения результатов в UI-поток (передаёт окно); null — результаты
     /// применяются прямо из вызывающего потока (тесты).
     /// </param>
+    /// <param name="installedPlatformVersions">
+    /// Установленные версии платформы 1С для ComboBox «Сменить платформу» (issue #54);
+    /// null/пустой — выбор недоступен, галочка работает вхолостую.
+    /// </param>
     public ConnectionReplaceViewModel(
         IReadOnlyList<Infobase> candidates,
         ConnectionReplaceScope initialScope,
         Action<IReadOnlyList<ConnectionReplaceUndoEntry>>? onApplied = null,
         Action? onUndone = null,
-        Action<Action>? dispatchToUi = null)
+        Action<Action>? dispatchToUi = null,
+        IReadOnlyList<string>? installedPlatformVersions = null)
     {
         _candidates = candidates ?? throw new ArgumentNullException(nameof(candidates));
         _selectedScope = initialScope;
         _onApplied = onApplied;
         _onUndone = onUndone;
         _dispatchToUi = dispatchToUi;
+        InstalledPlatformVersions = (installedPlatformVersions ?? Array.Empty<string>()).ToList();
 
         // Готовые списки для ComboBox'ов окна (0.3.9.190): значения enum + локализованные
         // тексты — единая точка, используются и WPF, и Avalonia.
@@ -167,6 +176,57 @@ public sealed class ConnectionReplaceViewModel : ViewModelBase
                 MarkInputChanged();
         }
     }
+
+    /// <summary>
+    /// Галочка «Сменить платформу» (issue #54): при включении в операцию массового
+    /// действия добавляется смена <see cref="Infobase.PlatformVersion"/> кандидатов на
+    /// <see cref="SelectedPlatform"/>. При включении с пустым выбором автоматически
+    /// подставляется первая из <see cref="InstalledPlatformVersions"/> (если есть).
+    /// </summary>
+    public bool ChangePlatform
+    {
+        get => _changePlatform;
+        set
+        {
+            if (!SetProperty(ref _changePlatform, value))
+                return;
+
+            if (value && string.IsNullOrWhiteSpace(_selectedPlatform) &&
+                InstalledPlatformVersions.Count > 0)
+            {
+                SelectedPlatform = InstalledPlatformVersions[0];
+            }
+            else
+            {
+                MarkInputChanged();
+            }
+
+            OnPropertyChanged(nameof(CanSelectPlatform));
+        }
+    }
+
+    /// <summary>
+    /// Выбранная версия платформы для смены (issue #54). Пустая — смена платформы в
+    /// предпросмотре/применении не участвует.
+    /// </summary>
+    public string SelectedPlatform
+    {
+        get => _selectedPlatform;
+        set
+        {
+            if (SetProperty(ref _selectedPlatform, value ?? string.Empty))
+                MarkInputChanged();
+        }
+    }
+
+    /// <summary>
+    /// Установленные версии платформы 1С для ComboBox «Сменить платформу» (issue #54):
+    /// единый источник передаёт <see cref="MainViewModel.InstalledPlatformVersions"/>.
+    /// </summary>
+    public IReadOnlyList<string> InstalledPlatformVersions { get; }
+
+    /// <summary>true — поле выбора версии платформы активно (галочка включена и есть версии).</summary>
+    public bool CanSelectPlatform => ChangePlatform && InstalledPlatformVersions.Count > 0;
 
     // ===================== Состояние предпросмотра =====================
 
@@ -275,35 +335,53 @@ public sealed class ConnectionReplaceViewModel : ViewModelBase
     // ===================== Действия =====================
 
     /// <summary>
-    /// «Найти»: строит правило <see cref="ConnectionStringReplaceRule"/> и план через
-    /// <see cref="ConnectionReplacementPlanner.Plan"/> (без мутаций). Пустой искомый текст —
-    /// правило не строится, предпросмотр пуст (CanApply=false). Невалидный regex-паттерн —
-    /// <see cref="ArgumentException"/> превращается в <c>ConnectionReplace.Error.InvalidRegex</c>,
-    /// предпросмотр пуст.
+    /// «Найти»: строит правила (строка подключения — если искомый текст непуст; смена
+    /// платформы — если включена галочка и выбрана версия) и планы через
+    /// <see cref="ConnectionReplacementPlanner.Plan"/> и
+    /// <see cref="ConnectionReplacementPlanner.PlanPlatform"/> (без мутаций). Пустой искомый
+    /// текст без активной смены платформы — правила не строятся, предпросмотр пуст
+    /// (CanApply=false). Невалидный regex-паттерн — <see cref="ArgumentException"/>
+    /// превращается в <c>ConnectionReplace.Error.InvalidRegex</c>, предпросмотр пуст.
     /// </summary>
     public void RefreshPreview()
     {
         ResultText = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(FindText))
+        var platformRule = BuildPlatformRule();
+        if (string.IsNullOrWhiteSpace(FindText) && platformRule is null)
         {
-            // Пустой поиск (в т.ч. из пробелов): правило не строится, сообщение об ошибке
-            // не требуется — просто пустой предпросмотр с CanApply=false.
+            // Пустой поиск (в т.ч. из пробелов) и смена платформы не задана: правила не
+            // строятся, сообщение об ошибке не требуется — пустой предпросмотр с CanApply=false.
             _lastRule = null;
+            _lastPlatformRule = null;
             ApplyUpdate(ClearPreview);
             return;
         }
 
-        var rule = new ConnectionStringReplaceRule(FindText, ReplaceText, SelectedField, SelectedMatchMode, IgnoreCase);
         try
         {
-            var plan = ConnectionReplacementPlanner.Plan(_candidates, rule);
-            _lastRule = rule;
-            ApplyUpdate(() => ApplyPlan(plan));
+            ConnectionReplacePlan? plan = null;
+            if (!string.IsNullOrWhiteSpace(FindText))
+            {
+                var rule = new ConnectionStringReplaceRule(FindText, ReplaceText, SelectedField, SelectedMatchMode, IgnoreCase);
+                plan = ConnectionReplacementPlanner.Plan(_candidates, rule);
+                _lastRule = rule;
+            }
+            else
+            {
+                _lastRule = null;
+            }
+
+            var platformRows = platformRule is null
+                ? Array.Empty<ConnectionReplacePreviewRow>()
+                : ConnectionReplacementPlanner.PlanPlatform(_candidates, platformRule);
+            _lastPlatformRule = platformRule;
+            ApplyUpdate(() => ApplyPlan(plan, platformRows));
         }
         catch (ArgumentException ex)
         {
             _lastRule = null;
+            _lastPlatformRule = null;
             ApplyUpdate(() =>
             {
                 ClearPreview();
@@ -315,9 +393,11 @@ public sealed class ConnectionReplaceViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// «Заменить»: применяет правило через <see cref="ConnectionReplacementPlanner.Apply"/>
-    /// (мутирует базы и возвращает записи отката), вызывает колбэк <c>onApplied</c>
-    /// (MainViewModel сохраняет undo-историю), выводит сводку результата
+    /// «Заменить»: применяет правила через <see cref="ConnectionReplacementPlanner.Apply"/>
+    /// (строки подключения) и <see cref="ConnectionReplacementPlanner.ApplyPlatform"/>
+    /// (версия платформы), мутирует базы, объединяет записи отката по базе
+    /// (<see cref="ConnectionReplacementPlanner.MergeUndoEntries"/>), вызывает колбэк
+    /// <c>onApplied</c> (MainViewModel сохраняет undo-историю), выводит сводку результата
     /// (<c>ConnectionReplace.Result.AppliedFormat</c>) и разблокирует «Отменить последнюю
     /// замену». Повторное применение без нового предпросмотра запрещено (CanApply=false).
     /// </summary>
@@ -325,10 +405,15 @@ public sealed class ConnectionReplaceViewModel : ViewModelBase
     {
         if (!CanApply || IsPreviewDirty)
             return;
-        if (_lastRule is null)
+        if (_lastRule is null && _lastPlatformRule is null)
             return;
 
-        var entries = ConnectionReplacementPlanner.Apply(_candidates, _lastRule);
+        var entries = new List<ConnectionReplaceUndoEntry>();
+        if (_lastRule is not null)
+            entries.AddRange(ConnectionReplacementPlanner.Apply(_candidates, _lastRule));
+        if (_lastPlatformRule is not null)
+            entries.AddRange(ConnectionReplacementPlanner.ApplyPlatform(_candidates, _lastPlatformRule));
+        entries = ConnectionReplacementPlanner.MergeUndoEntries(entries).ToList();
         _lastEntries = entries;
         _onApplied?.Invoke(entries);
 
@@ -383,24 +468,59 @@ public sealed class ConnectionReplaceViewModel : ViewModelBase
         ApplyUpdate(ClearPreview);
     }
 
-    private void ApplyPlan(ConnectionReplacePlan plan)
+    private void ApplyPlan(ConnectionReplacePlan? plan, IReadOnlyList<ConnectionReplacePreviewRow> platformRows)
     {
         PreviewRows.Clear();
-        foreach (var row in plan.Rows)
-            PreviewRows.Add(row);
+        var affected = new HashSet<Infobase>();
+        if (plan is not null)
+        {
+            foreach (var row in plan.Rows)
+            {
+                PreviewRows.Add(row);
+                affected.Add(row.Infobase);
+            }
+        }
 
-        AffectedCount = plan.AffectedCount;
-        NoMatchCount = plan.NoMatchCount;
-        EmptyCount = plan.EmptyConnectionCount;
-        SummaryText = string.Format(
+        var platformAffected = 0;
+        foreach (var row in platformRows)
+        {
+            PreviewRows.Add(row);
+            affected.Add(row.Infobase);
+            platformAffected++;
+        }
+
+        AffectedCount = affected.Count;
+        NoMatchCount = plan?.NoMatchCount ?? 0;
+        EmptyCount = plan?.EmptyConnectionCount ?? 0;
+        var summary = string.Format(
             LocalizationManager.T("ConnectionReplace.Summary.Format"),
-            plan.Rows.Count,
-            plan.AffectedCount,
-            plan.NoMatchCount,
-            plan.EmptyConnectionCount);
+            PreviewRows.Count,
+            AffectedCount,
+            NoMatchCount,
+            EmptyCount);
+        if (platformAffected > 0)
+        {
+            // Дополнительный хвост сводки о смене платформы (issue #54).
+            summary += string.Format(
+                LocalizationManager.T("ConnectionReplace.Summary.PlatformSuffixFormat"),
+                platformAffected);
+        }
+
+        SummaryText = summary;
         IsPreviewDirty = false;
-        CanApply = plan.AffectedCount > 0;
+        CanApply = AffectedCount > 0;
         ErrorMessage = string.Empty;
+    }
+
+    /// <summary>
+    /// Правило смены платформы из параметров окна: активно, когда галочка включена и
+    /// выбрана версия. Пустое значение версии — правило не строится.
+    /// </summary>
+    private PlatformReplaceRule? BuildPlatformRule()
+    {
+        if (!ChangePlatform || string.IsNullOrWhiteSpace(SelectedPlatform))
+            return null;
+        return new PlatformReplaceRule(SelectedPlatform.Trim());
     }
 
     private void ClearPreview()

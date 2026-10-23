@@ -44,8 +44,9 @@ public sealed class ConnectionReplaceViewModelTests
         IReadOnlyList<Infobase> candidates,
         ConnectionReplaceScope scope = ConnectionReplaceScope.AllBases,
         Action<IReadOnlyList<ConnectionReplaceUndoEntry>>? onApplied = null,
-        Action? onUndone = null)
-        => new(candidates, scope, onApplied, onUndone);
+        Action? onUndone = null,
+        IReadOnlyList<string>? installedVersions = null)
+        => new(candidates, scope, onApplied, onUndone, installedPlatformVersions: installedVersions);
 
     private static void SetServerReplace(
         ConnectionReplaceViewModel vm,
@@ -459,5 +460,174 @@ public sealed class ConnectionReplaceViewModelTests
         {
             Assert.Equal(item.DisplayText, item.ToString());
         }
+    }
+
+    // ---------- Issue #54: смена платформы ----------
+
+    [Fact]
+    public void PlatformDefaults_AreOff_EmptyVersion_AndNoVersions()
+    {
+        var vm = CreateVm(new List<Infobase> { ServerBase("1", "А") });
+
+        Assert.False(vm.ChangePlatform);
+        Assert.Equal(string.Empty, vm.SelectedPlatform);
+        Assert.Empty(vm.InstalledPlatformVersions);
+        Assert.False(vm.CanSelectPlatform);
+    }
+
+    [Fact]
+    public void ChangePlatformOn_WithVersions_PrefillsSelectedPlatform()
+    {
+        var vm = CreateVm(
+            new List<Infobase> { ServerBase("1", "А") },
+            installedVersions: new[] { "8.3.24.1664", "8.3.22.1483" });
+
+        vm.ChangePlatform = true;
+
+        Assert.Equal("8.3.24.1664", vm.SelectedPlatform);
+        Assert.True(vm.CanSelectPlatform);
+        Assert.True(vm.IsPreviewDirty); // предпросмотр инвалидирован до нового «Найти»
+    }
+
+    [Fact]
+    public void ChangePlatformToggle_WithoutVersions_MarksDirty_AndClearsPreview()
+    {
+        var candidates = new List<Infobase> { ServerBase("1", "База") };
+        var vm = CreateVm(candidates);
+        SetServerReplace(vm);
+        vm.RefreshPreview();
+        Assert.False(vm.IsPreviewDirty);
+
+        vm.ChangePlatform = true;
+
+        Assert.True(vm.IsPreviewDirty);
+        Assert.Empty(vm.PreviewRows);
+        Assert.False(vm.CanApply);
+    }
+
+    [Fact]
+    public void RefreshPreview_WithChangePlatform_AddsPlatformRows_AndSuffixInSummary()
+    {
+        var candidates = new List<Infobase>
+        {
+            ServerBase("1", "База А", server: "server1"),
+            ServerBase("2", "База Б", server: "server1")
+        };
+        candidates[0].PlatformVersion = "8.3.22.1483";
+        candidates[1].PlatformVersion = "8.3.24.1664";
+        var vm = CreateVm(candidates, installedVersions: new[] { "8.3.24.1664" });
+        SetServerReplace(vm);
+        vm.ChangePlatform = true;
+
+        vm.RefreshPreview();
+
+        // 2 строки замены сервера + 1 строка смены платформы (у второй базы версия уже совпадает).
+        Assert.Equal(3, vm.PreviewRows.Count);
+        Assert.Single(vm.PreviewRows, r => r.IsPlatformChange);
+        var platformRow = vm.PreviewRows.Single(r => r.IsPlatformChange);
+        Assert.Equal("8.3.22.1483", platformRow.BeforeText);
+        Assert.Equal("8.3.24.1664", platformRow.AfterText);
+        Assert.Equal(2, vm.AffectedCount);
+        Assert.Contains(platformRow.Infobase, candidates);
+        Assert.False(vm.IsPreviewDirty);
+        Assert.True(vm.CanApply);
+        // Сводка = базовая строка + суффикс о смене платформы.
+        var expectedBase = string.Format(
+            LocalizationManager.T("ConnectionReplace.Summary.Format"), 3, 2, 0, 0);
+        Assert.Equal(
+            expectedBase + string.Format(
+                LocalizationManager.T("ConnectionReplace.Summary.PlatformSuffixFormat"), 1),
+            vm.SummaryText);
+    }
+
+    [Fact]
+    public void Apply_WithBothRules_MergesUndoEntries_PerBase()
+    {
+        var candidates = new List<Infobase>
+        {
+            ServerBase("1", "База А", server: "server1"),
+            ServerBase("2", "База Б", server: "server1")
+        };
+        candidates[0].PlatformVersion = "8.3.22.1483";
+        candidates[1].PlatformVersion = "8.3.22.1483";
+        IReadOnlyList<ConnectionReplaceUndoEntry>? applied = null;
+        var vm = CreateVm(
+            candidates,
+            onApplied: entries => applied = entries,
+            installedVersions: new[] { "8.3.24.1664" });
+        SetServerReplace(vm);
+        vm.ChangePlatform = true;
+        vm.RefreshPreview();
+
+        vm.ApplyCommand.Execute(null);
+
+        Assert.NotNull(applied);
+        Assert.Equal(2, applied!.Count); // по одной записи на базу (подключение + платформа слиты)
+        Assert.All(applied, e => Assert.Equal("server2", e.After.Server));
+        Assert.All(applied, e => Assert.Equal("8.3.24.1664", e.AfterPlatform));
+        Assert.All(candidates, c => Assert.Equal("8.3.24.1664", c.PlatformVersion));
+        Assert.All(candidates, c => Assert.Equal("server2", c.Connection.Server));
+        Assert.True(vm.CanUndo);
+        Assert.False(vm.CanApply);
+    }
+
+    [Fact]
+    public void Apply_PlatformOnly_WorksWithoutFindText()
+    {
+        var candidates = new List<Infobase> { ServerBase("1", "База", server: "server1") };
+        candidates[0].PlatformVersion = "8.3.22.1483";
+        IReadOnlyList<ConnectionReplaceUndoEntry>? applied = null;
+        var vm = CreateVm(
+            candidates,
+            onApplied: entries => applied = entries,
+            installedVersions: new[] { "8.3.24.1664" });
+        vm.ChangePlatform = true;
+        // FindText пуст — в операции участвует только смена платформы.
+
+        vm.RefreshPreview();
+        Assert.True(vm.CanApply);
+        Assert.False(vm.IsPreviewDirty);
+        Assert.Single(vm.PreviewRows);
+        Assert.True(vm.PreviewRows[0].IsPlatformChange);
+
+        vm.ApplyCommand.Execute(null);
+
+        Assert.Equal("8.3.24.1664", candidates[0].PlatformVersion);
+        Assert.Equal("server1", candidates[0].Connection.Server); // строка не тронута
+        Assert.NotNull(applied);
+        var entry = Assert.Single(applied!);
+        Assert.Equal("8.3.22.1483", entry.BeforePlatform);
+        Assert.True(vm.CanUndo);
+    }
+
+    [Fact]
+    public void UndoLast_RestoresPlatformVersion()
+    {
+        var candidates = new List<Infobase> { ServerBase("1", "База") };
+        candidates[0].PlatformVersion = "8.3.22.1483";
+        var vm = CreateVm(candidates, installedVersions: new[] { "8.3.24.1664" });
+        vm.ChangePlatform = true;
+        vm.RefreshPreview();
+        vm.Apply();
+        Assert.Equal("8.3.24.1664", candidates[0].PlatformVersion);
+
+        vm.UndoLastCommand.Execute(null);
+
+        Assert.Equal("8.3.22.1483", candidates[0].PlatformVersion);
+        Assert.False(vm.CanUndo);
+        Assert.False(vm.CanApply);
+    }
+
+    [Fact]
+    public void NoPlatformRule_NoFindText_PlatformSuffixAbsent_AndPreviewEmpty()
+    {
+        var candidates = new List<Infobase> { ServerBase("1", "База", server: "server1") };
+        var vm = CreateVm(candidates);
+
+        vm.RefreshPreview();
+
+        Assert.False(vm.CanApply);
+        Assert.Empty(vm.PreviewRows);
+        Assert.DoesNotContain(LocalizationManager.T("ConnectionReplace.Summary.PlatformSuffixFormat").Replace("{0}", "0"), vm.SummaryText);
     }
 }

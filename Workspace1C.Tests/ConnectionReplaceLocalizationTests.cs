@@ -116,6 +116,39 @@ public sealed class ConnectionReplaceLocalizationTests
         Assert.Contains(key, en);
     }
 
+    // ---------- Issue #54: смена платформы ----------
+
+    [Theory]
+    [InlineData("ConnectionReplace.ChangePlatform")]
+    [InlineData("ConnectionReplace.PlatformLabel")]
+    [InlineData("ConnectionReplace.Fields.Platform")]
+    [InlineData("ConnectionReplace.Summary.PlatformSuffixFormat")]
+    public void ConnectionReplace_PlatformKeys_PresentInBothDictionaries(string key)
+    {
+        // Ключи смены платформы используются окном (галочка, выбор версии, строка
+        // предпросмотра «Платформа», суффикс сводки) — обязаны быть в обоих словарях.
+        var ru = CollectDictionaryKeys(Path.Combine("Workspace1C", "Localization", "Languages", "ru.json"));
+        var en = CollectDictionaryKeys(Path.Combine("Workspace1C", "Localization", "Languages", "en.json"));
+        Assert.Contains(key, ru);
+        Assert.Contains(key, en);
+    }
+
+    [Fact]
+    public void ConnectionReplace_MenuItemKeys_MentionPlatformInBothLanguages()
+    {
+        // Пункт меню переименован (issue #54): отражает обе возможности — замену строк
+        // подключения И смену платформы.
+        var ru = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "ru.json"));
+        var en = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "en.json"));
+        Assert.Contains("\"Main.BatchConnectionReplace\": \"Заменить строки подключения и платформу…\"", ru);
+        Assert.Contains("\"Main.UtilitiesConnectionReplace\": \"Заменить строки подключения и платформу…\"", ru);
+        Assert.Contains("\"Main.BatchConnectionReplace\": \"Replace connection strings and platform…\"", en);
+        Assert.Contains("\"Main.UtilitiesConnectionReplace\": \"Replace connection strings and platform…\"", en);
+        Assert.DoesNotContain("\"Заменить в строках подключения…\"", ru);
+        Assert.DoesNotContain("\"Replace in connection strings…\"", en);
+        Assert.DoesNotContain("\"Replace in base connection strings…\"", en);
+    }
+
     [Fact]
     public void ConnectionReplace_DictionariesSameKeySet()
     {

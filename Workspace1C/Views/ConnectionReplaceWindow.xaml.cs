@@ -64,15 +64,20 @@ namespace Workspace1C
     }
 
     /// <summary>
-    /// Конвертер локализованного имени поля строки подключения для колонки «Поле»
-    /// предпросмотра (тексты — <c>ConnectionReplace.Fields.*</c>, единая точка — метод
-    /// <see cref="ConnectionReplaceViewModel.FieldDisplayText"/>).
+    /// Конвертер локализованного имени в колонке «Поле» предпросмотра: для строки смены
+    /// платформы (<see cref="ConnectionReplacePreviewRow.IsPlatformChange"/>, issue #54) — текст
+    /// <c>ConnectionReplace.Fields.Platform</c>; для строки замены строки подключения — имя поля
+    /// (<c>ConnectionReplace.Fields.*</c>, единая точка — метод
+    /// <see cref="ConnectionReplaceViewModel.FieldDisplayText"/>). Принимает строку предпросмотра
+    /// целиком (в XAML — привязка без Path).
     /// </summary>
     public sealed class ConnectionFieldToTextConverter : IValueConverter
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-            => value is ConnectionField field
-                ? ConnectionReplaceViewModel.FieldDisplayText(field)
+            => value is ConnectionReplacePreviewRow row
+                ? row.IsPlatformChange
+                    ? LocalizationManager.T("ConnectionReplace.Fields.Platform")
+                    : ConnectionReplaceViewModel.FieldDisplayText(row.Field)
                 : string.Empty;
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

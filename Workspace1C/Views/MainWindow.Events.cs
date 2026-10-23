@@ -1147,7 +1147,8 @@ namespace Workspace1C
                 candidates,
                 ConnectionReplaceScope.BatchSelected,
                 onApplied: _viewModel.ApplyConnectionReplace,
-                onUndone: _viewModel.UndoLastConnectionReplace);
+                onUndone: _viewModel.UndoLastConnectionReplace,
+                installedPlatformVersions: _viewModel.InstalledPlatformVersions);
             var win = new ConnectionReplaceWindow(vm) { Owner = this };
             win.ShowDialog();
             _viewModel.ClearBatchSelection();
@@ -1169,7 +1170,8 @@ namespace Workspace1C
                 candidates,
                 ConnectionReplaceScope.AllBases,
                 onApplied: _viewModel.ApplyConnectionReplace,
-                onUndone: _viewModel.UndoLastConnectionReplace);
+                onUndone: _viewModel.UndoLastConnectionReplace,
+                installedPlatformVersions: _viewModel.InstalledPlatformVersions);
             var win = new ConnectionReplaceWindow(vm) { Owner = this };
             win.ShowDialog();
         }

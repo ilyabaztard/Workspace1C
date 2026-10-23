@@ -585,4 +585,116 @@ public sealed class ConnectionReplacementPlannerTests
         ConnectionReplacementPlanner.Undo(Array.Empty<ConnectionReplaceUndoEntry>());
         ConnectionReplacementPlanner.Undo(null!);
     }
+
+    // ---------- Issue #54: смена платформы ----------
+
+    [Fact]
+    public void PlanPlatform_RowsOnlyBasesWithDifferentPlatform()
+    {
+        var same = ServerBase("1", "А");
+        same.PlatformVersion = "8.3.24.1664";
+        var different = ServerBase("2", "Б");
+        different.PlatformVersion = "8.3.22.1483";
+        var emptyPlatform = ServerBase("3", "В");
+
+        var rows = ConnectionReplacementPlanner.PlanPlatform(
+            new[] { same, different, emptyPlatform },
+            new PlatformReplaceRule("8.3.24.1664"));
+
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, r => Assert.True(r.IsPlatformChange));
+        Assert.All(rows, r => Assert.True(r.Changed));
+        var row2 = rows.Single(r => r.Infobase.Id == "2");
+        Assert.Equal("8.3.22.1483", row2.BeforeText);
+        Assert.Equal("8.3.24.1664", row2.AfterText);
+        Assert.Contains(rows, r => r.Infobase.Id == "3");
+        // Без мутаций.
+        Assert.Equal("8.3.22.1483", different.PlatformVersion);
+    }
+
+    [Fact]
+    public void PlanPlatform_IgnoresSameVersion_IgnoreCaseAndWhitespace()
+    {
+        var b = ServerBase("1", "А");
+        b.PlatformVersion = "8.3.24.1664";
+
+        var rows = ConnectionReplacementPlanner.PlanPlatform(new[] { b }, new PlatformReplaceRule("8.3.24.1664 "));
+
+        Assert.Empty(rows);
+    }
+
+    [Fact]
+    public void PlanPlatform_EmptyPlatformRule_ReturnsEmpty()
+    {
+        var b = ServerBase("1", "А");
+
+        Assert.Empty(ConnectionReplacementPlanner.PlanPlatform(new[] { b }, new PlatformReplaceRule("  ")));
+    }
+
+    [Fact]
+    public void ApplyPlatform_MutatesVersion_CreatesUndoEntriesWithBeforeAfterPlatform()
+    {
+        var b = ServerBase("1", "А");
+        b.PlatformVersion = "8.3.22.1483";
+        var same = ServerBase("2", "Б");
+        same.PlatformVersion = "8.3.24.1664";
+
+        var entries = ConnectionReplacementPlanner.ApplyPlatform(
+            new[] { b, same },
+            new PlatformReplaceRule("8.3.24.1664"));
+
+        var entry = Assert.Single(entries);
+        Assert.Same(b, entry.Infobase);
+        Assert.Equal("8.3.22.1483", entry.BeforePlatform);
+        Assert.Equal("8.3.24.1664", entry.AfterPlatform);
+        Assert.Equal("8.3.24.1664", b.PlatformVersion);
+        Assert.Equal("8.3.24.1664", same.PlatformVersion); // уже совпадала — без изменений
+        // Строка подключения записью не меняется: Before/After — копии одних и тех же настроек.
+        AssertConnectionEqual(entry.Before, entry.After);
+    }
+
+    [Fact]
+    public void Undo_RestoresPlatformVersion()
+    {
+        var b = ServerBase("1", "А");
+        b.PlatformVersion = "8.3.22.1483";
+
+        var entries = ConnectionReplacementPlanner.ApplyPlatform(new[] { b }, new PlatformReplaceRule("8.3.24.1664"));
+        Assert.Equal("8.3.24.1664", b.PlatformVersion);
+
+        ConnectionReplacementPlanner.Undo(entries);
+
+        Assert.Equal("8.3.22.1483", b.PlatformVersion);
+    }
+
+    [Fact]
+    public void MergeUndoEntries_CombinesConnectionAndPlatformForSameBase()
+    {
+        var b = ServerBase("1", "А", server: "server1");
+        b.PlatformVersion = "8.3.22.1483";
+        var c = ServerBase("2", "Б", server: "server1");
+
+        var stringEntries = ConnectionReplacementPlanner.Apply(new[] { b, c }, Rule("server1", "server2"));
+        var platformEntries = ConnectionReplacementPlanner.ApplyPlatform(new[] { b }, new PlatformReplaceRule("8.3.24.1664"));
+
+        var merged = ConnectionReplacementPlanner.MergeUndoEntries(stringEntries.Concat(platformEntries));
+
+        Assert.Equal(2, merged.Count);
+        var eB = merged.Single(e => e.Infobase == b);
+        Assert.Equal("server1", eB.Before.Server);
+        Assert.Equal("server2", eB.After.Server);
+        Assert.Equal("8.3.22.1483", eB.BeforePlatform);
+        Assert.Equal("8.3.24.1664", eB.AfterPlatform);
+        var eC = merged.Single(e => e.Infobase == c);
+        Assert.Equal("server2", eC.After.Server);
+        Assert.Null(eC.BeforePlatform);
+        Assert.Null(eC.AfterPlatform);
+    }
+
+    [Fact]
+    public void MergeUndoEntries_NullOrEmpty_ReturnsEmpty()
+    {
+        Assert.Empty(ConnectionReplacementPlanner.MergeUndoEntries(null));
+        Assert.Empty(ConnectionReplacementPlanner.MergeUndoEntries(Array.Empty<ConnectionReplaceUndoEntry>()));
+    }
 }

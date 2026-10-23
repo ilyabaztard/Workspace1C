@@ -63,3 +63,12 @@ public sealed record ConnectionStringReplaceRule(
     ConnectionField Field,
     ConnectionMatchMode Mode,
     bool IgnoreCase);
+
+/// <summary>
+/// Правило смены версии платформы 1С (issue #54): массовое действие «Заменить строки
+/// подключения и платформу…» — независимо от правил замены строк меняет
+/// <see cref="Infobase.PlatformVersion"/> у кандидатов. Применяется и к базам без
+/// строки подключения. Пустая версия — правило не применяется.
+/// </summary>
+/// <param name="Platform">Целевая версия платформы (например «8.3.27.1644»).</param>
+public sealed record PlatformReplaceRule(string Platform);

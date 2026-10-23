@@ -117,6 +117,19 @@
                     </StackPanel>
                 </Button>
             </StackPanel>
+            <!-- Третья строка (issue #54): галочка «Сменить платформу» + выбор версии
+                 (поле неактивно, пока галочка выключена). -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <CheckBox Content="{loc:Loc ConnectionReplace.ChangePlatform}" VerticalAlignment="Center"
+                          IsChecked="{Binding ChangePlatform}" Margin="0,0,12,0"/>
+                <StackPanel Orientation="Horizontal" IsEnabled="{Binding CanSelectPlatform}">
+                    <TextBlock Text="{loc:Loc ConnectionReplace.PlatformLabel}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <ComboBox Width="220" Style="{StaticResource ModernComboBox}"
+                              ItemsSource="{Binding InstalledPlatformVersions}"
+                              SelectedItem="{Binding SelectedPlatform}"
+                              VerticalContentAlignment="Center" Padding="6,2"/>
+                </StackPanel>
+            </StackPanel>
         </StackPanel>
 
         <!-- Предпросмотр «База | Поле | Было | Станет»; «Станет» подсвечивается зелёным при Changed. -->
@@ -140,7 +153,9 @@
                 <DataGridTemplateColumn Width="1.2*" Header="{loc:Loc ConnectionReplace.Columns.Field}">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Field, Converter={StaticResource FieldToText}}"
+                            <!-- Конвертер принимает СТРОКУ предпросмотра целиком: для смены
+                                 платформы (issue #54) показывает «Платформа», иначе имя поля. -->
+                            <TextBlock Text="{Binding Converter={StaticResource FieldToText}}"
                                        Style="{StaticResource CenteredCellText}"/>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
