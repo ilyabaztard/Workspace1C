@@ -212,11 +212,14 @@ namespace Workspace1C
             return combo;
         }
 
-        /// <summary>Сетка «подпись / поле»: колонка подписей и остаток под поле.</summary>
+        /// <summary>Сетка «подпись / поле»: колонка подписей и остаток под поле.
+        /// Колонка подписей Auto с минимумом LabelColumn (issue #55): чекбоксы
+        /// «Размер вручную» и «Приватная база» стоят в ней и при узком окне
+        /// обрезались — текст должен влиять на ширину колонки.</summary>
         private static Grid FieldsGrid(int rows)
         {
             var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(LabelColumn)));
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MinWidth = LabelColumn });
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             for (var i = 0; i < rows; i++)
                 grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
@@ -645,7 +648,13 @@ namespace Workspace1C
             // баз, полученный запросом в СУБД, не держа его в комментариях.
             var manualSizeCheck = new CheckBox
             {
-                Content = LocalizationManager.T("Connection.ManualSizeLabel"),
+                // Метка в TextBlock с переносом (issue #55): в колонке подписей
+                // чекбокс обрезал текст при узком окне.
+                Content = new TextBlock
+                {
+                    Text = LocalizationManager.T("Connection.ManualSizeLabel"),
+                    TextWrapping = TextWrapping.Wrap
+                },
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 3)
             };
@@ -668,7 +677,11 @@ namespace Workspace1C
             // предложит задать пароль.
             var privateCheck = new CheckBox
             {
-                Content = LocalizationManager.T("Connection.PrivateBase"),
+                Content = new TextBlock
+                {
+                    Text = LocalizationManager.T("Connection.PrivateBase"),
+                    TextWrapping = TextWrapping.Wrap
+                },
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 3)
             };

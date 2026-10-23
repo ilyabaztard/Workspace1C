@@ -679,12 +679,13 @@ namespace Workspace1C
             // строка дерева тянется, остальные идут по содержимому, поэтому
             // дерево прокручивается внутри себя, а карточки ниже остаются
             // на экране при любом числе найденных версий.
+            // Три строки вместо пяти (issue #55): дерево тянется в своей строке,
+            // а статус/пути/разрядность живут в нижней строке внутри ScrollViewer,
+            // чтобы при уменьшении высоты окна контент прокручивался, а не обрезался.
             var platforms = new Grid { Margin = new Thickness(4, 12, 4, 0) };
             platforms.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             platforms.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
-            platforms.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-            platforms.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-            platforms.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            platforms.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
 
             // Кегль вводной строки в разметке не задан, то есть берётся оконный
             // 13 (SettingsWindow.xaml:21), а не 12 общего пояснения.
@@ -786,8 +787,8 @@ namespace Workspace1C
             versionsRow.Children.Add(refreshButton);
             Grid.SetRow(versionsRow, 1);
             platforms.Children.Add(versionsRow);
-            Grid.SetRow(versionsStatus, 2);
-            platforms.Children.Add(versionsStatus);
+            var platformsBottom = new StackPanel();
+            platformsBottom.Children.Add(versionsStatus);
 
             var pathButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
             var addPath = new Button
@@ -888,8 +889,7 @@ namespace Workspace1C
             pathsBody.Children.Add(pathButtons);
             var pathsGroup = SettingsGroup(LocalizationManager.T("Settings.AdditionalPaths"),
                 pathsBody, new Thickness(10, 8), bottom: 8);
-            Grid.SetRow(pathsGroup, 3);
-            platforms.Children.Add(pathsGroup);
+            platformsBottom.Children.Add(pathsGroup);
 
             // Разрядность: подпись и список в одну строку, как в разметке
             // (SettingsWindow.xaml:458), а не подпись над списком.
@@ -925,8 +925,19 @@ namespace Workspace1C
             archRow.Children.Add(archBox);
             var archGroup = SettingsGroup(LocalizationManager.T("Settings.DefaultArch"),
                 archRow, new Thickness(10, 8), bottom: 8);
-            Grid.SetRow(archGroup, 4);
-            platforms.Children.Add(archGroup);
+            platformsBottom.Children.Add(archGroup);
+
+            // Нижний блок прокручивается при нехватке высоты окна (issue #55):
+            // группировки статуса, путей и разрядности становятся доступны
+            // прокруткой, а не обрезаются. Горизонтальная полоса не нужна.
+            var platformsBottomScroll = new ScrollViewer
+            {
+                Content = platformsBottom,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
+            Grid.SetRow(platformsBottomScroll, 2);
+            platforms.Children.Add(platformsBottomScroll);
 
             var tabPlatforms = MainTab("IconServer", "Settings.TabPlatforms", platforms);
 

@@ -342,9 +342,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Text="{loc:Loc Settings.Platforms.Intro}"
@@ -450,12 +448,19 @@
                         </Button>
                     </Grid>
 
-                    <TextBlock x:Name="StatusText" Grid.Row="2"
+                    <!-- Нижний блок: статус, доп. пути поиска и разрядность обёрнуты
+                         в ScrollViewer (issue #55) — при уменьшении высоты окна контент
+                         прокручивается, а не обрезается; дерево версий осталось
+                         в гибкой строке сверху. -->
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                    <TextBlock x:Name="StatusText"
                                Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
                                TextWrapping="Wrap" Margin="0,0,0,12"/>
 
                     <!-- Дополнительные пути поиска -->
-                    <GroupBox Grid.Row="3" Header="{loc:Loc Settings.AdditionalPaths}" Padding="10,8" Margin="0,0,0,8">
+                    <GroupBox Header="{loc:Loc Settings.AdditionalPaths}" Padding="10,8" Margin="0,0,0,8">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -507,7 +512,7 @@
                     </GroupBox>
 
                     <!-- Разрядность по умолчанию -->
-                    <GroupBox Grid.Row="4" Header="{loc:Loc Settings.DefaultArch}" Padding="10,8" Margin="0,0,0,8">
+                    <GroupBox Header="{loc:Loc Settings.DefaultArch}" Padding="10,8" Margin="0,0,0,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -519,6 +524,8 @@
                                       HorizontalAlignment="Left" VerticalAlignment="Center"/>
                         </Grid>
                     </GroupBox>
+                    </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </TabItem>
 

@@ -244,8 +244,11 @@
                         </StackPanel>
                     </GroupBox.Header>
                     <Grid>
+                        <!-- Колонка подписей Auto с минимумом 120 (issue #55): чекбоксы
+                             «Размер вручную» и «Приватная база» стоят в ней и при узком
+                             окне обрезались — текст должен влиять на ширину колонки. -->
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
@@ -276,8 +279,11 @@
                         <!-- Ручной размер базы (issue #243): позволяет хранить размер клиент-серверных
                              баз, полученный запросом в СУБД, не держа его в комментариях. -->
                         <CheckBox Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,3"
-                                  Content="{loc:Loc Connection.ManualSizeLabel}"
-                                  IsChecked="{Binding IsManualSizeSet}"/>
+                                  IsChecked="{Binding IsManualSizeSet}">
+                            <!-- Метка с переносом (issue #55): в колонке подписей WPF-чекбокс
+                                 обрезал текст при узком окне. -->
+                            <TextBlock Text="{loc:Loc Connection.ManualSizeLabel}" TextWrapping="Wrap"/>
+                        </CheckBox>
                         <TextBox Grid.Row="3" Grid.Column="1" Margin="0,3" Padding="6,4"
                                  Text="{Binding ManualSizeText, UpdateSourceTrigger=PropertyChanged}"
                                  IsEnabled="{Binding IsManualSizeSet}"
@@ -286,9 +292,10 @@
                              не разблокирован паролем. При включении без пароля профиля окно
                              предложит задать пароль (обработчик OnSave_Click). -->
                         <CheckBox Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,3"
-                                  Content="{loc:Loc Connection.PrivateBase}"
                                   IsChecked="{Binding IsPrivate}"
-                                  ToolTip="{loc:Loc Connection.PrivateBaseTooltip}"/>
+                                  ToolTip="{loc:Loc Connection.PrivateBaseTooltip}">
+                            <TextBlock Text="{loc:Loc Connection.PrivateBase}" TextWrapping="Wrap"/>
+                        </CheckBox>
                     </Grid>
                 </GroupBox>
 
@@ -355,7 +362,7 @@
                     </GroupBox.Header>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
@@ -508,7 +515,7 @@
                     <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
@@ -599,7 +606,7 @@
                         </GroupBox.Header>
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -718,7 +725,7 @@
                                   Margin="4,0,0,8" ToolTip="{loc:Loc Connection.ConfiguratorUseEnterpriseAuthHint}"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -1162,7 +1169,7 @@
                     </GroupBox.Header>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
