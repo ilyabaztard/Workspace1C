@@ -58,6 +58,12 @@ jobs:
         run: |
           Get-ChildItem TestResults -Filter *.trx -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
             [xml]$x = Get-Content $_.FullName
+            # GitHub показывает не больше 10 аннотаций на шаг — первой идёт сводная
+            # со списком ВСЕХ упавших тестов (видна через API check-runs/annotations).
+            $failed = @($x.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' } | ForEach-Object { $_.testName })
+            if ($failed.Count -gt 0) {
+              Write-Output "::error title=Упавшие тесты ($($failed.Count))::$($failed -join '; ')"
+            }
             $x.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' } | Select-Object -First 40 | ForEach-Object {
               $msg = ($_.Output.ErrorInfo.Message -replace '\r?\n', ' ')
               if ($msg.Length -gt 600) { $msg = $msg.Substring(0, 600) }
@@ -91,6 +97,12 @@ jobs:
         run: |
           Get-ChildItem TestResults -Filter *.trx -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
             [xml]$x = Get-Content $_.FullName
+            # GitHub показывает не больше 10 аннотаций на шаг — первой идёт сводная
+            # со списком ВСЕХ упавших тестов (видна через API check-runs/annotations).
+            $failed = @($x.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' } | ForEach-Object { $_.testName })
+            if ($failed.Count -gt 0) {
+              Write-Output "::error title=Упавшие тесты ($($failed.Count))::$($failed -join '; ')"
+            }
             $x.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' } | Select-Object -First 40 | ForEach-Object {
               $msg = ($_.Output.ErrorInfo.Message -replace '\r?\n', ' ')
               if ($msg.Length -gt 600) { $msg = $msg.Substring(0, 600) }
