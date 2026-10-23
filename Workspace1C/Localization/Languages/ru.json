@@ -2418,6 +2418,8 @@
     "ClusterMigration.Columns.TargetStatus": "Статус приёмника",
     "ClusterMigration.DbUser": "Пользователь СУБД:",
     "ClusterMigration.DbPassword": "Пароль СУБД:",
+    "ClusterMigration.Dbms": "Тип СУБД:",
+    "ClusterMigration.DbServer": "Сервер СУБД:",
     "ClusterMigration.KeepInSource": "Не удалять в старом кластере (копия без удаления)",
     "ClusterMigration.GroupByCluster": "Создавать группу по имени кластера",
     "ClusterMigration.MigrateButton": "Мигрировать",

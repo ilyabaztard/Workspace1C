@@ -44,6 +44,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Двухпанельная раскладка: «Источник» и «Приёмник» (issue #41). -->
@@ -249,8 +250,29 @@
                       IsChecked="{Binding KeepInSource}"/>
         </StackPanel>
 
-        <!-- Учётные данные СУБД в одну линию. -->
+        <!-- Тип СУБД + Сервер СУБД (issue #41, комментарий 7OH): rac «infobase create»
+             требует непустые значения "dbms" и "db-server"; для приёмника на другом
+             сервере СУБД значения источника не подходят. Строка выше учётных данных СУБД. -->
         <Grid Grid.Row="3" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{loc:Loc ClusterMigration.Dbms}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="DbmsBox" Grid.Column="1" Style="{StaticResource ModernComboBox}"
+                      ItemsSource="{Binding DbmsOptions}"
+                      SelectedItem="{Binding Dbms, Mode=TwoWay}"
+                      VerticalContentAlignment="Center" Padding="6,2"/>
+            <TextBlock Grid.Column="2" Text="{loc:Loc ClusterMigration.DbServer}" VerticalAlignment="Center"
+                       Margin="14,0,8,0"/>
+            <TextBox x:Name="DbServerBox" Grid.Column="3" Style="{StaticResource ModernTextBox}"
+                     Text="{Binding DbServer, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
+        </Grid>
+
+        <!-- Учётные данные СУБД в одну линию. -->
+        <Grid Grid.Row="4" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -267,7 +289,7 @@
         </Grid>
 
         <!-- Прогресс «N из M: база» + сообщение об ошибке. -->
-        <StackPanel Grid.Row="4" Margin="0,10,0,0">
+        <StackPanel Grid.Row="5" Margin="0,10,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -284,7 +306,7 @@
         </StackPanel>
 
         <!-- Сводка выделения + действия: выделить все / снять все, «Мигрировать», «Отмена». -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,10,0,0">
+        <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,10,0,0">
             <!-- «Выделено: N из M · будет перенесено: N» (issue #41, комментарий 7OH). -->
             <TextBlock Text="{Binding SelectionSummaryText}" FontSize="12" Opacity="0.8"
                        VerticalAlignment="Center" Margin="0,0,14,0" TextWrapping="Wrap"

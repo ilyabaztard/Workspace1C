@@ -52,13 +52,10 @@ namespace Workspace1C
             Closed += (_, _) => _vm.PropertyChanged -= OnVmPropertyChanged;
             UpdateCommandStates();
 
-            // Открытие из окна «Серверы 1С»: выбранный сервер-источник + автоподключение.
-            if (initialSourceServer is not null)
-            {
-                _vm.SelectedSourceServer = initialSourceServer;
-                if (initialSourceClusterId is Guid clusterId)
-                    _vm.SelectedSourceClusterId = clusterId;
-            }
+            // Открытие из окна «Серверы 1С»: выбранный сервер-источник + автоподключение
+            // (issue #41): сопоставление с записями справочника по Id — в VM, чтобы ComboBox
+            // подсвечивал текущий сервер (у ManagementServer нет переопределённого Equals).
+            _vm.SetInitialSource(initialSourceServer, initialSourceClusterId);
         }
 
         /// <summary>

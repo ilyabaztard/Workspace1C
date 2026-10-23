@@ -50,10 +50,21 @@ public static class ClusterMigrationService
     /// <param name="source">Запись базы источника («infobase summary list» старого кластера).</param>
     /// <param name="dbUser">Пользователь СУБД для подключения из нового кластера (диалог).</param>
     /// <param name="dbPassword">Пароль СУБД (диалог; маскируется в журнале RacClient).</param>
+    /// <param name="overrideDbms">
+    /// Тип СУБД с формы миграции (issue #41): при непустом значении приоритетнее, чем
+    /// <see cref="RacInfobaseSummary.Dbms"/> источника (приёмник может быть на другом сервере
+    /// СУБД, rac требует непустые dbms/db-server). Пусто — значения источника.
+    /// </param>
+    /// <param name="overrideDbServer">
+    /// Сервер СУБД с формы миграции (issue #41); приоритет над
+    /// <see cref="RacInfobaseSummary.DbServer"/> источника. Пусто — значения источника.
+    /// </param>
     public static RacInfobaseCreateRequest BuildCreateRequest(
         RacInfobaseSummary source,
         string dbUser,
-        string dbPassword)
+        string dbPassword,
+        string overrideDbms = "",
+        string overrideDbServer = "")
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -61,8 +72,8 @@ public static class ClusterMigrationService
         {
             Name = source.Name ?? string.Empty,
             Description = source.Descr ?? string.Empty,
-            Dbms = source.Dbms ?? string.Empty,
-            DbServer = source.DbServer ?? string.Empty,
+            Dbms = FirstNonEmpty(overrideDbms, source.Dbms),
+            DbServer = FirstNonEmpty(overrideDbServer, source.DbServer),
             DbName = source.DbName ?? string.Empty,
             DbUser = dbUser ?? string.Empty,
             DbPassword = dbPassword ?? string.Empty,
@@ -72,6 +83,18 @@ public static class ClusterMigrationService
             CreateDb = false,
             ScheduledJobsDeny = false
         };
+    }
+
+    /// <summary>Первое непустое значение (<paramref name="values"/>; переопределение пользователя
+    /// приоритетнее значения источника, пустое/пробельное пропускается). Пусто — пустая строка.</summary>
+    private static string FirstNonEmpty(params string[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+        return string.Empty;
     }
 
     /// <summary>

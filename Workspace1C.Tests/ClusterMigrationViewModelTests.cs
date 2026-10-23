@@ -594,6 +594,109 @@ public sealed class ClusterMigrationViewModelTests
         Assert.Empty(vm.ErrorMessage);
     }
 
+    // ===================== Issue #41: автоподстановка сервера =====================
+
+    [Fact]
+    public void SetInitialSource_WithServerIdInList_SelectsInstanceFromList()
+    {
+        // ManagementServer — class без переопределённого Equals: окно «Серверы 1С» передаёт
+        // ДРУГОЙ экземпляр с тем же Id, и ComboBox не находил SelectedItem. Сопоставление
+        // по Id должно выбрать запись ИЗ списка (как InitializeFromServer в импорте).
+        var listed = BuildServer("srv-01", "srv-old");
+        var vm = new ClusterMigrationViewModel(
+            new FakeRacClient(singleCluster: false), Array.Empty<Infobase>(), new[] { listed });
+        var fromServersWindow = BuildServer("srv-01", "srv-old"); // другой объект, тот же Id
+
+        vm.SetInitialSource(fromServersWindow, null);
+
+        Assert.Same(listed, vm.SelectedSourceServer);
+        // Кластер не передан; на сервере кластеров несколько — автовыбор единственного
+        // не выполняется (SetInitialSource не выбирает кластер сам).
+        Assert.Null(vm.SelectedSourceClusterId);
+    }
+
+    [Fact]
+    public void SetInitialSource_WithUnknownServer_KeepsInstanceAndSetsCluster()
+    {
+        // Сервер вне списка справочника (новый Guid) — берётся переданный экземпляр,
+        // а переданный кластер выставляется сразу (issue #41: кластер в окне «Серверы 1С»
+        // подставлялся, сервер — нет).
+        var vm = new ClusterMigrationViewModel(
+            new FakeRacClient(), Array.Empty<Infobase>(), Array.Empty<ManagementServer>());
+        var unknown = BuildServer("new-guid", "srv-unknown");
+
+        vm.SetInitialSource(unknown, FakeRacClient.SourceClusterId);
+
+        Assert.Same(unknown, vm.SelectedSourceServer);
+        Assert.Equal(FakeRacClient.SourceClusterId, vm.SelectedSourceClusterId);
+    }
+
+    // ===================== Issue #41: Тип СУБД и Сервер СУБД =====================
+
+    [Fact]
+    public async Task LoadSourceBases_AutoFillsDbmsAndDbServer_FromFirstBase_Normalized()
+    {
+        // После «Получить базы» поля «Тип СУБД»/«Сервер СУБД» автозаполняются из первой
+        // базы источника; тип нормализуется из вывода rac регистронезависимо
+        // ("mssqlserver" → "MSSQLServer").
+        var client = new FakeRacClient(singleCluster: true, sourceDbms: "mssqlserver");
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+
+        await AwaitSourceRows(vm);
+
+        Assert.Equal("MSSQLServer", vm.Dbms);
+        Assert.Equal("sql-01", vm.DbServer);
+    }
+
+    [Fact]
+    public async Task LoadSourceBases_DoesNotOverwriteDbmsDbServer_WhenUserEditedThem()
+    {
+        // Пользователь изменил «Тип СУБД»/«Сервер СУБД» вручную (приёмник — другой сервер
+        // СУБД) — автозаполнение из первой базы источника не перезаписывает его выбор.
+        var client = new FakeRacClient(singleCluster: true);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+
+        vm.Dbms = "PostgreSQL";
+        vm.DbServer = "pg-02";
+
+        await AwaitSourceRows(vm);
+
+        Assert.Equal("PostgreSQL", vm.Dbms);
+        Assert.Equal("pg-02", vm.DbServer);
+    }
+
+    [Fact]
+    public async Task MigrateAsync_PassesVmDbmsAndDbServer_IntoCreateRequest()
+    {
+        // «Тип СУБД»/«Сервер СУБД» с формы миграции уходят в rac «infobase create»
+        // (фейк IRacClient фиксирует полученные RacInfobaseCreateRequest).
+        var client = new FakeRacClient(singleCluster: true);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        vm.Dbms = "PostgreSQL";
+        vm.DbServer = "pg-02";
+
+        await vm.MigrateAsync();
+
+        Assert.True(vm.MigrationCompleted);
+        Assert.NotEmpty(client.Created);
+        Assert.All(client.Created, c => Assert.Equal("PostgreSQL", c.Request.Dbms));
+        Assert.All(client.Created, c => Assert.Equal("pg-02", c.Request.DbServer));
+    }
+
     // ===================== Хелперы =====================
 
     private static async Task AwaitSourceClusters(ClusterMigrationViewModel vm)
@@ -644,14 +747,16 @@ public sealed class ClusterMigrationViewModelTests
         private readonly bool _failCreate;
         private readonly bool _failDrop;
         private readonly string[] _targetBaseNames;
+        private readonly string _sourceDbms;
 
         public FakeRacClient(bool singleCluster = true, bool failCreate = false, bool failDrop = false,
-            string[]? targetBaseNames = null)
+            string[]? targetBaseNames = null, string? sourceDbms = null)
         {
             _singleCluster = singleCluster;
             _failCreate = failCreate;
             _failDrop = failDrop;
             _targetBaseNames = targetBaseNames ?? Array.Empty<string>();
+            _sourceDbms = sourceDbms ?? "MSSQLServer";
         }
 
         public RacConnectionParams? LastParams { get; private set; }
@@ -695,8 +800,8 @@ public sealed class ClusterMigrationViewModelTests
             {
                 return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(new RacInfobaseSummary[]
                 {
-                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000001"), Name = "База1", Descr = "Описание", Dbms = "MSSQLServer", DbServer = "sql-01", DbName = "база1" },
-                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000002"), Name = "База2", Descr = "Описание", Dbms = "MSSQLServer", DbServer = "sql-01", DbName = "база2" }
+                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000001"), Name = "База1", Descr = "Описание", Dbms = _sourceDbms, DbServer = "sql-01", DbName = "база1" },
+                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000002"), Name = "База2", Descr = "Описание", Dbms = _sourceDbms, DbServer = "sql-01", DbName = "база2" }
                 });
             }
             return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(

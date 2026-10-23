@@ -2418,6 +2418,8 @@
     "ClusterMigration.Columns.TargetStatus": "Target status",
     "ClusterMigration.DbUser": "DB user:",
     "ClusterMigration.DbPassword": "DB password:",
+    "ClusterMigration.Dbms": "DBMS type:",
+    "ClusterMigration.DbServer": "DB server:",
     "ClusterMigration.KeepInSource": "Keep in the old cluster (copy without deletion)",
     "ClusterMigration.GroupByCluster": "Create a group by cluster name",
     "ClusterMigration.MigrateButton": "Migrate",

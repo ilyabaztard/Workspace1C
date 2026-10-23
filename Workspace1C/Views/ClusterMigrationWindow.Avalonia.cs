@@ -234,6 +234,12 @@ namespace Workspace1C
             var keepCheck = this.FindControl<CheckBox>("KeepInSourceCheck")!;
             keepCheck.Bind(CheckBox.IsCheckedProperty, new Binding("KeepInSource", BindingMode.TwoWay));
 
+            // ---- Тип СУБД + Сервер СУБД (issue #41, комментарий 7OH). ----
+            var dbmsBox = this.FindControl<ComboBox>("DbmsBox")!;
+            dbmsBox.Bind(ComboBox.SelectedItemProperty, new Binding("Dbms", BindingMode.TwoWay));
+            var dbServerBox = this.FindControl<TextBox>("DbServerBox")!;
+            dbServerBox.Bind(TextBox.TextProperty, new Binding("DbServer", BindingMode.TwoWay));
+
             // ---- Учётные данные СУБД. ----
             var dbUserBox = this.FindControl<TextBox>("DbUserBox")!;
             dbUserBox.Bind(TextBox.TextProperty, new Binding("DbUser", BindingMode.TwoWay));
@@ -289,13 +295,10 @@ namespace Workspace1C
 
             UpdateCommandStates();
 
-            // Открытие из окна «Серверы 1С»: выбранный сервер-источник + автоподключение.
-            if (initialSourceServer is not null)
-            {
-                _vm.SelectedSourceServer = initialSourceServer;
-                if (initialSourceClusterId is Guid clusterId)
-                    _vm.SelectedSourceClusterId = clusterId;
-            }
+            // Открытие из окна «Серверы 1С»: выбранный сервер-источник + автоподключение
+            // (issue #41): сопоставление с записями справочника по Id — в VM, чтобы ComboBox
+            // подсвечивал текущий сервер (у ManagementServer нет переопределённого Equals).
+            _vm.SetInitialSource(initialSourceServer, initialSourceClusterId);
         }
 
         /// <summary>

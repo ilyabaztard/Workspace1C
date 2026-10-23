@@ -40,6 +40,9 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     private ManagementServer? _selectedSourceServer;
     private IReadOnlyList<RacCluster> _sourceClusters = Array.Empty<RacCluster>();
     private Guid? _selectedSourceClusterId;
+    // Кластер, запрошенный окном «Серверы 1С» для автовыбора (issue #41, паттерн
+    // _requestedClusterId импорта, issue #25); потребляется ApplySourceClusters.
+    private Guid? _requestedSourceClusterId;
     private string _sourceStatusText = string.Empty;
     private string _sourceError = string.Empty;
 
@@ -55,6 +58,11 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     private int _busy;
     private string _dbUser = string.Empty;
     private string _dbPassword = string.Empty;
+    // «Тип СУБД»/«Сервер СУБД» для rac «infobase create» (issue #41): автозаполняются из
+    // первой базы источника, пока пользователь не изменил их вручную (_dbDetailsTouched).
+    private string _dbms = RacDbms.MssqlServer;
+    private string _dbServer = string.Empty;
+    private bool _dbDetailsTouched;
     private bool _keepInSource;
     private bool _useClusterGrouping = true;
     private string _statusText = string.Empty;
@@ -96,6 +104,35 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         {
             _logger = null; // тестовый контекст без DI
         }
+    }
+
+    /// <summary>
+    /// Подставляет сервер-источник при открытии окна из «Серверы 1С» (issue #41, комментарий
+    /// 7OH: «текущий сервер, как в Импорте, не подставляется, хотя его кластер подставлен»).
+    /// <see cref="ManagementServer"/> — class без переопределённого Equals, поэтому переданный
+    /// экземпляр по ссылке не равен записям <see cref="AvailableSourceServers"/> (список из
+    /// справочника): сопоставляем по Id (как <see cref="ClusterImportViewModel.InitializeFromServer"/>)
+    /// — выбирается запись списка, иначе — переданный экземпляр. Сеттер
+    /// <see cref="SelectedSourceServer"/> сразу запускает <c>StartConnectSource()</c>.
+    /// Запрошенный кластер запоминается для автовыбора по завершении загрузки кластеров
+    /// (паттерн <c>_requestedClusterId</c> импорта, issue #25) и выставляется сразу — гонки
+    /// с автозагрузкой не создаётся (безвредный сеттер на пустом списке кластеров выходит
+    /// рано, а <c>ApplySourceClusters</c> повторит автовыбор по запомненному Id).
+    /// </summary>
+    /// <param name="server">Сервер из окна «Серверы 1С» (может отличаться по ссылке от списка); null — обычное открытие.</param>
+    /// <param name="clusterId">Кластер, выбранный в окне «Серверы 1С»; null — без автовыбора.</param>
+    public void SetInitialSource(ManagementServer? server, Guid? clusterId)
+    {
+        if (server is not null)
+        {
+            var matched = AvailableSourceServers.FirstOrDefault(
+                s => string.Equals(s.Id, server.Id, StringComparison.OrdinalIgnoreCase)) ?? server;
+            SelectedSourceServer = matched;
+        }
+
+        _requestedSourceClusterId = clusterId;
+        if (clusterId is Guid id)
+            SelectedSourceClusterId = id;
     }
 
     // ===================== Справочник «Серверы 1С» =====================
@@ -291,6 +328,54 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     {
         get => _dbPassword;
         set => SetProperty(ref _dbPassword, value ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Варианты «Тип СУБД» для выпадающего списка миграции (rac «--dbms»): ровно четыре
+    /// клиент-серверных значения (комментарий 7OH от 2026-10-18 20:24), как в диалоге
+    /// создания базы.
+    /// </summary>
+    public IReadOnlyList<string> DbmsOptions { get; } = new[]
+    {
+        RacDbms.MssqlServer,
+        RacDbms.PostgreSql,
+        RacDbms.IbmDb2,
+        RacDbms.OracleDatabase
+    };
+
+    /// <summary>
+    /// Тип СУБД для регистрации баз в кластере-приёмнике (rac «--dbms», issue #41, комментарий
+    /// 7OH): «странная ошибка» создания базы возникала, потому что rac требует тип СУБД и
+    /// сервер СУБД, а для приёмника на другом сервере СУБД значения из записи источника не
+    /// подходят. Поле на форме (ComboBox из <see cref="DbmsOptions"/>), выше учётных данных
+    /// СУБД. Автозаполняется из первой базы источника после «Получить базы»; ручное изменение
+    /// пользователем фиксируется флагом <c>_dbDetailsTouched</c>, и автозаполнение больше не
+    /// перезаписывает значение.
+    /// </summary>
+    public string Dbms
+    {
+        get => _dbms;
+        set
+        {
+            _dbDetailsTouched = true;
+            SetProperty(ref _dbms, (value ?? string.Empty).Trim());
+        }
+    }
+
+    /// <summary>
+    /// Сервер СУБД для регистрации баз в кластере-приёмнике (rac «--db-server», issue #41):
+    /// rac «infobase create» требует непустые Dbms и DbServer. Поле на форме (TextBox выше
+    /// учётных данных СУБД); автозаполняется из первой базы источника, пока пользователь
+    /// не изменил его вручную.
+    /// </summary>
+    public string DbServer
+    {
+        get => _dbServer;
+        set
+        {
+            _dbDetailsTouched = true;
+            SetProperty(ref _dbServer, (value ?? string.Empty).Trim());
+        }
     }
 
     /// <summary>
@@ -558,8 +643,19 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         SourceStatusText = clusters.Count == 0
             ? LocalizationManager.T("ClusterMigration.Status.NoClusters")
             : string.Format(LocalizationManager.T("ClusterMigration.Status.LoadedClustersFormat"), clusters.Count);
-        if (clusters.Count == 1)
+        // Автовыбор кластера (issue #41): приоритет у запрошенного из окна «Серверы 1С»
+        // (паттерн _requestedClusterId импорта, issue #25) — если присвоить id сразу в
+        // SetInitialSource, этот блок перезапишет его сбросом выше, поэтому id запоминается
+        // и выбирается здесь; иначе — автовыбор единственного кластера, как раньше.
+        if (_requestedSourceClusterId is Guid requested && clusters.Any(c => c.Id == requested))
+        {
+            SelectedSourceClusterId = requested;
+            _requestedSourceClusterId = null;
+        }
+        else if (clusters.Count == 1)
+        {
             SelectedSourceClusterId = clusters[0].Id;
+        }
     }
 
     /// <summary>«Получить базы»: перечитать базы выбранного кластера-источника (без подключения — no-op).</summary>
@@ -624,6 +720,25 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             .Where(s => s is not null)
             .Select(s => BuildRow(s, cluster))
             .ToList();
+
+        // «Тип СУБД»/«Сервер СУБД» (issue #41, комментарий 7OH): rac «infobase create»
+        // требует непустые dbms/db-server — автозаполняем из первой базы источника, пока
+        // пользователь не изменил значения вручную (_dbDetailsTouched). Пишем в поля
+        // напрямую (без публичных сеттеров), чтобы сам автозаполняющий вызов не «фиксировал»
+        // ввод пользователя и повторные загрузки другого кластера могли обновлять значения.
+        if (!_dbDetailsTouched)
+        {
+            var firstSource = rows.Select(r => r.Source).FirstOrDefault(s => s is not null);
+            if (firstSource is not null)
+            {
+                var dbms = NormalizeDbms(firstSource.Dbms);
+                if (SetProperty(ref _dbms, dbms))
+                    OnPropertyChanged(nameof(Dbms));
+                var dbServer = firstSource.DbServer ?? string.Empty;
+                if (SetProperty(ref _dbServer, dbServer))
+                    OnPropertyChanged(nameof(DbServer));
+            }
+        }
 
         SourceRows.Clear();
         foreach (var row in rows)
@@ -935,7 +1050,9 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                 });
 
                 // 1) Добавляем базу с теми же данными в новый кластер (rac «infobase create»).
-                var request = ClusterMigrationService.BuildCreateRequest(row.Source!, DbUser, DbPassword);
+                // Значения «Тип СУБД»/«Сервер СУБД» с формы (issue #41) приоритетнее данных
+                // источника: приёмник может быть на другом сервере СУБД.
+                var request = ClusterMigrationService.BuildCreateRequest(row.Source!, DbUser, DbPassword, Dbms, DbServer);
                 var created = await _rac.CreateInfobaseAsync(targetParams, targetClusterId, request).ConfigureAwait(false);
                 if (!created)
                 {
@@ -1024,6 +1141,24 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         if (!string.IsNullOrWhiteSpace(source.DbName))
             parts.Add(source.DbName!);
         return string.Join(" • ", parts);
+    }
+
+    /// <summary>
+    /// Приводит тип СУБД из вывода rac к значению списка <see cref="DbmsOptions"/>
+    /// (регистронезависимо); пустое/незнакомое значение → MSSQLServer (как диалог создания
+    /// базы, issue #41).
+    /// </summary>
+    private static string NormalizeDbms(string? summaryDbms)
+    {
+        var value = (summaryDbms ?? string.Empty).Trim().ToLowerInvariant();
+        return value switch
+        {
+            "mssqlserver" => RacDbms.MssqlServer,
+            "postgresql" => RacDbms.PostgreSql,
+            "ibmdb2" => RacDbms.IbmDb2,
+            "oracledatabase" => RacDbms.OracleDatabase,
+            _ => RacDbms.MssqlServer
+        };
     }
 
     /// <summary>Запуск загрузки кластеров источника без ожидания (fire-and-forget).</summary>

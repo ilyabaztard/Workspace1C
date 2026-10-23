@@ -61,6 +61,47 @@ public sealed class ClusterMigrationServiceTests
         Assert.Equal(string.Empty, request.DbPassword);
     }
 
+    [Fact]
+    public void BuildCreateRequest_UsesOverrideDbmsAndDbServer_WhenProvided()
+    {
+        // issue #41, комментарий 7OH: rac «infobase create» требует тип СУБД и сервер СУБД;
+        // для приёмника на другом сервере СУБД значения из формы миграции приоритетнее
+        // значений источника (иначе — «странная ошибка» создания базы).
+        var source = new RacInfobaseSummary
+        {
+            Name = "Бухгалтерия",
+            Dbms = "MSSQLServer",
+            DbServer = "sql-01",
+            DbName = "buho"
+        };
+
+        var request = ClusterMigrationService.BuildCreateRequest(
+            source, "new-user", "pass", "PostgreSQL", "pg-02");
+
+        Assert.Equal("PostgreSQL", request.Dbms);
+        Assert.Equal("pg-02", request.DbServer);
+        // Остальные поля по-прежнему из источника.
+        Assert.Equal("Бухгалтерия", request.Name);
+        Assert.Equal("buho", request.DbName);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_FallsBackToSourceDbmsAndDbServer_WhenOverridesEmpty()
+    {
+        // Пустые/пробельные значения формы — используются значения источника (тест на
+        // сохранение прежнего поведения при вызове без override-параметров).
+        var source = new RacInfobaseSummary
+        {
+            Dbms = "OracleDatabase",
+            DbServer = "ora-01"
+        };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "   ");
+
+        Assert.Equal("OracleDatabase", request.Dbms);
+        Assert.Equal("ora-01", request.DbServer);
+    }
+
     // ---------- ExcludeSourceServer ----------
 
     [Fact]

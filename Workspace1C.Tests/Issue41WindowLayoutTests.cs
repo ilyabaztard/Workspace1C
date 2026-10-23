@@ -67,4 +67,46 @@ public sealed class Issue41WindowLayoutTests
         Assert.Contains("SelectedSourceServer", source, StringComparison.Ordinal);
         Assert.Contains("SelectedTargetServer", source, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ClusterMigrationWindow_Wpf_HasDbmsAndDbServerFields_AboveCredentials()
+    {
+        // issue #41, комментарий 7OH: «Тип СУБД» — ComboBox с TwoWay-привязкой Dbms,
+        // «Сервер СУБД» — TextBox с DbServer; строка выше полей пользователя/пароля.
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.xaml"));
+
+        var dbmsPos = xaml.IndexOf("ClusterMigration.Dbms", StringComparison.Ordinal);
+        var dbServerPos = xaml.IndexOf("ClusterMigration.DbServer", StringComparison.Ordinal);
+        var dbUserPos = xaml.IndexOf("ClusterMigration.DbUser", StringComparison.Ordinal);
+        Assert.True(dbmsPos >= 0, "Поле «Тип СУБД» не найдено в разметке.");
+        Assert.True(dbServerPos >= 0, "Поле «Сервер СУБД» не найдено в разметке.");
+        Assert.True(dbUserPos > dbServerPos, "Строка «Тип СУБД/Сервер СУБД» должна быть ВЫШЕ полей пользователя/пароля.");
+
+        Assert.Contains("ItemsSource=\"{Binding DbmsOptions}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem=\"{Binding Dbms, Mode=TwoWay}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding DbServer, UpdateSourceTrigger=PropertyChanged}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClusterMigrationWindow_Avalonia_HasDbmsAndDbServerBindings_AboveCredentials()
+    {
+        // issue #41: та же строка «Тип СУБД/Сервер СУБД» над учётными данными СУБД —
+        // в axaml разметка (ItemsSource + TwoWay Dbms, DbServer), в коде — привязки box-ов.
+        var axaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.axaml"));
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.Avalonia.cs"));
+
+        var dbmsPos = axaml.IndexOf("ClusterMigration.Dbms", StringComparison.Ordinal);
+        var dbServerPos = axaml.IndexOf("ClusterMigration.DbServer", StringComparison.Ordinal);
+        var dbUserPos = axaml.IndexOf("ClusterMigration.DbUser", StringComparison.Ordinal);
+        Assert.True(dbmsPos >= 0, "Поле «Тип СУБД» не найдено в разметке.");
+        Assert.True(dbServerPos >= 0, "Поле «Сервер СУБД» не найдено в разметке.");
+        Assert.True(dbUserPos > dbServerPos, "Строка «Тип СУБД/Сервер СУБД» должна быть ВЫШЕ полей пользователя/пароля.");
+
+        Assert.Contains("ItemsSource=\"{Binding DbmsOptions}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem=\"{Binding Dbms, Mode=TwoWay}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding DbServer, UpdateSourceTrigger=PropertyChanged}\"", axaml, StringComparison.Ordinal);
+        // Код связывает поля с VM (как DbUserBox/DbPasswordBox).
+        Assert.Contains("DbmsBox", code, StringComparison.Ordinal);
+        Assert.Contains("DbServerBox", code, StringComparison.Ordinal);
+    }
 }

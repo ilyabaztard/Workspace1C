@@ -93,6 +93,23 @@
   от которого окно наследуется, — правка не требовалась. Покрыто тестами
   `Issue54EscapeCloseTests` (наследование WPF, разметка `IsCancel` и корневого элемента,
   Avalonia-наследование, подписка `PreviewKeyDown`).
+- **Миграция баз: автоподстановка сервера из «Серверы 1С» и поля «Тип СУБД»/«Сервер
+  СУБД» (issue #41, Windows и Linux)** — при запуске миграции из окна «Серверы 1С» текущий
+  сервер теперь подставляется в поле, как в импорте: `ManagementServer` — class без
+  переопределённого `Equals`, поэтому переданный экземпляр сопоставляется со списком
+  справочника по Id, а переданный кластер запоминается для автовыбора по завершении
+  загрузки кластеров (паттерн импорта)
+  ([`ClusterMigrationViewModel.SetInitialSource`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs)). Устранена
+  «странная ошибка» создания баз в приёмнике на другом сервере СУБД: на форму добавлены
+  поля **«Тип СУБД»** (ComboBox, 4 значения rac) и **«Сервер СУБД»** (TextBox) — строкой
+  выше полей пользователя/пароля
+  ([`ClusterMigrationWindow.xaml`](Workspace1C/Views/ClusterMigrationWindow.xaml),
+  [`ClusterMigrationWindow.axaml`](Workspace1C/Views/ClusterMigrationWindow.axaml)); они
+  автозаполняются из первой базы источника после «Получить базы» (тип нормализуется
+  регистронезависимо) и не перезаписывают ручные правки;
+  [`ClusterMigrationService.BuildCreateRequest`](Workspace1C/Services/ClusterMigrationService.cs)
+  использует значения формы с приоритетом над данными источника. Покрыто тестами
+  `ClusterMigrationViewModelTests`/`ClusterMigrationServiceTests`/`Issue41WindowLayoutTests`.
 
 ### Технические изменения
 
