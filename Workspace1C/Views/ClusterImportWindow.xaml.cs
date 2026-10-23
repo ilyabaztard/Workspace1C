@@ -73,8 +73,16 @@ namespace Workspace1C
             BasesGrid.ItemsSource = _vm.Rows;
 
             _vm.PropertyChanged += OnVmPropertyChanged;
-            Closed += (_, _) => _vm.PropertyChanged -= OnVmPropertyChanged;
+            // Подсказка над кнопками зависит и от числа строк (issue #41, 1.0.0.61).
+            System.Collections.Specialized.NotifyCollectionChangedEventHandler onRows = (_, _) => UpdateCommandStates();
+            _vm.Rows.CollectionChanged += onRows;
+            Closed += (_, _) =>
+            {
+                _vm.PropertyChanged -= OnVmPropertyChanged;
+                _vm.Rows.CollectionChanged -= onRows;
+            };
             UpdateSummary();
+            UpdateCommandStates();
 
             // Открытие из окна «Серверы 1С»: выбранный сервер + автоподключение.
             if (initialServer is not null)
@@ -224,6 +232,10 @@ namespace Workspace1C
             // проверка «база уже есть в приёмнике» выполняется в диалоге миграции.
             MigrateButton.IsEnabled = !busy && _vm.CheckedCount > 0;
             ProgressBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            // Причина недоступности кнопок — над кнопками (issue #41, 1.0.0.61).
+            var hint = _vm.ActionHint;
+            ActionHintText.Text = hint;
+            ActionHintText.Visibility = string.IsNullOrEmpty(hint) ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private void UpdateSummary()

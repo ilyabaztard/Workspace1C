@@ -167,14 +167,19 @@
         </DataGrid>
 
         <!-- Сводка перед подтверждением + переключатель группировки по кластеру. -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,8,0,0">
-            <TextBlock x:Name="SummaryText" VerticalAlignment="Center" FontWeight="SemiBold"/>
-            <CheckBox x:Name="GroupByClusterCheck" VerticalAlignment="Center" Margin="18,0,0,0"
-                      Content="{loc:Loc ClusterImport.GroupByCluster}"
-                      IsChecked="{Binding UseClusterGrouping}"
-                      Checked="OnGroupByCluster_Toggled" Unchecked="OnGroupByCluster_Toggled"/>
-            <TextBlock x:Name="DuplicateSummaryText" VerticalAlignment="Center" Margin="14,0,0,0"
-                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+        <StackPanel Grid.Row="4" Margin="0,8,0,0">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="SummaryText" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                <CheckBox x:Name="GroupByClusterCheck" VerticalAlignment="Center" Margin="18,0,0,0"
+                          Content="{loc:Loc ClusterImport.GroupByCluster}"
+                          IsChecked="{Binding UseClusterGrouping}"
+                          Checked="OnGroupByCluster_Toggled" Unchecked="OnGroupByCluster_Toggled"/>
+                <TextBlock x:Name="DuplicateSummaryText" VerticalAlignment="Center" Margin="14,0,0,0"
+                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </StackPanel>
+            <!-- Причина недоступности «Импортировать»/«Мигрировать» (issue #41, 1.0.0.61). -->
+            <TextBlock x:Name="ActionHintText" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextSecondaryBrush}" Visibility="Collapsed"/>
         </StackPanel>
 
         <!-- Действия: выделить все / снять все, импортировать, закрыть. -->

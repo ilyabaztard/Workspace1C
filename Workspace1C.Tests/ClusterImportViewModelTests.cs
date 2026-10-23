@@ -275,6 +275,51 @@ public sealed class ClusterImportViewModelTests
     }
 
     [Fact]
+    public async Task SelectAll_ChecksDuplicatesToo_SoMigrateBecomesAvailable_Issue41()
+    {
+        // issue #41 (комментарий 7OH 23.10): все базы кластера уже есть в списке —
+        // по умолчанию ничего не отмечено; «Выделить все» должна отметить их, иначе
+        // «Мигрировать» недоступна. Импорт дубликаты по-прежнему пропускает.
+        var existing = new[] { "Бухгалтерия", "Управление персоналом", "Кадры" }
+            .Select(n => RacInfobaseMapper.ToInfobase(
+                new RacInfobaseSummary { Name = n, Dbms = "MSSQLServer" }, "srv1", 1541, null, "Группа"))
+            .ToArray();
+        var vm = new ClusterImportViewModel(new FakeRacClient(singleCluster: true), existing);
+        await vm.ConnectAsync();
+
+        Assert.True(vm.Rows.Count > 0);
+        Assert.All(vm.Rows, r => Assert.True(r.IsDuplicate));
+        Assert.Equal(0, vm.CheckedCount);
+        Assert.NotEqual(string.Empty, vm.ActionHint);
+
+        vm.SelectAll();
+
+        Assert.Equal(vm.Rows.Count, vm.CheckedCount);
+        Assert.Equal(0, vm.ReadyToImportCount);
+        Assert.Equal(vm.Rows.Count, vm.SelectedRowsForMigration().Count);
+        Assert.Equal(
+            ClusterImportViewModel.BuildActionHint(false, vm.Rows.Count, vm.CheckedCount, 0),
+            vm.ActionHint);
+    }
+
+    [Fact]
+    public void ActionHint_ExplainsWhyButtonsAreDisabled_Issue41()
+    {
+        // Идёт запрос — подсказки нет (виден индикатор занятости).
+        Assert.Equal(string.Empty, ClusterImportViewModel.BuildActionHint(true, 0, 0, 0));
+        // Нет строк, ничего не отмечено, отмечены только существующие — три разные причины.
+        var noBases = ClusterImportViewModel.BuildActionHint(false, 0, 0, 0);
+        var nothingChecked = ClusterImportViewModel.BuildActionHint(false, 3, 0, 0);
+        var onlyDuplicates = ClusterImportViewModel.BuildActionHint(false, 3, 2, 0);
+        Assert.NotEqual(string.Empty, noBases);
+        Assert.NotEqual(string.Empty, nothingChecked);
+        Assert.NotEqual(string.Empty, onlyDuplicates);
+        Assert.Equal(3, new[] { noBases, nothingChecked, onlyDuplicates }.Distinct().Count());
+        // Обе кнопки доступны — подсказки нет.
+        Assert.Equal(string.Empty, ClusterImportViewModel.BuildActionHint(false, 3, 2, 1));
+    }
+
+    [Fact]
     public async Task CheckedAndMigrationRows_IncludeDuplicatesMarkedByUser()
     {
         // Дубликат «Бухгалтерия» не готов к импорту, но для «Мигрировать» (issue #41,

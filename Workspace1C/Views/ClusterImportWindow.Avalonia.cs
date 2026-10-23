@@ -46,6 +46,7 @@ namespace Workspace1C
         private readonly ComboBox _serverCombo;
         private readonly TextBlock _summaryText;
         private readonly TextBlock _duplicateSummaryText;
+        private TextBlock? _actionHintText;
         private readonly ProgressBar _progressBar;
         private readonly Button _connectButton;
         private readonly Button _loadBasesButton;
@@ -95,7 +96,18 @@ namespace Workspace1C
             Title = LocalizationManager.T("ClusterImport.Title");
             DataContext = _vm;
             _vm.PropertyChanged += OnVmPropertyChanged;
-            Closed += (_, _) => _vm.PropertyChanged -= OnVmPropertyChanged;
+            // Подсказка над кнопками зависит и от числа строк (issue #41, 1.0.0.61).
+            System.Collections.Specialized.NotifyCollectionChangedEventHandler onRows = (_, _) =>
+            {
+                if (_migrateButton is not null)
+                    UpdateCommandStates();
+            };
+            _vm.Rows.CollectionChanged += onRows;
+            Closed += (_, _) =>
+            {
+                _vm.PropertyChanged -= OnVmPropertyChanged;
+                _vm.Rows.CollectionChanged -= onRows;
+            };
 
             // ---- Выбор сервера из справочника (issue #27): адрес/порт/логин/пароль
             // заполняются из записи через SelectedServer. ----
@@ -199,6 +211,8 @@ namespace Workspace1C
 
             // Открытие из окна «Серверы 1С» (issue #27): выбранный сервер + автоподключение.
             _connectButton.IsEnabled = _vm.HasAvailableServers;
+            _actionHintText = this.FindControl<TextBlock>("ActionHintText")!;
+            UpdateCommandStates();
             if (initialServer is not null)
                 _ = _vm.InitializeFromServer(initialServer, autoConnect, initialClusterId);
         }
@@ -318,6 +332,13 @@ namespace Workspace1C
             // проверка «база уже есть в приёмнике» выполняется в диалоге миграции.
             _migrateButton.IsEnabled = !busy && _vm.CheckedCount > 0;
             _progressBar.IsVisible = busy;
+            // Причина недоступности кнопок — над кнопками (issue #41, 1.0.0.61).
+            if (_actionHintText is not null)
+            {
+                var hint = _vm.ActionHint;
+                _actionHintText.Text = hint;
+                _actionHintText.IsVisible = !string.IsNullOrEmpty(hint);
+            }
         }
 
         /// <summary>

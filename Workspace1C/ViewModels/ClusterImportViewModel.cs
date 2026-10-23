@@ -652,15 +652,39 @@ public sealed class ClusterImportViewModel : ViewModelBase
             .Where(r => r.IsChecked && r.Source is not null)
             .ToList();
 
-    /// <summary>«Выделить все»: отметить все импортируемые строки (дубликаты не трогаем).</summary>
+    /// <summary>
+    /// «Выделить все»: отметить ВСЕ строки чеклиста (issue #41, 1.0.0.61), включая базы,
+    /// уже добавленные в список приложения: для «Мигрировать» они нужны, а импорт их
+    /// и так пропускает (<see cref="ReadyToImportCount"/> считает только новые). Раньше
+    /// дубликаты не отмечались, и если все базы кластера уже были в списке, кнопка
+    /// «Мигрировать» оставалась недоступной даже после «Выделить все».
+    /// </summary>
     public void SelectAll()
     {
         foreach (var row in Rows)
-        {
-            if (!row.IsDuplicate && string.IsNullOrEmpty(row.SkipReason))
-                row.IsChecked = true;
-        }
+            row.IsChecked = true;
         UpdateSummary();
+    }
+
+    /// <summary>
+    /// Подсказка над кнопками действий (issue #41, комментарий 7OH 22.10): почему
+    /// недоступна «Мигрировать» и/или «Импортировать». Пустая строка — обе кнопки
+    /// доступны или идёт запрос (виден индикатор занятости).
+    /// </summary>
+    public string ActionHint => BuildActionHint(IsBusy, Rows.Count, CheckedCount, ReadyToImportCount);
+
+    /// <summary>Чистая функция подсказки над кнопками действий (для тестов и обеих платформ).</summary>
+    public static string BuildActionHint(bool busy, int rowCount, int checkedCount, int readyToImportCount)
+    {
+        if (busy)
+            return string.Empty;
+        if (rowCount == 0)
+            return LocalizationManager.T("ClusterImport.Hint.NoBases");
+        if (checkedCount == 0)
+            return LocalizationManager.T("ClusterImport.Hint.NothingChecked");
+        if (readyToImportCount == 0)
+            return LocalizationManager.T("ClusterImport.Hint.ImportOnlyDuplicates");
+        return string.Empty;
     }
 
     /// <summary>«Снять все»: снять отметки со всех строк чеклиста.</summary>
