@@ -36,11 +36,24 @@ namespace Workspace1C
                 });
             var tabHeader = new StackPanel { Orientation = Orientation.Horizontal };
             tabHeader.Children.Add(tabIcon);
-            tabHeader.Children.Add(new TextBlock
+            var title = new TextBlock
             {
                 Text = LocalizationManager.T("Settings.TabAccounts"),
                 VerticalAlignment = VerticalAlignment.Center
-            });
+            };
+            // Цвет текста заголовка привязан к Foreground вкладки так же, как в
+            // статичной разметке вкладок (SettingsWindow.xaml:296): при выборе
+            // пункта тема красит подпись контрастной кистью TreeSelectedTextBrush
+            // (issue #26), а не наследуемым значением — WPF не передаёт его от
+            // шаблона в TextBlock через attached TextElement.Foreground.
+            title.SetBinding(TextBlock.ForegroundProperty,
+                new System.Windows.Data.Binding("Foreground")
+                {
+                    RelativeSource = new System.Windows.Data.RelativeSource(
+                        System.Windows.Data.RelativeSourceMode.FindAncestor,
+                        typeof(System.Windows.Controls.TabItem), 1)
+                });
+            tabHeader.Children.Add(title);
             tab.Header = tabHeader;
 
             // Свежий экземпляр ViewModel: конструктор сам загружает список учётных записей.

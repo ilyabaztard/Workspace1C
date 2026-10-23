@@ -207,7 +207,7 @@
                                               HorizontalAlignment="Left"
                                               VerticalAlignment="Center"
                                               RecognizesAccessKey="True"
-                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                              TextElement.Foreground="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <MultiTrigger>
