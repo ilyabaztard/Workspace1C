@@ -109,6 +109,9 @@ namespace Workspace1C
             revealButton.Click += (_, _) =>
             {
                 revealed = !revealed;
+                // Issue #49: RevealPassword снимает маску в шаблоне TextBox Avalonia 11
+                // надёжнее смены PasswordChar; оба значения держим согласованными.
+                _passwordBox.RevealPassword = revealed;
                 _passwordBox.PasswordChar = revealed ? '\0' : '•';
             };
 

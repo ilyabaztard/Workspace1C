@@ -81,8 +81,10 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <PasswordBox x:Name="PasswordBox" Grid.Column="0" Padding="6,3"/>
-                <PasswordBox x:Name="PasswordRevealTextBox" Grid.Column="0" Padding="6,3"
-                             Visibility="Collapsed"/>
+                <!-- Issue #49: поле показа пароля — обычный TextBox (раньше был второй
+                     PasswordBox, и «глаз» снова показывал маску вместо пароля). -->
+                <TextBox x:Name="PasswordRevealTextBox" Grid.Column="0" Padding="6,3"
+                         VerticalContentAlignment="Center" Visibility="Collapsed"/>
                 <Button x:Name="ShowPasswordButton" Grid.Column="1" Width="30" Margin="6,0,0,0"
                         Style="{DynamicResource IconButton}"
                         Content="👁" Click="OnShowPasswordToggle_Click"/>

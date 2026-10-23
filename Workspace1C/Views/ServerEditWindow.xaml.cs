@@ -66,14 +66,15 @@ public partial class ServerEditWindow : Window
         _isPasswordRevealed = !_isPasswordRevealed;
         if (_isPasswordRevealed)
         {
-            PasswordRevealTextBox.Password = PasswordBox.Password;
+            PasswordRevealTextBox.Text = PasswordBox.Password;
             PasswordBox.Visibility = Visibility.Collapsed;
             PasswordRevealTextBox.Visibility = Visibility.Visible;
             PasswordRevealTextBox.Focus();
+            PasswordRevealTextBox.CaretIndex = PasswordRevealTextBox.Text.Length;
         }
         else
         {
-            PasswordBox.Password = PasswordRevealTextBox.Password;
+            PasswordBox.Password = PasswordRevealTextBox.Text ?? string.Empty;
             PasswordRevealTextBox.Visibility = Visibility.Collapsed;
             PasswordBox.Visibility = Visibility.Visible;
         }
@@ -108,7 +109,7 @@ public partial class ServerEditWindow : Window
             Port = port,
             User = UserBox.Text?.Trim() ?? string.Empty,
             Password = _isPasswordRevealed
-                ? (PasswordRevealTextBox.Password ?? string.Empty)
+                ? (PasswordRevealTextBox.Text ?? string.Empty)
                 : (PasswordBox.Password ?? string.Empty),
         };
         DialogResult = true;
