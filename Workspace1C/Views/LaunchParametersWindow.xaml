@@ -94,14 +94,14 @@
                     <TextBox x:Name="TxtNewComment" Grid.Column="1" MinHeight="30" Margin="8,0,0,0"
                              VerticalContentAlignment="Center" Padding="6,2"
                              ToolTip="{loc:Loc LaunchParams.CustomCommentTooltip}"/>
-                    <Button x:Name="BtnAddParam" Grid.Column="2" Width="120" Height="32"
+                    <Button Style="{DynamicResource SecondaryButton}" x:Name="BtnAddParam" Grid.Column="2" Width="120" Height="32" MinHeight="32" Padding="10,4"
                             Margin="8,0,0,0" Click="OnAddParam_Click" Cursor="Hand">
                         <StackPanel Orientation="Horizontal">
                             <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" Margin="0,0,4,0" VerticalAlignment="Center"/>
                             <TextBlock Text="{loc:Loc LaunchParams.CustomAdd}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="BtnRemoveParam" Grid.Column="3" Width="104" Height="32"
+                    <Button Style="{DynamicResource SecondaryButton}" x:Name="BtnRemoveParam" Grid.Column="3" Width="104" Height="32" MinHeight="32" Padding="10,4"
                             Margin="6,0,0,0" Click="OnRemoveParam_Click" Cursor="Hand"
                             ToolTip="{loc:Loc LaunchParams.CustomRemove}">
                         <StackPanel Orientation="Horizontal">
