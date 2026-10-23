@@ -264,8 +264,29 @@ public class AppSettings
     /// Общая авторизация для всех ИБ (issue #57): если у базы не задана
     /// собственная (для режима или базы), при запуске подставляются эти
     /// учётные данные. Значения по умолчанию (IsDefault) — авторизация не задана.
+    /// Поле остаётся legacy: применяется для обоих режимов при незаданной
+    /// раздельной общей авторизации (<see cref="CommonEnterpriseAuth"/> /
+    /// <see cref="CommonConfiguratorAuth"/>), сохраняется без изменений.
     /// </summary>
     public InfobaseAuthSettings? CommonAuthorization { get; set; }
+
+    /// <summary>
+    /// Раздельная общая авторизация для «1С:Предприятия» (issue #57): применяется
+    /// для запусков в режиме Enterprise всех ИБ, у которых не задана собственная
+    /// авторизация (для режима или базы). При незаданной (null или IsDefault)
+    /// используется прежняя общая авторизация <see cref="CommonAuthorization"/>
+    /// (обратная совместимость).
+    /// </summary>
+    public InfobaseAuthSettings? CommonEnterpriseAuth { get; set; }
+
+    /// <summary>
+    /// Раздельная общая авторизация для «Конфигуратора» (issue #57): применяется
+    /// для запусков в режиме Configurator всех ИБ, у которых не задана собственная
+    /// авторизация (для режима или базы). При незаданной (null или IsDefault)
+    /// используется прежняя общая авторизация <see cref="CommonAuthorization"/>
+    /// (обратная совместимость).
+    /// </summary>
+    public InfobaseAuthSettings? CommonConfiguratorAuth { get; set; }
 
     /// <summary>
     /// Глобальная настройка действия по двойному щелчку на информационной базе

@@ -19,8 +19,29 @@ public static partial class OneCLauncher
     /// <summary>
     /// Общая авторизация для всех ИБ (issue #57): fallback при незаданной
     /// авторизации ИБ. Устанавливается из настроек при старте и при сохранении.
+    /// Поле остаётся legacy — применяется для обоих режимов при незаданной
+    /// раздельной общей авторизации (<see cref="CommonEnterpriseAuthorization"/> /
+    /// <see cref="CommonConfiguratorAuthorization"/>).
     /// </summary>
     public static InfobaseAuthSettings? CommonAuthorization { get; set; }
+
+    /// <summary>
+    /// Раздельная общая авторизация для «1С:Предприятия» (issue #57): fallback для
+    /// запусков в режиме Enterprise при незаданной авторизации ИБ. При незаданной
+    /// (null или IsDefault) резолвер использует прежнюю общую
+    /// <see cref="CommonAuthorization"/>. Устанавливается из настроек при старте
+    /// и при сохранении.
+    /// </summary>
+    public static InfobaseAuthSettings? CommonEnterpriseAuthorization { get; set; }
+
+    /// <summary>
+    /// Раздельная общая авторизация для «Конфигуратора» (issue #57): fallback для
+    /// запусков в режиме Configurator при незаданной авторизации ИБ. При незаданной
+    /// (null или IsDefault) резолвер использует прежнюю общую
+    /// <see cref="CommonAuthorization"/>. Устанавливается из настроек при старте
+    /// и при сохранении.
+    /// </summary>
+    public static InfobaseAuthSettings? CommonConfiguratorAuthorization { get; set; }
 
     /// <summary>
     /// Проверяет, можно ли безопасно подставить значение внутрь кавычек ключа командной строки
@@ -153,9 +174,11 @@ public static partial class OneCLauncher
 
         // Учётные данные выбираются единым резолвингом (issue #236, #57): раздельная авторизация
         // Конфигуратора/Предприятия (EnterpriseAuth/ConfiguratorAuth), иначе авторизация базы,
-        // а при незаданной — общая авторизация (CommonAuthorization, issue #57).
+        // а при незаданной — общая авторизация по режиму запуска (issue #57): раздельная
+        // CommonEnterpriseAuthorization/CommonConfiguratorAuthorization, при незаданной —
+        // legacy CommonAuthorization.
         InfobaseAuthResolver.Resolve(infobase, mode, out var authMode, out var authUser, out var authPassword,
-            CommonAuthorization);
+            CommonEnterpriseAuthorization, CommonConfiguratorAuthorization, CommonAuthorization);
 
         // Запуск с аутентификацией (issue #48): ни сохранённых имени/пароля, ни входа
         // по учётной записи ОС — /WA- заставляет платформу спросить имя и пароль, даже

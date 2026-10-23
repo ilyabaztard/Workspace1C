@@ -1031,7 +1031,11 @@ public sealed class OneCComConnector : IOneCComConnector
 
         // Общая авторизация для всех ИБ (issue #57): выбирается единым резолвингом
         // с fallback при незаданной собственной авторизации (режима или базы).
+        // Для режима берётся раздельная общая (CommonEnterpriseAuthorization/
+        // CommonConfiguratorAuthorization), при её незаданности — legacy общая.
         InfobaseAuthResolver.Resolve(infobase, mode, out var authMode, out var authUser, out var authPassword,
+            OneCLauncher.CommonEnterpriseAuthorization,
+            OneCLauncher.CommonConfiguratorAuthorization,
             OneCLauncher.CommonAuthorization);
         if (authMode == AuthenticationMode.Credentials
             && !string.IsNullOrWhiteSpace(authUser))

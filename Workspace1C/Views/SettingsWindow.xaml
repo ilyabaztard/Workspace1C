@@ -1978,52 +1978,101 @@
                             </StackPanel>
                         </GroupBox>
 
-                        <!-- Общая авторизация для всех ИБ (issue #57): если у базы не задана
-                             собственная авторизация (для режима или базы), при запуске
-                             подставляются эти учётные данные (fallback в InfobaseAuthResolver).
-                             Поля логина/пароля видны только в режиме «Автоматический вход». -->
+                        <!-- Общая авторизация для всех ИБ (issue #57): раздельная по режимам
+                             запуска — для «1С:Предприятия» и для «Конфигуратора» свои учётные
+                             данные. Если раздельная для режима не задана — используется прежняя
+                             общая (legacy, fallback в InfobaseAuthResolver). Поля логина/пароля
+                             видны только в режиме «Автоматический вход». -->
                         <GroupBox Header="{loc:Loc Settings.CommonAuth.GroupTitle}" Padding="8" Margin="0,14,0,0">
                             <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                    <RadioButton x:Name="CommonAuthPromptRadio" GroupName="CommonAuth"
-                                                 Content="{loc:Loc Settings.CommonAuth.ModePrompt}"
-                                                 Checked="OnCommonAuthMode_Checked"
-                                                 VerticalAlignment="Center" Margin="0,0,16,0"/>
-                                    <RadioButton x:Name="CommonAuthCredentialsRadio" GroupName="CommonAuth"
-                                                 Content="{loc:Loc Settings.CommonAuth.ModeCredentials}"
-                                                 Checked="OnCommonAuthMode_Checked"
-                                                 VerticalAlignment="Center" Margin="0,0,16,0"/>
-                                    <RadioButton x:Name="CommonAuthOsRadio" GroupName="CommonAuth"
-                                                 Content="{loc:Loc Settings.CommonAuth.ModeOs}"
-                                                 Checked="OnCommonAuthMode_Checked"
-                                                 VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <Grid x:Name="CommonAuthCredentialsGrid" Margin="0,6,0,0">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Settings.CommonAuth.Login}"
-                                               VerticalAlignment="Center" Margin="0,3"
-                                               Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                    <TextBox x:Name="CommonAuthUserBox" Grid.Row="0" Grid.Column="1"
-                                             Margin="10,3,0,3" Padding="6,4"
-                                             VerticalContentAlignment="Center"
-                                             Style="{StaticResource ModernTextBox}"/>
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Settings.CommonAuth.Password}"
-                                               VerticalAlignment="Center" Margin="0,3"
-                                               Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                    <PasswordBox x:Name="CommonAuthPasswordBox" Grid.Row="1" Grid.Column="1"
-                                                 Margin="10,3,0,3" Padding="6,4"
-                                                 VerticalContentAlignment="Center"/>
-                                </Grid>
-                                <TextBlock Text="{loc:Loc Settings.CommonAuth.Hint}"
-                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                           TextWrapping="Wrap" Margin="0,6,12,0"/>
+                                <GroupBox Header="{loc:Loc Settings.CommonAuth.GroupTitleEnterprise}" Padding="8">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <RadioButton x:Name="CommonEnterprisePromptRadio" GroupName="CommonEnterpriseAuth"
+                                                         Content="{loc:Loc Settings.CommonAuth.ModePrompt}"
+                                                         Checked="OnCommonAuthMode_Checked"
+                                                         VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <RadioButton x:Name="CommonEnterpriseCredentialsRadio" GroupName="CommonEnterpriseAuth"
+                                                         Content="{loc:Loc Settings.CommonAuth.ModeCredentials}"
+                                                         Checked="OnCommonAuthMode_Checked"
+                                                         VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <RadioButton x:Name="CommonEnterpriseOsRadio" GroupName="CommonEnterpriseAuth"
+                                                         Content="{loc:Loc Settings.CommonAuth.ModeOs}"
+                                                         Checked="OnCommonAuthMode_Checked"
+                                                         VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <Grid x:Name="CommonEnterpriseCredentialsGrid" Margin="0,6,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Settings.CommonAuth.Login}"
+                                                       VerticalAlignment="Center" Margin="0,3"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <TextBox x:Name="CommonEnterpriseUserBox" Grid.Row="0" Grid.Column="1"
+                                                     Margin="10,3,0,3" Padding="6,4"
+                                                     VerticalContentAlignment="Center"
+                                                     Style="{StaticResource ModernTextBox}"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Settings.CommonAuth.Password}"
+                                                       VerticalAlignment="Center" Margin="0,3"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <PasswordBox x:Name="CommonEnterprisePasswordBox" Grid.Row="1" Grid.Column="1"
+                                                         Margin="10,3,0,3" Padding="6,4"
+                                                         VerticalContentAlignment="Center"/>
+                                        </Grid>
+                                        <TextBlock Text="{loc:Loc Settings.CommonAuth.Hint}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="0,6,12,0"/>
+                                    </StackPanel>
+                                </GroupBox>
+                                <GroupBox Header="{loc:Loc Settings.CommonAuth.GroupTitleConfigurator}" Padding="8" Margin="0,10,0,0">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <RadioButton x:Name="CommonConfiguratorPromptRadio" GroupName="CommonConfiguratorAuth"
+                                                         Content="{loc:Loc Settings.CommonAuth.ModePrompt}"
+                                                         Checked="OnCommonAuthMode_Checked"
+                                                         VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <RadioButton x:Name="CommonConfiguratorCredentialsRadio" GroupName="CommonConfiguratorAuth"
+                                                         Content="{loc:Loc Settings.CommonAuth.ModeCredentials}"
+                                                         Checked="OnCommonAuthMode_Checked"
+                                                         VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                            <RadioButton x:Name="CommonConfiguratorOsRadio" GroupName="CommonConfiguratorAuth"
+                                                         Content="{loc:Loc Settings.CommonAuth.ModeOs}"
+                                                         Checked="OnCommonAuthMode_Checked"
+                                                         VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <Grid x:Name="CommonConfiguratorCredentialsGrid" Margin="0,6,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Settings.CommonAuth.Login}"
+                                                       VerticalAlignment="Center" Margin="0,3"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <TextBox x:Name="CommonConfiguratorUserBox" Grid.Row="0" Grid.Column="1"
+                                                     Margin="10,3,0,3" Padding="6,4"
+                                                     VerticalContentAlignment="Center"
+                                                     Style="{StaticResource ModernTextBox}"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Settings.CommonAuth.Password}"
+                                                       VerticalAlignment="Center" Margin="0,3"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <PasswordBox x:Name="CommonConfiguratorPasswordBox" Grid.Row="1" Grid.Column="1"
+                                                         Margin="10,3,0,3" Padding="6,4"
+                                                         VerticalContentAlignment="Center"/>
+                                        </Grid>
+                                        <TextBlock Text="{loc:Loc Settings.CommonAuth.Hint}"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="0,6,12,0"/>
+                                    </StackPanel>
+                                </GroupBox>
                             </StackPanel>
                         </GroupBox>
                     </StackPanel>

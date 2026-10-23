@@ -8,8 +8,11 @@ namespace Workspace1C.Services;
 /// если она задана; «Конфигуратор» — отдельную авторизацию (<see cref="Infobase.ConfiguratorAuth"/>),
 /// если она задана; иначе — авторизацию информационной базы (<see cref="Infobase.Connection"/>,
 /// обратная совместимость). При незаданной авторизации базы (режима и базы) подставляется
-/// общая авторизация <see cref="AppSettings.CommonAuthorization"/> (issue #57) — fallback для
-/// всех ИБ. Учётные данные Хранилища конфигурации разрешаются отдельно
+/// общая авторизация (issue #57): раздельная по режиму запуска —
+/// <see cref="AppSettings.CommonEnterpriseAuth"/> для «1С:Предприятия» /
+/// <see cref="AppSettings.CommonConfiguratorAuth"/> для «Конфигуратора», а при её
+/// незаданности — прежняя общая <see cref="AppSettings.CommonAuthorization"/> (legacy).
+/// Учётные данные Хранилища конфигурации разрешаются отдельно
 /// (<see cref="ResolveRepository"/>) из <see cref="Infobase.Repository"/>.
 /// Резолвинг применяется и при запуске 1С (<see cref="OneCLauncher"/>), и при чтении сведений
 /// о конфигурации через COM-коннектор (<see cref="OneCComConnector"/>), чтобы учётные данные
@@ -26,7 +29,8 @@ public static class InfobaseAuthResolver
     ///    если она задана (не <see cref="InfobaseAuthSettings.IsDefault"/>);
     /// 2) авторизация информационной базы (<see cref="Infobase.Connection"/>), если она
     ///    задана явно (режим не «Запрос» или заполнены пользователь/пароль);
-    /// 3) общая авторизация <paramref name="commonAuth"/> (issue #57), если задана;
+    /// 3) общая авторизация <paramref name="commonAuth"/> (issue #57), если задана —
+    ///    legacy для обоих режимов;
     /// 4) иначе — «Запрос имени и пароля» с пустыми реквизитами (платформа спросит
     ///    имя и пароль при запуске).
     /// <para>
@@ -40,6 +44,38 @@ public static class InfobaseAuthResolver
     public static void Resolve(Infobase infobase, OneCLaunchMode mode,
         out AuthenticationMode authMode, out string authUser, out string authPassword,
         InfobaseAuthSettings? commonAuth = null)
+    {
+        // Обратная совместимость: одиночный параметр общей авторизации — это legacy
+        // («общая для обоих режимов»), раздельные общие не заданы.
+        Resolve(infobase, mode, out authMode, out authUser, out authPassword,
+            commonAuth, commonAuth, commonAuth);
+    }
+
+    /// <summary>
+    /// Разрешает режим аутентификации, логин и пароль для заданного режима
+    /// (раздельная общая авторизация по режимам запуска, issue #57). Порядок приоритета:
+    /// 1) раздельная авторизация режима — <see cref="Infobase.EnterpriseAuth"/> для
+    ///    «1С:Предприятия» / <see cref="Infobase.ConfiguratorAuth"/> для «Конфигуратора»,
+    ///    если она задана (не <see cref="InfobaseAuthSettings.IsDefault"/>);
+    /// 2) авторизация информационной базы (<see cref="Infobase.Connection"/>), если она
+    ///    задана явно (режим не «Запрос» или заполнены пользователь/пароль);
+    /// 3) общая авторизация по режиму запуска (issue #57): для «1С:Предприятия» —
+    ///    <paramref name="commonEnterpriseAuth"/>, для «Конфигуратора» —
+    ///    <paramref name="commonConfiguratorAuth"/>; при незаданной (null или
+    ///    <see cref="InfobaseAuthSettings.IsDefault"/>) — прежняя общая
+    ///    <paramref name="legacyCommonAuth"/> (обратная совместимость);
+    /// 4) иначе — «Запрос имени и пароля» с пустыми реквизитами.
+    /// <para>
+    /// ПОВЕДЕНЧЕСКИЙ НЮАНС (issue #57): «дефолтная» общая авторизация режима
+    /// (IsDefault — «Запрос» с пустыми реквизитами) считается незаданной и даёт
+    /// fallback на legacy, затем на авторизацию базы — порядок шагов см. выше.
+    /// </para>
+    /// </summary>
+    public static void Resolve(Infobase infobase, OneCLaunchMode mode,
+        out AuthenticationMode authMode, out string authUser, out string authPassword,
+        InfobaseAuthSettings? commonEnterpriseAuth,
+        InfobaseAuthSettings? commonConfiguratorAuth,
+        InfobaseAuthSettings? legacyCommonAuth)
     {
         // 1) Раздельная авторизация режима. «Дефолтные» настройки (IsDefault — «Запрос»
         // с пустыми реквизитами) считаются незаданными и переходят к следующим шагам.
@@ -75,9 +111,15 @@ public static class InfobaseAuthResolver
             return;
         }
 
-        // 3) Общая авторизация для всех ИБ (issue #57): fallback, если у базы не задана
-        // собственная авторизация (для режима или базы).
-        if (commonAuth is { } a && !a.IsDefault)
+        // 3) Общая авторизация по режиму запуска (issue #57): раздельная для режима
+        // (Enterprise — commonEnterpriseAuth, Configurator — commonConfiguratorAuth),
+        // при незаданной (null или IsDefault — «Запрос» с пустыми реквизитами) —
+        // прежняя общая legacyCommonAuth (обратная совместимость), затем «Запрос».
+        InfobaseAuthSettings? modeCommon =
+            mode == OneCLaunchMode.Enterprise
+                ? commonEnterpriseAuth is { } ent && !ent.IsDefault ? ent : legacyCommonAuth
+                : commonConfiguratorAuth is { } cfg && !cfg.IsDefault ? cfg : legacyCommonAuth;
+        if (modeCommon is { } a && !a.IsDefault)
         {
             authMode = a.AuthenticationMode;
             authUser = a.User;

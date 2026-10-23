@@ -256,7 +256,8 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// Общая авторизация для всех ИБ (issue #57): если у базы не задана собственная
     /// (для режима или базы), при запуске подставляются эти учётные данные.
-    /// Значения по умолчанию (IsDefault) — авторизация не задана.
+    /// Значения по умолчанию (IsDefault) — авторизация не задана. Остаётся legacy:
+    /// применяется для обоих режимов при незаданной раздельной общей авторизации.
     /// </summary>
     private InfobaseAuthSettings? _commonAuthorization;
 
@@ -273,6 +274,52 @@ public partial class MainViewModel : ViewModelBase
         {
             _commonAuthorization = value;
             OneCLauncher.CommonAuthorization = value;
+        }
+    }
+
+    /// <summary>
+    /// Раздельная общая авторизация для «1С:Предприятия» (issue #57): применяется для
+    /// запусков в режиме Enterprise, у которых не задана собственная авторизация.
+    /// При незаданной (null или IsDefault) используется прежняя общая
+    /// <see cref="CommonAuthorization"/> (обратная совместимость). Сеттер немедленно
+    /// синхронизирует значение со статиком <see cref="OneCLauncher.CommonEnterpriseAuthorization"/>.
+    /// </summary>
+    private InfobaseAuthSettings? _commonEnterpriseAuth;
+
+    /// <summary>
+    /// Раздельная общая авторизация для «1С:Предприятия» (issue #57). Сеттер немедленно
+    /// синхронизирует значение со статиком <see cref="OneCLauncher.CommonEnterpriseAuthorization"/>.
+    /// </summary>
+    public InfobaseAuthSettings? CommonEnterpriseAuth
+    {
+        get => _commonEnterpriseAuth;
+        set
+        {
+            _commonEnterpriseAuth = value;
+            OneCLauncher.CommonEnterpriseAuthorization = value;
+        }
+    }
+
+    /// <summary>
+    /// Раздельная общая авторизация для «Конфигуратора» (issue #57): применяется для
+    /// запусков в режиме Configurator, у которых не задана собственная авторизация.
+    /// При незаданной (null или IsDefault) используется прежняя общая
+    /// <see cref="CommonAuthorization"/> (обратная совместимость). Сеттер немедленно
+    /// синхронизирует значение со статиком <see cref="OneCLauncher.CommonConfiguratorAuthorization"/>.
+    /// </summary>
+    private InfobaseAuthSettings? _commonConfiguratorAuth;
+
+    /// <summary>
+    /// Раздельная общая авторизация для «Конфигуратора» (issue #57). Сеттер немедленно
+    /// синхронизирует значение со статиком <see cref="OneCLauncher.CommonConfiguratorAuthorization"/>.
+    /// </summary>
+    public InfobaseAuthSettings? CommonConfiguratorAuth
+    {
+        get => _commonConfiguratorAuth;
+        set
+        {
+            _commonConfiguratorAuth = value;
+            OneCLauncher.CommonConfiguratorAuthorization = value;
         }
     }
 
@@ -433,8 +480,14 @@ public partial class MainViewModel : ViewModelBase
         _contextMenuEditingEnabled = settings.ContextMenuEditingEnabled;
         // Общая авторизация для всех ИБ (issue #57): fallback при незаданной авторизации
         // базы. Передаётся резолверу (InfobaseAuthResolver) через статик лаунчера.
+        // Раздельные по режимам авторизации (Enterprise/Configurator) при незаданности
+        // дают fallback на legacy (CommonAuthorization) — см. InfobaseAuthResolver.
         _commonAuthorization = settings.CommonAuthorization;
         OneCLauncher.CommonAuthorization = settings.CommonAuthorization;
+        _commonEnterpriseAuth = settings.CommonEnterpriseAuth;
+        OneCLauncher.CommonEnterpriseAuthorization = settings.CommonEnterpriseAuth;
+        _commonConfiguratorAuth = settings.CommonConfiguratorAuth;
+        OneCLauncher.CommonConfiguratorAuthorization = settings.CommonConfiguratorAuth;
         _comConnectorNameTemplate = settings.ComConnectorNameTemplate ?? "";
         // Кэш шаблона в коннекторе заполняем сразу, а не ленивым чтением файла (issue #175):
         // иначе результат зависел бы от того, случилось ли COM-чтение до смены активного

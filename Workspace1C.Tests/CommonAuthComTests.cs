@@ -78,5 +78,94 @@ public sealed class CommonAuthComTests
             OneCLauncher.CommonAuthorization = null;
         }
     }
+
+    // ---- Раздельная общая авторизация по режимам запуска (issue #57) ----
+
+    [Fact]
+    public void ConfiguratorCommonAuth_AddsUsrPwd()
+    {
+        // Чтение сведений идёт в режиме «Конфигуратор» — применяется раздельная
+        // общая для Конфигуратора.
+        var ib = FileBase(AuthenticationMode.Prompt);
+        try
+        {
+            OneCLauncher.CommonConfiguratorAuthorization = new InfobaseAuthSettings
+            {
+                AuthenticationMode = AuthenticationMode.Credentials,
+                User = "cfgComU",
+                Password = "cfgComP"
+            };
+
+            var result = OneCComConnector.BuildComConnectString(
+                ib, OneCLaunchMode.Configurator, out var hasSecret);
+
+            Assert.Contains("Usr=\"cfgComU\"", result);
+            Assert.Contains("Pwd=\"cfgComP\"", result);
+            Assert.True(hasSecret);
+        }
+        finally
+        {
+            OneCLauncher.CommonAuthorization = null;
+            OneCLauncher.CommonEnterpriseAuthorization = null;
+            OneCLauncher.CommonConfiguratorAuthorization = null;
+        }
+    }
+
+    [Fact]
+    public void EnterpriseCommonAuth_NotUsedForConfiguratorCom()
+    {
+        // Для чтения сведений (режим Configurator) раздельная для «1С:Предприятия»
+        // не применяется: без legacy общих учётных данных строка остаётся без Usr/Pwd.
+        var ib = FileBase(AuthenticationMode.Prompt);
+        try
+        {
+            OneCLauncher.CommonEnterpriseAuthorization = new InfobaseAuthSettings
+            {
+                AuthenticationMode = AuthenticationMode.Credentials,
+                User = "entComU",
+                Password = "entComP"
+            };
+
+            var result = OneCComConnector.BuildComConnectString(
+                ib, OneCLaunchMode.Configurator, out _);
+
+            Assert.DoesNotContain("entComU", result);
+        }
+        finally
+        {
+            OneCLauncher.CommonAuthorization = null;
+            OneCLauncher.CommonEnterpriseAuthorization = null;
+            OneCLauncher.CommonConfiguratorAuthorization = null;
+        }
+    }
+
+    [Fact]
+    public void ComUsesEnterpriseCommonAuth_ForEnterpriseMode()
+    {
+        // Строка подключения строится по переданному режиму: для Enterprise-режима
+        // применяется раздельная общая для «1С:Предприятия».
+        var ib = FileBase(AuthenticationMode.Prompt);
+        try
+        {
+            OneCLauncher.CommonEnterpriseAuthorization = new InfobaseAuthSettings
+            {
+                AuthenticationMode = AuthenticationMode.Credentials,
+                User = "entComU",
+                Password = "entComP"
+            };
+
+            var result = OneCComConnector.BuildComConnectString(
+                ib, OneCLaunchMode.Enterprise, out _);
+
+            Assert.Contains("Usr=\"entComU\"", result);
+            Assert.Contains("Pwd=\"entComP\"", result);
+        }
+        finally
+        {
+            OneCLauncher.CommonAuthorization = null;
+            OneCLauncher.CommonEnterpriseAuthorization = null;
+            OneCLauncher.CommonConfiguratorAuthorization = null;
+        }
+    }
 }
 #endif

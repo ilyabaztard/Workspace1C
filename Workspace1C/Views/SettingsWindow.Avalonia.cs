@@ -667,95 +667,181 @@ namespace Workspace1C
             settings.Children.Add(manageProfilesButton);
 
             // ----- Общая авторизация для всех ИБ (issue #57) -----
-            // Fallback при незаданной собственной авторизации ИБ (InfobaseAuthResolver).
-            // Поля логина/пароля видны только в режиме «Автоматический вход».
-            settings.Children.Add(GroupSectionHeader("Settings.CommonAuth.GroupTitle"));
+            // Раздельная по режимам запуска: для «1С:Предприятия» и «Конфигуратора» свои
+            // учётные данные; fallback при незаданной собственной авторизации ИБ
+            // (InfobaseAuthResolver). Поля логина/пароля видны только в режиме
+            // «Автоматический вход».
+
+            // --- «1С:Предприятие» ---
+            var entCommonAuth = _viewModel.CommonEnterpriseAuth;
+            var entCommonAuthMode = entCommonAuth?.AuthenticationMode ?? AuthenticationMode.Prompt;
+
+            settings.Children.Add(GroupSectionHeader("Settings.CommonAuth.GroupTitleEnterprise"));
             settings.Children.Add(Hint(LocalizationManager.T("Settings.CommonAuth.Hint"), bottom: 10));
 
-            var commonAuth = _viewModel.CommonAuthorization;
-            var commonAuthMode = commonAuth?.AuthenticationMode ?? AuthenticationMode.Prompt;
-
-            var commonAuthPromptRadio = new RadioButton
+            var entCommonAuthPromptRadio = new RadioButton
             {
                 Content = LocalizationManager.T("Settings.CommonAuth.ModePrompt"),
-                GroupName = "CommonAuth",
-                IsChecked = commonAuthMode == AuthenticationMode.Prompt
+                GroupName = "CommonEnterpriseAuth",
+                IsChecked = entCommonAuthMode == AuthenticationMode.Prompt
             };
-            var commonAuthCredentialsRadio = new RadioButton
+            var entCommonAuthCredentialsRadio = new RadioButton
             {
                 Content = LocalizationManager.T("Settings.CommonAuth.ModeCredentials"),
-                GroupName = "CommonAuth",
-                IsChecked = commonAuthMode == AuthenticationMode.Credentials
+                GroupName = "CommonEnterpriseAuth",
+                IsChecked = entCommonAuthMode == AuthenticationMode.Credentials
             };
-            var commonAuthOsRadio = new RadioButton
+            var entCommonAuthOsRadio = new RadioButton
             {
                 Content = LocalizationManager.T("Settings.CommonAuth.ModeOs"),
-                GroupName = "CommonAuth",
-                IsChecked = commonAuthMode == AuthenticationMode.Windows
+                GroupName = "CommonEnterpriseAuth",
+                IsChecked = entCommonAuthMode == AuthenticationMode.Windows
             };
-            var commonAuthModes = new StackPanel
+            var entCommonAuthModes = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 16,
                 Margin = new Thickness(0, 0, 0, 2)
             };
-            commonAuthModes.Children.Add(commonAuthPromptRadio);
-            commonAuthModes.Children.Add(commonAuthCredentialsRadio);
-            commonAuthModes.Children.Add(commonAuthOsRadio);
-            settings.Children.Add(commonAuthModes);
+            entCommonAuthModes.Children.Add(entCommonAuthPromptRadio);
+            entCommonAuthModes.Children.Add(entCommonAuthCredentialsRadio);
+            entCommonAuthModes.Children.Add(entCommonAuthOsRadio);
+            settings.Children.Add(entCommonAuthModes);
 
-            var commonAuthUserRow = new StackPanel
+            var entCommonAuthUserRow = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Margin = new Thickness(0, 8, 0, 4)
             };
-            commonAuthUserRow.Children.Add(new TextBlock
+            entCommonAuthUserRow.Children.Add(new TextBlock
             {
                 Text = LocalizationManager.T("Settings.CommonAuth.Login"),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0)
             });
-            var commonAuthUserBox = new TextBox
+            var entCommonAuthUserBox = new TextBox
             {
-                Text = commonAuth?.User ?? string.Empty,
+                Text = entCommonAuth?.User ?? string.Empty,
                 Width = 260,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center
             }.Styled(ControlThemes.ModernTextBox);
-            commonAuthUserRow.Children.Add(commonAuthUserBox);
-            settings.Children.Add(commonAuthUserRow);
+            entCommonAuthUserRow.Children.Add(entCommonAuthUserBox);
+            settings.Children.Add(entCommonAuthUserRow);
 
-            var commonAuthPasswordRow = new StackPanel
+            var entCommonAuthPasswordRow = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Margin = new Thickness(0, 0, 0, 4)
             };
-            commonAuthPasswordRow.Children.Add(new TextBlock
+            entCommonAuthPasswordRow.Children.Add(new TextBlock
             {
                 Text = LocalizationManager.T("Settings.CommonAuth.Password"),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0)
             });
-            var commonAuthPasswordBox = new PasswordBox
+            var entCommonAuthPasswordBox = new PasswordBox
             {
-                Password = commonAuth?.Password ?? string.Empty,
+                Password = entCommonAuth?.Password ?? string.Empty,
                 Width = 260,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center
             }.Styled(ControlThemes.ModernPasswordBox);
-            commonAuthPasswordRow.Children.Add(commonAuthPasswordBox);
-            settings.Children.Add(commonAuthPasswordRow);
+            entCommonAuthPasswordRow.Children.Add(entCommonAuthPasswordBox);
+            settings.Children.Add(entCommonAuthPasswordRow);
+
+            // --- «Конфигуратор» ---
+            var cfgCommonAuth = _viewModel.CommonConfiguratorAuth;
+            var cfgCommonAuthMode = cfgCommonAuth?.AuthenticationMode ?? AuthenticationMode.Prompt;
+
+            settings.Children.Add(GroupSectionHeader("Settings.CommonAuth.GroupTitleConfigurator"));
+            settings.Children.Add(Hint(LocalizationManager.T("Settings.CommonAuth.Hint"), bottom: 10));
+
+            var cfgCommonAuthPromptRadio = new RadioButton
+            {
+                Content = LocalizationManager.T("Settings.CommonAuth.ModePrompt"),
+                GroupName = "CommonConfiguratorAuth",
+                IsChecked = cfgCommonAuthMode == AuthenticationMode.Prompt
+            };
+            var cfgCommonAuthCredentialsRadio = new RadioButton
+            {
+                Content = LocalizationManager.T("Settings.CommonAuth.ModeCredentials"),
+                GroupName = "CommonConfiguratorAuth",
+                IsChecked = cfgCommonAuthMode == AuthenticationMode.Credentials
+            };
+            var cfgCommonAuthOsRadio = new RadioButton
+            {
+                Content = LocalizationManager.T("Settings.CommonAuth.ModeOs"),
+                GroupName = "CommonConfiguratorAuth",
+                IsChecked = cfgCommonAuthMode == AuthenticationMode.Windows
+            };
+            var cfgCommonAuthModes = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 16,
+                Margin = new Thickness(0, 0, 0, 2)
+            };
+            cfgCommonAuthModes.Children.Add(cfgCommonAuthPromptRadio);
+            cfgCommonAuthModes.Children.Add(cfgCommonAuthCredentialsRadio);
+            cfgCommonAuthModes.Children.Add(cfgCommonAuthOsRadio);
+            settings.Children.Add(cfgCommonAuthModes);
+
+            var cfgCommonAuthUserRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 8, 0, 4)
+            };
+            cfgCommonAuthUserRow.Children.Add(new TextBlock
+            {
+                Text = LocalizationManager.T("Settings.CommonAuth.Login"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0)
+            });
+            var cfgCommonAuthUserBox = new TextBox
+            {
+                Text = cfgCommonAuth?.User ?? string.Empty,
+                Width = 260,
+                Height = 30,
+                VerticalContentAlignment = VerticalAlignment.Center
+            }.Styled(ControlThemes.ModernTextBox);
+            cfgCommonAuthUserRow.Children.Add(cfgCommonAuthUserBox);
+            settings.Children.Add(cfgCommonAuthUserRow);
+
+            var cfgCommonAuthPasswordRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            cfgCommonAuthPasswordRow.Children.Add(new TextBlock
+            {
+                Text = LocalizationManager.T("Settings.CommonAuth.Password"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0)
+            });
+            var cfgCommonAuthPasswordBox = new PasswordBox
+            {
+                Password = cfgCommonAuth?.Password ?? string.Empty,
+                Width = 260,
+                Height = 30,
+                VerticalContentAlignment = VerticalAlignment.Center
+            }.Styled(ControlThemes.ModernPasswordBox);
+            cfgCommonAuthPasswordRow.Children.Add(cfgCommonAuthPasswordBox);
+            settings.Children.Add(cfgCommonAuthPasswordRow);
 
             void UpdateCommonAuthFieldsVisibility()
             {
-                var visible = commonAuthCredentialsRadio.IsChecked == true;
-                commonAuthUserRow.IsVisible = visible;
-                commonAuthPasswordRow.IsVisible = visible;
+                entCommonAuthUserRow.IsVisible = entCommonAuthCredentialsRadio.IsChecked == true;
+                entCommonAuthPasswordRow.IsVisible = entCommonAuthCredentialsRadio.IsChecked == true;
+                cfgCommonAuthUserRow.IsVisible = cfgCommonAuthCredentialsRadio.IsChecked == true;
+                cfgCommonAuthPasswordRow.IsVisible = cfgCommonAuthCredentialsRadio.IsChecked == true;
             }
 
-            commonAuthPromptRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
-            commonAuthCredentialsRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
-            commonAuthOsRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
+            entCommonAuthPromptRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
+            entCommonAuthCredentialsRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
+            entCommonAuthOsRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
+            cfgCommonAuthPromptRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
+            cfgCommonAuthCredentialsRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
+            cfgCommonAuthOsRadio.IsCheckedChanged += (_, _) => UpdateCommonAuthFieldsVisibility();
             UpdateCommonAuthFieldsVisibility();
 
             var tabGeneral = MainTab("IconApplicationCog", "Settings.TabGeneral",
@@ -3383,17 +3469,29 @@ namespace Workspace1C
                 _viewModel.UtilitiesMenuEditingEnabled = _utilitiesMenuEditingCheck?.IsChecked == true;
                 // Правка структуры контекстного меню базы (issue #56).
                 _viewModel.ContextMenuEditingEnabled = _contextMenuEditingCheck?.IsChecked == true;
-                // Общая авторизация для всех ИБ (issue #57): собираем из блока вкладки
-                // «Настройки»; сеттер VM обновляет статик лаунчера и сохраняет настройки.
-                _viewModel.CommonAuthorization = new InfobaseAuthSettings
+                // Общая авторизация для всех ИБ (issue #57): раздельная по режимам запуска —
+                // для «1С:Предприятия» и «Конфигуратора» свои учётные данные. Собираем из
+                // подблоков вкладки «Настройки»; сеттеры VM обновляют статики лаунчера
+                // и сохраняют настройки.
+                _viewModel.CommonEnterpriseAuth = new InfobaseAuthSettings
                 {
-                    AuthenticationMode = commonAuthPromptRadio.IsChecked == true
+                    AuthenticationMode = entCommonAuthPromptRadio.IsChecked == true
                         ? AuthenticationMode.Prompt
-                        : commonAuthOsRadio.IsChecked == true
+                        : entCommonAuthOsRadio.IsChecked == true
                             ? AuthenticationMode.Windows
                             : AuthenticationMode.Credentials,
-                    User = commonAuthUserBox.Text ?? string.Empty,
-                    Password = commonAuthPasswordBox.Password ?? string.Empty
+                    User = entCommonAuthUserBox.Text ?? string.Empty,
+                    Password = entCommonAuthPasswordBox.Password ?? string.Empty
+                };
+                _viewModel.CommonConfiguratorAuth = new InfobaseAuthSettings
+                {
+                    AuthenticationMode = cfgCommonAuthPromptRadio.IsChecked == true
+                        ? AuthenticationMode.Prompt
+                        : cfgCommonAuthOsRadio.IsChecked == true
+                            ? AuthenticationMode.Windows
+                            : AuthenticationMode.Credentials,
+                    User = cfgCommonAuthUserBox.Text ?? string.Empty,
+                    Password = cfgCommonAuthPasswordBox.Password ?? string.Empty
                 };
 
                 // Порог предупреждения «Свободно на диске» в Центре обслуживания (0.3.9.96).

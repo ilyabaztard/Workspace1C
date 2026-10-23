@@ -110,6 +110,21 @@
   [`ClusterMigrationService.BuildCreateRequest`](Workspace1C/Services/ClusterMigrationService.cs)
   использует значения формы с приоритетом над данными источника. Покрыто тестами
   `ClusterMigrationViewModelTests`/`ClusterMigrationServiceTests`/`Issue41WindowLayoutTests`.
+- **Общая авторизация стала раздельной по режимам запуска (issue #57, Windows и Linux)** —
+  в настройках блок «Общая авторизация» разбит на два подблока: **«1С:Предприятие»** и
+  **«Конфигуратор»**, в каждом свои режим аутентификации, логин и пароль. При запуске
+  базы без собственной авторизации (режима или базы) для режима Enterprise применяется
+  раздельная общая для «1С:Предприятия» (`CommonEnterpriseAuth`), для конструктора —
+  раздельная общая для «Конфигуратора» (`CommonConfiguratorAuth`); если раздельная для
+  режима не задана — по-прежнему используется прежняя общая `CommonAuthorization`
+  (legacy, обратная совместимость со старыми `settings.json`). Раздельные общие
+  учитываются и при запуске 1С, и при построении COM-строки подключения
+  ([`InfobaseAuthResolver.cs`](Workspace1C/Services/InfobaseAuthResolver.cs),
+  [`OneCLauncher.Arguments.Shared.cs`](Workspace1C/Services/OneCLauncher.Arguments.Shared.cs),
+  [`OneCComConnector.cs`](Workspace1C/Services/OneCComConnector.cs),
+  [`SettingsWindow.xaml`](Workspace1C/Views/SettingsWindow.xaml)). Покрыто тестами
+  `CommonAuthResolverTests`/`CommonAuthLaunchArgsTests`/`CommonAuthComTests`
+  и новым `CommonAuthSettingsStorageTests` (миграция старого `settings.json`).
 
 ### Технические изменения
 

@@ -211,23 +211,37 @@ namespace Workspace1C
         // ---- Общая авторизация для всех ИБ (issue #57) ----
 
         /// <summary>
-        /// Заполняет блок «Общая авторизация» из настроек (<see cref="MainViewModel.CommonAuthorization"/>):
-        /// режим — соответствующей радиокнопкой, логин и пароль — текстовыми полями.
+        /// Заполняет блок «Общая авторизация» из настроек: для «1С:Предприятия» —
+        /// <see cref="MainViewModel.CommonEnterpriseAuth"/>, для «Конфигуратора» —
+        /// <see cref="MainViewModel.CommonConfiguratorAuth"/>. Режим — соответствующей
+        /// радиокнопкой, логин и пароль — текстовыми полями.
         /// </summary>
         private void InitCommonAuthSettings()
         {
-            var mode = _viewModel.CommonAuthorization?.AuthenticationMode ?? AuthenticationMode.Prompt;
-            if (CommonAuthPromptRadio != null)
-                CommonAuthPromptRadio.IsChecked = mode == AuthenticationMode.Prompt;
-            if (CommonAuthCredentialsRadio != null)
-                CommonAuthCredentialsRadio.IsChecked = mode == AuthenticationMode.Credentials;
-            if (CommonAuthOsRadio != null)
-                CommonAuthOsRadio.IsChecked = mode == AuthenticationMode.Windows;
-            if (CommonAuthUserBox != null)
-                CommonAuthUserBox.Text = _viewModel.CommonAuthorization?.User ?? string.Empty;
-            if (CommonAuthPasswordBox != null)
-                CommonAuthPasswordBox.Password = _viewModel.CommonAuthorization?.Password ?? string.Empty;
+            InitCommonAuthMode(CommonEnterprisePromptRadio, CommonEnterpriseCredentialsRadio,
+                CommonEnterpriseOsRadio, CommonEnterpriseUserBox, CommonEnterprisePasswordBox,
+                _viewModel.CommonEnterpriseAuth);
+            InitCommonAuthMode(CommonConfiguratorPromptRadio, CommonConfiguratorCredentialsRadio,
+                CommonConfiguratorOsRadio, CommonConfiguratorUserBox, CommonConfiguratorPasswordBox,
+                _viewModel.CommonConfiguratorAuth);
             UpdateCommonAuthFieldsVisibility();
+        }
+
+        /// <summary>Заполняет один набор радиокнопок и полей логина/пароля из настроек.</summary>
+        private static void InitCommonAuthMode(RadioButton? promptRadio, RadioButton? credentialsRadio,
+            RadioButton? osRadio, TextBox? userBox, PasswordBox? passwordBox, InfobaseAuthSettings? auth)
+        {
+            var mode = auth?.AuthenticationMode ?? AuthenticationMode.Prompt;
+            if (promptRadio != null)
+                promptRadio.IsChecked = mode == AuthenticationMode.Prompt;
+            if (credentialsRadio != null)
+                credentialsRadio.IsChecked = mode == AuthenticationMode.Credentials;
+            if (osRadio != null)
+                osRadio.IsChecked = mode == AuthenticationMode.Windows;
+            if (userBox != null)
+                userBox.Text = auth?.User ?? string.Empty;
+            if (passwordBox != null)
+                passwordBox.Password = auth?.Password ?? string.Empty;
         }
 
         /// <summary>Переключает видимость полей логина/пароля: только при «Автоматическом входе».</summary>
@@ -235,14 +249,20 @@ namespace Workspace1C
             => UpdateCommonAuthFieldsVisibility();
 
         /// <summary>
-        /// Поля логина/пароля блока «Общая авторизация» показываются только в режиме
+        /// Поля логина/пароля подблоков «Общая авторизация» показываются только в режиме
         /// «Автоматический вход» (credentials), как в свойствах информационной базы.
         /// </summary>
         private void UpdateCommonAuthFieldsVisibility()
         {
-            if (CommonAuthCredentialsGrid != null)
+            if (CommonEnterpriseCredentialsGrid != null)
             {
-                CommonAuthCredentialsGrid.Visibility = CommonAuthCredentialsRadio?.IsChecked == true
+                CommonEnterpriseCredentialsGrid.Visibility = CommonEnterpriseCredentialsRadio?.IsChecked == true
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+            if (CommonConfiguratorCredentialsGrid != null)
+            {
+                CommonConfiguratorCredentialsGrid.Visibility = CommonConfiguratorCredentialsRadio?.IsChecked == true
                     ? Visibility.Visible
                     : Visibility.Collapsed;
             }
@@ -711,17 +731,29 @@ namespace Workspace1C
             _viewModel.UtilitiesMenuEditingEnabled = UtilitiesMenuEditingCheck?.IsChecked ?? false;
             // Правка структуры контекстного меню базы (issue #56).
             _viewModel.ContextMenuEditingEnabled = ContextMenuEditingCheck?.IsChecked ?? false;
-            // Общая авторизация для всех ИБ (issue #57): собираем из блока вкладки
-            // «Настройки» ДО вызова SaveSettings (он сохраняет и статик лаунчера).
-            _viewModel.CommonAuthorization = new InfobaseAuthSettings
+            // Общая авторизация для всех ИБ (issue #57): раздельная по режимам запуска —
+            // для «1С:Предприятия» и для «Конфигуратора» свои учётные данные. Собираем
+            // из подблоков вкладки «Настройки» ДО вызова SaveSettings (он сохраняет
+            // и статики лаунчера).
+            _viewModel.CommonEnterpriseAuth = new InfobaseAuthSettings
             {
-                AuthenticationMode = CommonAuthPromptRadio?.IsChecked == true
+                AuthenticationMode = CommonEnterprisePromptRadio?.IsChecked == true
                     ? AuthenticationMode.Prompt
-                    : CommonAuthOsRadio?.IsChecked == true
+                    : CommonEnterpriseOsRadio?.IsChecked == true
                         ? AuthenticationMode.Windows
                         : AuthenticationMode.Credentials,
-                User = CommonAuthUserBox?.Text ?? string.Empty,
-                Password = CommonAuthPasswordBox?.Password ?? string.Empty
+                User = CommonEnterpriseUserBox?.Text ?? string.Empty,
+                Password = CommonEnterprisePasswordBox?.Password ?? string.Empty
+            };
+            _viewModel.CommonConfiguratorAuth = new InfobaseAuthSettings
+            {
+                AuthenticationMode = CommonConfiguratorPromptRadio?.IsChecked == true
+                    ? AuthenticationMode.Prompt
+                    : CommonConfiguratorOsRadio?.IsChecked == true
+                        ? AuthenticationMode.Windows
+                        : AuthenticationMode.Credentials,
+                User = CommonConfiguratorUserBox?.Text ?? string.Empty,
+                Password = CommonConfiguratorPasswordBox?.Password ?? string.Empty
             };
             _viewModel.SaveSettings();
 

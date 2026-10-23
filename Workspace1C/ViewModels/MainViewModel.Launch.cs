@@ -693,8 +693,11 @@ public partial class MainViewModel : ViewModelBase
         s.UtilitiesMenuEditingEnabled = _utilitiesMenuEditingEnabled;
         // Правка структуры контекстного меню базы (issue #56).
         s.ContextMenuEditingEnabled = _contextMenuEditingEnabled;
-        // Общая авторизация для всех ИБ (issue #57).
+        // Общая авторизация для всех ИБ (issue #57): прежняя (legacy) и раздельные
+        // по режимам запуска (Enterprise/Configurator).
         s.CommonAuthorization = _commonAuthorization;
+        s.CommonEnterpriseAuth = _commonEnterpriseAuth;
+        s.CommonConfiguratorAuth = _commonConfiguratorAuth;
         s.CompactMode = _compactMode;
         s.ExplorerIntegrationEnabled = _explorerIntegrationEnabled;
         // Автозапуск при старте ОС (функция №31) и копия экрана (функция №30, Этап 8).

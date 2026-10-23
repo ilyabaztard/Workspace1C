@@ -149,4 +149,101 @@ public sealed class CommonAuthLaunchArgsTests
             OneCLauncher.CommonAuthorization = null;
         }
     }
+
+    // ---- Раздельная общая авторизация по режимам запуска (issue #57) ----
+
+    [Fact]
+    public void EnterpriseCommonAuth_UsedForEnterpriseMode()
+    {
+        var ib = FileBase(AuthenticationMode.Prompt);
+        try
+        {
+            OneCLauncher.CommonEnterpriseAuthorization = new InfobaseAuthSettings
+            {
+                AuthenticationMode = AuthenticationMode.Credentials,
+                User = "entCommon",
+                Password = "entSecret"
+            };
+
+            var entArgs = OneCLauncher.BuildArguments(ib, OneCLaunchMode.Enterprise, null, null);
+            Assert.Contains("/N\"entCommon\"", entArgs);
+            Assert.Contains("/P\"entSecret\"", entArgs);
+
+            // В режиме «Конфигуратора» раздельная для «1С:Предприятия» не применяется.
+            var cfgArgs = OneCLauncher.BuildArguments(ib, OneCLaunchMode.Configurator, null, null);
+            Assert.DoesNotContain("/N\"entCommon\"", cfgArgs);
+        }
+        finally
+        {
+            OneCLauncher.CommonAuthorization = null;
+            OneCLauncher.CommonEnterpriseAuthorization = null;
+            OneCLauncher.CommonConfiguratorAuthorization = null;
+        }
+    }
+
+    [Fact]
+    public void ConfiguratorCommonAuth_UsedForConfiguratorMode()
+    {
+        var ib = FileBase(AuthenticationMode.Prompt);
+        try
+        {
+            OneCLauncher.CommonConfiguratorAuthorization = new InfobaseAuthSettings
+            {
+                AuthenticationMode = AuthenticationMode.Credentials,
+                User = "cfgCommon",
+                Password = "cfgSecret"
+            };
+
+            var cfgArgs = OneCLauncher.BuildArguments(ib, OneCLaunchMode.Configurator, null, null);
+            Assert.Contains("/N\"cfgCommon\"", cfgArgs);
+            Assert.Contains("/P\"cfgSecret\"", cfgArgs);
+
+            // В режиме «1С:Предприятия» раздельная для «Конфигуратора» не применяется.
+            var entArgs = OneCLauncher.BuildArguments(ib, OneCLaunchMode.Enterprise, null, null);
+            Assert.DoesNotContain("/N\"cfgCommon\"", entArgs);
+        }
+        finally
+        {
+            OneCLauncher.CommonAuthorization = null;
+            OneCLauncher.CommonEnterpriseAuthorization = null;
+            OneCLauncher.CommonConfiguratorAuthorization = null;
+        }
+    }
+
+    [Fact]
+    public void ModeSpecificCommonAuth_OverridesLegacy()
+    {
+        var ib = FileBase(AuthenticationMode.Prompt);
+        try
+        {
+            // Раздельная общая для «1С:Предприятия» приоритетнее legacy: в Enterprise
+            // идут раздельные учётные данные, и legacy не попадает в аргументы.
+            OneCLauncher.CommonAuthorization = new InfobaseAuthSettings
+            {
+                AuthenticationMode = AuthenticationMode.Credentials,
+                User = "legacy",
+                Password = "legacySecret"
+            };
+            OneCLauncher.CommonEnterpriseAuthorization = new InfobaseAuthSettings
+            {
+                AuthenticationMode = AuthenticationMode.Credentials,
+                User = "entCommon",
+                Password = "entSecret"
+            };
+
+            var entArgs = OneCLauncher.BuildArguments(ib, OneCLaunchMode.Enterprise, null, null);
+            Assert.Contains("/N\"entCommon\"", entArgs);
+            Assert.DoesNotContain("legacy", entArgs);
+
+            // Для «Конфигуратора» раздельная не задана — применяется legacy.
+            var cfgArgs = OneCLauncher.BuildArguments(ib, OneCLaunchMode.Configurator, null, null);
+            Assert.Contains("/N\"legacy\"", cfgArgs);
+        }
+        finally
+        {
+            OneCLauncher.CommonAuthorization = null;
+            OneCLauncher.CommonEnterpriseAuthorization = null;
+            OneCLauncher.CommonConfiguratorAuthorization = null;
+        }
+    }
 }
