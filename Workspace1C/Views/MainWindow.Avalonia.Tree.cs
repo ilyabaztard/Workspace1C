@@ -1954,6 +1954,8 @@ namespace Workspace1C
                     item.Click += (_, _) => _vm!.ImportFromIbasesFileInteractive(); break;
                 case UtilitiesMenuCommandKind.ImportClusterInfobases:
                     item.Command = _vm!.ImportClusterInfobasesCommand; break;
+                case UtilitiesMenuCommandKind.MigrateClusterInfobases:
+                    item.Command = _vm!.MigrateClusterInfobasesCommand; break;
                 case UtilitiesMenuCommandKind.ProcessInspector:
                     item.Command = _vm!.ProcessInspectorCommand; break;
                 case UtilitiesMenuCommandKind.KillOneCProcesses:

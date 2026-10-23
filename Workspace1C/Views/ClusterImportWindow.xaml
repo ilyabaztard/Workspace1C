@@ -208,17 +208,7 @@
                     <TextBlock Text="{loc:Loc ClusterImport.ImportButton}" VerticalAlignment="Center" Foreground="White"/>
                 </StackPanel>
             </Button>
-            <!-- «Мигрировать» (issue #41): рядом с «Импортировать», как «Выделить все» и
-                 «Снять все» (отступ 8), тот же цвет, стрелка вправо. -->
-            <Button x:Name="MigrateButton" Style="{StaticResource ModernButton}"
-                    Background="#06B6D4" Foreground="White" Padding="16,5"
-                    Click="OnMigrate_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="➜" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="White"/>
-                    <TextBlock Text="{loc:Loc ClusterImport.MigrateButton}" VerticalAlignment="Center" Foreground="White"/>
-                </StackPanel>
-            </Button>
-            <!-- «Закрыть» (issue #41): отодвинута дальше (отступ как между «Снять все»
+            <!-- «Закрыть»: отодвинута дальше (отступ как между «Снять все»
                  и «Импортировать» — 18), красный шрифт и иконка (красная подсветка). -->
             <Button x:Name="CloseButton" Style="{StaticResource ModernButton}" IsCancel="True"
                     Background="{DynamicResource ItemHoverBrush}" Padding="12,5" Margin="18,0,0,0"

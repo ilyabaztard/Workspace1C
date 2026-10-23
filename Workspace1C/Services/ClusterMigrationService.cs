@@ -7,12 +7,14 @@ namespace Workspace1C.Services;
 
 /// <summary>
 /// Результат миграции баз между кластерами 1С (issue #41): список перенесённых баз,
+/// базы для добавления в список приложения (в новой группе — имя кластера приёмника),
 /// новый сервер/порт для строки подключения и флаг необходимости замены строки
-/// подключения в списке приложения. Создаётся VM диалога миграции
+/// подключения в списке приложения. Создаётся VM окна миграции
 /// (<see cref="ViewModels.ClusterMigrationViewModel"/>) при успешном завершении и
-/// передаётся в MainViewModel через окно импорта.
+/// передаётся в MainViewModel.
 /// </summary>
 /// <param name="MigratedBaseNames">Имена успешно перенесённых баз (порядок переноса).</param>
+/// <param name="AddedInfobases">Базы для добавления в список приложения (группа — имя кластера приёмника).</param>
 /// <param name="NewServer">Хост нового кластера для строки подключения («cluster info» или адрес сервера назначения).</param>
 /// <param name="NewPort">Порт нового кластера.</param>
 /// <param name="ReplaceConnectionStrings">
@@ -21,6 +23,7 @@ namespace Workspace1C.Services;
 /// </param>
 public sealed record ClusterMigrationResult(
     IReadOnlyList<string> MigratedBaseNames,
+    IReadOnlyList<Infobase> AddedInfobases,
     string NewServer,
     int NewPort,
     bool ReplaceConnectionStrings);

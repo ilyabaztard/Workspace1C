@@ -29,11 +29,7 @@ namespace Workspace1C
         private readonly ClusterImportViewModel _vm;
         private readonly IInfobaseRepository _repository;
 
-        /// <summary>Результат миграции (issue #41): применяет MainViewModel после закрытия
-        /// окна (замена сервера/порта в списке приложения). Null — миграция не выполнялась.</summary>
-        private ClusterMigrationResult? _migrationResult;
-
-        /// <param name="rac">Клиент rac (кластеры, «cluster info», базы кластера, миграция).</param>
+        /// <param name="rac">Клиент rac (кластеры, «cluster info», базы кластера).</param>
         /// <param name="repository">Репозиторий настроек (адрес/порт/логин RAS сохраняются при успешном подключении).</param>
         /// <param name="existingInfobases">Базы, уже присутствующие в списке приложения — для пометки дубликатов.</param>
         /// <param name="initialServer">
@@ -97,13 +93,6 @@ namespace Workspace1C
         /// </summary>
         public IReadOnlyList<Infobase> SelectedBases => _vm.SelectedBases;
 
-        /// <summary>
-        /// Результат миграции (issue #41): применяет MainViewModel после закрытия окна —
-        /// при подтверждении «заменить строку подключения» заменятся сервер/порт в базах
-        /// списка приложения. Null — миграция не выполнялась или не завершилась успешно.
-        /// </summary>
-        public ClusterMigrationResult? MigrationResult => _migrationResult;
-
         private async void OnConnect_Click(object sender, RoutedEventArgs e)
         {
             // Пароль приходит из выбранной записи справочника (issue #27) — PasswordBox нет.
@@ -146,42 +135,6 @@ namespace Workspace1C
 
             DialogResult = true;
             Close();
-        }
-
-        /// <summary>
-        /// «Мигрировать» (issue #41): открывает диалог миграции для отмеченных баз —
-        /// допускается, если выбрана хотя бы одна. После успешного переноса диалог закрывается,
-        /// а здесь обновляется список баз кластера (перенесённые базы могли исчезнуть
-        /// из старого кластера). Результат миграции (замена строки подключения) применяет
-        /// MainViewModel после закрытия окна импорта (см. <see cref="MigrationResult"/>).
-        /// </summary>
-        private void OnMigrate_Click(object sender, RoutedEventArgs e)
-        {
-            var rows = _vm.SelectedRowsForMigration();
-            if (rows.Count == 0)
-            {
-                MessageBox.Show(
-                    LocalizationManager.T("Selection.NothingSelected"),
-                    Title, MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            var dialog = new ClusterMigrationWindow(
-                _rac,
-                _vm.BuildSourceParams(),
-                _vm.SelectedClusterId ?? Guid.Empty,
-                rows,
-                _vm.AvailableServers,
-                _vm.SelectedServer)
-            {
-                Owner = this
-            };
-            if (dialog.ShowDialog() != true)
-                return;
-
-            _migrationResult = dialog.Result;
-            // Список баз кластера-источника после миграции: перечитаем его заново.
-            _vm.LoadBasesCommand.Execute(null);
         }
 
         private void OnClose_Click(object sender, RoutedEventArgs e) => Close();
@@ -227,12 +180,8 @@ namespace Workspace1C
             SelectAllButton.IsEnabled = !busy;
             SelectNoneButton.IsEnabled = !busy;
             ImportButton.IsEnabled = !busy && _vm.ReadyToImportCount > 0;
-            // «Мигрировать» (issue #41, 1.0.0.52): доступна при ЛЮБОЙ отмеченной базе
-            // (без фильтра дубликатов/пропусков — для переноса это не помеха);
-            // проверка «база уже есть в приёмнике» выполняется в диалоге миграции.
-            MigrateButton.IsEnabled = !busy && _vm.CheckedCount > 0;
             ProgressBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-            // Причина недоступности кнопок — над кнопками (issue #41, 1.0.0.61).
+            // Причина недоступности кнопки «Импортировать» — над кнопками.
             var hint = _vm.ActionHint;
             ActionHintText.Text = hint;
             ActionHintText.Visibility = string.IsNullOrEmpty(hint) ? Visibility.Collapsed : Visibility.Visible;

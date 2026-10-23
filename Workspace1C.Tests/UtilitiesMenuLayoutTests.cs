@@ -77,7 +77,7 @@ public sealed class UtilitiesMenuLayoutTests
         AssertSeparator(layout.Root[13]);
         AssertGroup(layout.Root[14], UtilitiesMenuCatalog.GroupOperations);
         var opsChildren = layout.Root[14].Children;
-        Assert.Equal(23, opsChildren.Count);
+        Assert.Equal(24, opsChildren.Count);
         AssertItem(opsChildren[0], "ConfigDiff");
         AssertItem(opsChildren[1], "MetadataExplorer");
         AssertSeparator(opsChildren[2]);
@@ -92,20 +92,23 @@ public sealed class UtilitiesMenuLayoutTests
         // что в настройках (вкладка «Базы» → «Список баз»).
         AssertItem(opsChildren[10], "ExportV8iFile");
         AssertItem(opsChildren[11], "ImportV8iFile");
+        // «Импорт из кластера 1С» и «Миграция между кластерами 1С» (issue #41):
+        // отдельные пункты — миграция вынесена в самостоятельное окно.
         AssertItem(opsChildren[12], "ClusterImport");
-        AssertSeparator(opsChildren[13]);
-        AssertItem(opsChildren[14], "ProcessInspector");
-        AssertItem(opsChildren[15], "KillOneCProcesses");
-        AssertSeparator(opsChildren[16]);
-        AssertItem(opsChildren[17], "ConnectionReplace");
-        AssertItem(opsChildren[18], "UndoConnectionReplace");
+        AssertItem(opsChildren[13], "ClusterMigration");
+        AssertSeparator(opsChildren[14]);
+        AssertItem(opsChildren[15], "ProcessInspector");
+        AssertItem(opsChildren[16], "KillOneCProcesses");
+        AssertSeparator(opsChildren[17]);
+        AssertItem(opsChildren[18], "ConnectionReplace");
+        AssertItem(opsChildren[19], "UndoConnectionReplace");
         // Пункт «Блокировка сеансов ИБ» есть только в Avalonia/Linux: в стандартной
         // компоновке он присутствует с разделителем (как в статическом меню Linux),
         // а WPF-построитель отфильтрует его по LinuxOnly.
-        AssertSeparator(opsChildren[19]);
-        AssertItem(opsChildren[20], "SessionLock");
-        AssertSeparator(opsChildren[21]);
-        AssertItem(opsChildren[22], "RemoveMissingFileBases");
+        AssertSeparator(opsChildren[20]);
+        AssertItem(opsChildren[21], "SessionLock");
+        AssertSeparator(opsChildren[22]);
+        AssertItem(opsChildren[23], "RemoveMissingFileBases");
 
         // ---- «Проверить обновления» в конце, с разделителем ----
         AssertSeparator(layout.Root[15]);
@@ -126,6 +129,31 @@ public sealed class UtilitiesMenuLayoutTests
         // В каталоге больше пунктов, чем в стандартной компоновке? Нет: компоновка
         // включает все пункты каталога, кроме пометок «новинка» (сейчас их нет).
         Assert.True(ids.Count <= UtilitiesMenuCatalog.All.Count);
+    }
+
+    /// <summary>
+    /// «Миграция между кластерами 1С» (issue #41, переработка): отдельный пункт каталога
+    /// рядом с «Импортом из кластера 1С», БЕЗ хоткея (не частая операция — комментарий 7OH).
+    /// </summary>
+    [Fact]
+    public void ClusterMigration_IsSeparateItem_WithoutHotkey()
+    {
+        var item = UtilitiesMenuCatalog.Find("ClusterMigration");
+        Assert.NotNull(item);
+        Assert.Equal(UtilitiesMenuCommandKind.MigrateClusterInfobases, item!.CommandKind);
+        Assert.Null(item.HotkeyKey); // без хоткея
+        Assert.Equal("ClusterMigration.MenuItem", item.TextKey);
+
+        // В стандартной компоновке — сразу после «Импорта из кластера 1С».
+        var layout = UtilitiesMenuLayouts.Default();
+        var ops = layout.Root
+            .First(n => string.Equals(n.Kind, "group", StringComparison.Ordinal)
+                && string.Equals(n.GroupId, UtilitiesMenuCatalog.GroupOperations, StringComparison.Ordinal));
+        var ids = ops.Children.Select(n => n.ItemId).ToList();
+        var importIndex = ids.IndexOf("ClusterImport");
+        var migrationIndex = ids.IndexOf("ClusterMigration");
+        Assert.True(importIndex >= 0);
+        Assert.Equal(importIndex + 1, migrationIndex);
     }
 
     /// <summary>JSON-сериализация и обратная десериализация сохраняют структуру компоновки.</summary>

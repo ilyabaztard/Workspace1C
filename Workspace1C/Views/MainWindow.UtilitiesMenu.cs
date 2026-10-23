@@ -295,6 +295,8 @@ public partial class MainWindow
                 item.Command = _viewModel.ImportFromIbasesFileCommand; break;
             case UtilitiesMenuCommandKind.ImportClusterInfobases:
                 item.Command = _viewModel.ImportClusterInfobasesCommand; break;
+            case UtilitiesMenuCommandKind.MigrateClusterInfobases:
+                item.Command = _viewModel.MigrateClusterInfobasesCommand; break;
             case UtilitiesMenuCommandKind.ProcessInspector:
                 item.Command = _viewModel.ProcessInspectorCommand; break;
             case UtilitiesMenuCommandKind.KillOneCProcesses:

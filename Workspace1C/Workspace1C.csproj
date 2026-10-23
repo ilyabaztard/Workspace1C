@@ -538,10 +538,11 @@
          чистый .NET без WPF-зависимостей, используется и Windows, и Linux. -->
     <Compile Include="ViewModels\ClusterImportViewModel.cs" />
     <Compile Include="ViewModels\ClusterImportRow.cs" />
-    <!-- Вью-модель диалога «Миграция баз» (1.0.0.51, issue #41): чистый .NET без
-         WPF-зависимостей, используется и Windows, и Linux; подключается явно
-         (имя не совпадает с глобом *.Avalonia.cs). -->
+    <!-- Вью-модель окна «Миграция между кластерами 1С» (issue #41, переработка):
+         чистый .NET без WPF-зависимостей, используется и Windows, и Linux;
+         подключается явно (имя не совпадает с глобом *.Avalonia.cs). -->
     <Compile Include="ViewModels\ClusterMigrationViewModel.cs" />
+    <Compile Include="ViewModels\ClusterMigrationRow.cs" />
     <!-- Вью-модель окна «Заменить в строках подключения…» (0.3.9.189, функция 6):
          чистый .NET без WPF-зависимостей, используется и Windows, и Linux. -->
     <Compile Include="ViewModels\ConnectionReplaceViewModel.cs" />

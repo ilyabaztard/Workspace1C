@@ -1,19 +1,18 @@
-<!-- Окно «Миграция баз» (1.0.0.51, issue #41, Windows/WPF): перенос информационных баз
-     из кластера-источника (открыто окно «Импорт из кластера 1С») в выбранный кластер
-     другого сервера 1С. Выбор сервера назначения — из справочника «Серверы 1С» БЕЗ
-     сервера-источника; при выборе сервера загружается список его кластеров (единственный
-     выбирается автоматически). Напоминание о количестве баз к переносу, учётные данные
-     СУБД (rac db-user/db-pwd, пароль только в памяти окна), галочка «Не удалять
-     в старом» (копия без удаления) и кнопки «Перенести»/«Отмена». Фоном — прогресс
-     «N из M: база». Вся логика — в чистой ClusterMigrationViewModel; окно — тонкая обёртка
-     (источник серверов, подстановка выбранного сервера, вопрос о замене строки
-     подключения после успешного переноса). -->
+<!-- Окно «Миграция между кластерами 1С» (issue #41, переработка по комментарию 7OH,
+     Windows/WPF): перенос информационных баз между кластерами серверов 1С. Двухпанельная
+     раскладка: группа «Источник» (Сервер 1С + Подключиться, Кластер + Получить базы,
+     Загружено баз) и группа «Приёмник» (те же поля; кнопка «Получить статусы» проставляет
+     статусы приёмника «Есть в кластере»/пусто по совпадению имени). Сервера источника и
+     приёмника не должны пересекаться — проверяется по выбору, но из списков не удаляются.
+     Галочки: после получения баз источника — ВСЕ; после получения статусов приёмника —
+     только там, где базы нет в приёмнике. Доступность «Мигрировать» зависит от галочек
+     и статусов. Вся логика — в чистой ClusterMigrationViewModel; окно — тонкая обёртка. -->
 <Window x:Class="Workspace1C.ClusterMigrationWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:Workspace1C.Localization"
         Icon="{StaticResource AppIcon}"
-        Height="430" Width="620" MinHeight="400" MinWidth="560"
+        Height="700" Width="1200" MinHeight="520" MinWidth="1000"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         Background="{DynamicResource ContentBackgroundBrush}">
@@ -22,80 +21,236 @@
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
+
+        <Style x:Key="CenteredCellText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Margin" Value="4,0"/>
+        </Style>
+
+        <Style x:Key="CenteredColumnHeader" TargetType="DataGridColumnHeader"
+               BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="8,0"/>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Напоминание о количестве баз к переносу (issue #41). -->
-        <TextBlock x:Name="BaseCountText" Grid.Row="0" FontWeight="SemiBold" Margin="0,0,0,10"/>
+        <!-- Двухпанельная раскладка: «Источник» и «Приёмник» (issue #41). -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="24"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-        <!-- Сервер 1С назначения: список БЕЗ сервера-источника; при выборе загружаются кластеры. -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-            <TextBlock Text="{loc:Loc ClusterMigration.TargetServer}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <ComboBox x:Name="ServerCombo" Width="360" Style="{StaticResource ModernComboBox}"
-                      ItemsSource="{Binding AvailableServers}"
-                      SelectedItem="{Binding SelectedServer}"
-                      VerticalContentAlignment="Center" Padding="6,2">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Description}" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                            <TextBlock VerticalAlignment="Center" Opacity="0.6" Margin="6,0,0,0">
-                                <Run Text="{Binding Address, Mode=OneWay}"/><Run Text=":"/><Run Text="{Binding Port, Mode=OneWay}"/>
-                            </TextBlock>
-                        </StackPanel>
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock x:Name="ServersEmptyHint" MaxWidth="180" VerticalAlignment="Center" Margin="10,0,0,0"
-                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
-                       Text="{loc:Loc ClusterMigration.Error.ServersEmpty}">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
-                        <Setter Property="Visibility" Value="Collapsed"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding HasAvailableServers}" Value="False">
-                                <Setter Property="Visibility" Value="Visible"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
+            <!-- ===================== Группа «Источник» ===================== -->
+            <GroupBox Grid.Column="0" Header="{loc:Loc ClusterMigration.SourceGroup}"
+                      Padding="12,8" BorderBrush="{DynamicResource BorderBrushColor}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Сервер 1С + Подключиться. -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
+                        <TextBlock Text="{loc:Loc ClusterMigration.SourceServer}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="SourceServerCombo" Width="300" Style="{StaticResource ModernComboBox}"
+                                  ItemsSource="{Binding AvailableSourceServers}"
+                                  SelectedItem="{Binding SelectedSourceServer}"
+                                  VerticalContentAlignment="Center" Padding="6,2">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Description}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                        <TextBlock VerticalAlignment="Center" Opacity="0.6" Margin="6,0,0,0">
+                                            <Run Text="{Binding Address, Mode=OneWay}"/><Run Text=":"/><Run Text="{Binding Port, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button x:Name="SourceConnectButton" Style="{StaticResource ModernButton}"
+                                Background="{DynamicResource ItemHoverBrush}" Padding="10,5" Margin="10,0,0,0"
+                                Click="OnSourceConnect_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🔌" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{loc:Loc ClusterMigration.Connect}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Кластер + Получить базы. -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
+                        <TextBlock Text="{loc:Loc ClusterMigration.SourceCluster}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="SourceClusterCombo" Width="300" Style="{StaticResource ModernComboBox}"
+                                  ItemsSource="{Binding SourceClusters}" SelectedValuePath="Id"
+                                  SelectedValue="{Binding SelectedSourceClusterId}"
+                                  VerticalContentAlignment="Center" Padding="6,2">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Port, StringFormat=' [{0}]'}" Opacity="0.6"
+                                                   Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button x:Name="SourceLoadBasesButton" Style="{StaticResource ModernButton}"
+                                Background="{DynamicResource ItemHoverBrush}" Padding="10,5" Margin="10,0,0,0"
+                                Click="OnSourceLoadBases_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⟳" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{loc:Loc ClusterMigration.LoadBases}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- «Загружено баз» под «Кластер». -->
+                    <TextBlock Grid.Row="2" x:Name="SourceStatusText" FontSize="12"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Text="{Binding SourceStatusText}"/>
+                </Grid>
+            </GroupBox>
+
+            <!-- ===================== Группа «Приёмник» ===================== -->
+            <GroupBox Grid.Column="2" Header="{loc:Loc ClusterMigration.TargetGroup}"
+                      Padding="12,8" BorderBrush="{DynamicResource BorderBrushColor}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Сервер 1С + Подключиться. -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
+                        <TextBlock Text="{loc:Loc ClusterMigration.TargetServer}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="TargetServerCombo" Width="300" Style="{StaticResource ModernComboBox}"
+                                  ItemsSource="{Binding AvailableTargetServers}"
+                                  SelectedItem="{Binding SelectedTargetServer}"
+                                  VerticalContentAlignment="Center" Padding="6,2">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Description}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                        <TextBlock VerticalAlignment="Center" Opacity="0.6" Margin="6,0,0,0">
+                                            <Run Text="{Binding Address, Mode=OneWay}"/><Run Text=":"/><Run Text="{Binding Port, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button x:Name="TargetConnectButton" Style="{StaticResource ModernButton}"
+                                Background="{DynamicResource ItemHoverBrush}" Padding="10,5" Margin="10,0,0,0"
+                                Click="OnTargetConnect_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🔌" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{loc:Loc ClusterMigration.Connect}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Кластер + Получить статусы. -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
+                        <TextBlock Text="{loc:Loc ClusterMigration.TargetCluster}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="TargetClusterCombo" Width="300" Style="{StaticResource ModernComboBox}"
+                                  ItemsSource="{Binding TargetClusters}" SelectedValuePath="Id"
+                                  SelectedValue="{Binding SelectedTargetClusterId}"
+                                  VerticalContentAlignment="Center" Padding="6,2">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Port, StringFormat=' [{0}]'}" Opacity="0.6"
+                                                   Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button x:Name="TargetGetStatusesButton" Style="{StaticResource ModernButton}"
+                                Background="{DynamicResource ItemHoverBrush}" Padding="10,5" Margin="10,0,0,0"
+                                Click="OnTargetGetStatuses_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⟳" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{loc:Loc ClusterMigration.GetStatuses}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Статус приёмника под «Кластер». -->
+                    <TextBlock Grid.Row="2" x:Name="TargetStatusText" FontSize="12"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Text="{Binding TargetStatusText}"/>
+                </Grid>
+            </GroupBox>
+        </Grid>
+
+        <!-- Чеклист баз источника: флажок, имя, описание, кластер, подключение,
+             статус источника, статус приёмника. -->
+        <DataGrid x:Name="BasesGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True"
+                  HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
+                  ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
+                  SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal"
+                  RowHeight="38" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
+                  Background="{DynamicResource CardBackgroundBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <DataGrid.CellStyle>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="VerticalContentAlignment" Value="Center"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="Padding" Value="0"/>
+                </Style>
+            </DataGrid.CellStyle>
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Width="44" Header="" CanUserSort="False">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsChecked, UpdateSourceTrigger=PropertyChanged}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Width="1.2*" Header="{loc:Loc ClusterMigration.Columns.Name}"
+                                    Binding="{Binding Name}" ElementStyle="{StaticResource CenteredCellText}"/>
+                <DataGridTextColumn Width="1.4*" Header="{loc:Loc ClusterMigration.Columns.Description}"
+                                    Binding="{Binding Subtitle}" ElementStyle="{StaticResource CenteredCellText}"/>
+                <DataGridTextColumn Width="130" Header="{loc:Loc ClusterMigration.Columns.Cluster}"
+                                    Binding="{Binding ClusterName}" ElementStyle="{StaticResource CenteredCellText}"/>
+                <DataGridTextColumn Width="1.6*" Header="{loc:Loc ClusterMigration.Columns.Connection}"
+                                    Binding="{Binding ConnectionString}" ElementStyle="{StaticResource CenteredCellText}"/>
+                <DataGridTextColumn Width="130" Header="{loc:Loc ClusterMigration.Columns.SourceStatus}"
+                                    Binding="{Binding SourceStatus}" ElementStyle="{StaticResource CenteredCellText}"/>
+                <DataGridTextColumn Width="130" Header="{loc:Loc ClusterMigration.Columns.TargetStatus}"
+                                    Binding="{Binding TargetStatus}" ElementStyle="{StaticResource CenteredCellText}"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Опции: «Создавать группу по имени кластера» + «Не удалять в старом кластере» в одной строке. -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+            <CheckBox x:Name="GroupByClusterCheck" VerticalAlignment="Center"
+                      Content="{loc:Loc ClusterMigration.GroupByCluster}"
+                      IsChecked="{Binding UseClusterGrouping}"/>
+            <CheckBox x:Name="KeepInSourceCheck" VerticalAlignment="Center" Margin="18,0,0,0"
+                      Content="{loc:Loc ClusterMigration.KeepInSource}"
+                      IsChecked="{Binding KeepInSource}"/>
         </StackPanel>
 
-        <!-- Кластер назначения + статус загрузки кластеров. -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
-            <TextBlock Text="{loc:Loc ClusterMigration.TargetCluster}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <ComboBox x:Name="ClusterCombo" Width="360" Style="{StaticResource ModernComboBox}"
-                      ItemsSource="{Binding Clusters}" SelectedValuePath="Id"
-                      SelectedValue="{Binding SelectedClusterId}"
-                      VerticalContentAlignment="Center" Padding="6,2">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding Port, StringFormat=' [{0}]'}" Opacity="0.6"
-                                       Margin="6,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="12,0,0,0"
-                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                       Text="{Binding StatusText}"/>
-        </StackPanel>
-
-        <!-- Учётные данные СУБД (для добавления баз в новый кластер). -->
-        <Grid Grid.Row="3" Margin="0,0,0,8">
+        <!-- Учётные данные СУБД в одну линию. -->
+        <Grid Grid.Row="3" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -107,20 +262,12 @@
                      Text="{Binding DbUser, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
             <TextBlock Grid.Column="2" Text="{loc:Loc ClusterMigration.DbPassword}" VerticalAlignment="Center"
                        Margin="14,0,8,0"/>
-            <!-- Пароль: без ModernTextBox — он имеет TargetType=TextBox и несовместим
-                 с PasswordBox (см. комментарий в ProfilesPanel.xaml); PasswordBox получает
-                 темированный implicit-стиль из LightTheme/DarkTheme. -->
             <PasswordBox x:Name="DbPasswordBox" Grid.Column="3" Padding="6,4"
                          PasswordChanged="OnDbPasswordChanged"/>
         </Grid>
 
-        <!-- «Не удалять в старом»: копия в другой кластер без удаления из источника. -->
-        <CheckBox x:Name="KeepInSourceCheck" Grid.Row="4" VerticalAlignment="Center"
-                  Content="{loc:Loc ClusterMigration.KeepInSource}"
-                  IsChecked="{Binding KeepInSource}"/>
-
         <!-- Прогресс «N из M: база» + сообщение об ошибке. -->
-        <StackPanel Grid.Row="5" Margin="0,10,0,0">
+        <StackPanel Grid.Row="4" Margin="0,10,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -136,10 +283,26 @@
                        Margin="0,6,0,0" Text="{Binding ErrorMessage}"/>
         </StackPanel>
 
-        <!-- Действия: «Перенести» (зелёная, как «Импортировать» в окне импорта) и «Отмена». -->
-        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+        <!-- Действия: выделить все / снять все, «Мигрировать», «Отмена». -->
+        <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,10,0,0">
+            <Button x:Name="SelectAllButton" Style="{StaticResource ModernButton}"
+                    Background="{DynamicResource ItemHoverBrush}" Padding="12,5"
+                    Click="OnSelectAll_Click">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="☑" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc Selection.SelectAll}" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="SelectNoneButton" Style="{StaticResource ModernButton}"
+                    Background="{DynamicResource ItemHoverBrush}" Padding="12,5" Margin="8,0,0,0"
+                    Click="OnSelectNone_Click">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="☐" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc Selection.None}" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
             <Button x:Name="MigrateButton" Style="{StaticResource ModernButton}"
-                    Background="#16A34A" Foreground="White" Padding="16,5"
+                    Background="#16A34A" Foreground="White" Padding="16,5" Margin="18,0,8,0"
                     Click="OnMigrate_Click">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="➜" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="White"/>
@@ -147,7 +310,7 @@
                 </StackPanel>
             </Button>
             <Button x:Name="CancelButton" Style="{StaticResource ModernButton}" IsCancel="True"
-                    Background="{DynamicResource ItemHoverBrush}" Padding="14,5" Margin="10,0,0,0"
+                    Background="{DynamicResource ItemHoverBrush}" Padding="14,5" Margin="18,0,0,0"
                     Click="OnCancel_Click">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="✖" Margin="0,0,6,0" VerticalAlignment="Center"/>

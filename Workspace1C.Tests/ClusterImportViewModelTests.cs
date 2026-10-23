@@ -275,11 +275,11 @@ public sealed class ClusterImportViewModelTests
     }
 
     [Fact]
-    public async Task SelectAll_ChecksDuplicatesToo_SoMigrateBecomesAvailable_Issue41()
+    public async Task SelectAll_DoesNotCheckDuplicates_ImportOnly()
     {
-        // issue #41 (комментарий 7OH 23.10): все базы кластера уже есть в списке —
-        // по умолчанию ничего не отмечено; «Выделить все» должна отметить их, иначе
-        // «Мигрировать» недоступна. Импорт дубликаты по-прежнему пропускает.
+        // issue #41 (переработка по комментарию 7OH): «Выделить все» возвращена на место —
+        // отмечает только импортируемые (не дубликаты) строки. Миграция вынесена
+        // в отдельное окно, поэтому дубликаты для импорта не нужны.
         var existing = new[] { "Бухгалтерия", "Управление персоналом", "Кадры" }
             .Select(n => RacInfobaseMapper.ToInfobase(
                 new RacInfobaseSummary { Name = n, Dbms = "MSSQLServer" }, "srv1", 1541, null, "Группа"))
@@ -294,16 +294,16 @@ public sealed class ClusterImportViewModelTests
 
         vm.SelectAll();
 
-        Assert.Equal(vm.Rows.Count, vm.CheckedCount);
+        // Дубликаты НЕ отмечаются — импорт их и так пропускает.
+        Assert.Equal(0, vm.CheckedCount);
         Assert.Equal(0, vm.ReadyToImportCount);
-        Assert.Equal(vm.Rows.Count, vm.SelectedRowsForMigration().Count);
         Assert.Equal(
             ClusterImportViewModel.BuildActionHint(false, vm.Rows.Count, vm.CheckedCount, 0),
             vm.ActionHint);
     }
 
     [Fact]
-    public void ActionHint_ExplainsWhyButtonsAreDisabled_Issue41()
+    public void ActionHint_ExplainsWhyImportIsDisabled()
     {
         // Идёт запрос — подсказки нет (виден индикатор занятости).
         Assert.Equal(string.Empty, ClusterImportViewModel.BuildActionHint(true, 0, 0, 0));
@@ -315,34 +315,8 @@ public sealed class ClusterImportViewModelTests
         Assert.NotEqual(string.Empty, nothingChecked);
         Assert.NotEqual(string.Empty, onlyDuplicates);
         Assert.Equal(3, new[] { noBases, nothingChecked, onlyDuplicates }.Distinct().Count());
-        // Обе кнопки доступны — подсказки нет.
+        // Кнопка доступна — подсказки нет.
         Assert.Equal(string.Empty, ClusterImportViewModel.BuildActionHint(false, 3, 2, 1));
-    }
-
-    [Fact]
-    public async Task CheckedAndMigrationRows_IncludeDuplicatesMarkedByUser()
-    {
-        // Дубликат «Бухгалтерия» не готов к импорту, но для «Мигрировать» (issue #41,
-        // 1.0.0.52) важен общий счётчик отмеченных строк: перенос не проверяет наличие
-        // базы в списке приложения — проверка «уже есть в приёмнике» живёт в диалоге
-        // миграции после выбора кластера назначения.
-        var existing = RacInfobaseMapper.ToInfobase(
-            new RacInfobaseSummary { Name = "Бухгалтерия", Dbms = "MSSQLServer" },
-            "srv1", 1541, null, "Группа");
-        var vm = new ClusterImportViewModel(new FakeRacClient(singleCluster: true), new[] { existing });
-        await vm.ConnectAsync();
-
-        var dup = vm.Rows.Single(r => r.Name == "Бухгалтерия");
-        Assert.True(dup.IsDuplicate);
-        dup.IsChecked = true; // пользователь вручную отмечает и существующую базу
-
-        // ReadyToImportCount не учитывает дубликат, CheckedCount — учитывает.
-        Assert.Equal(2, vm.ReadyToImportCount);
-        Assert.Equal(3, vm.CheckedCount);
-
-        // Строки для миграции включают отмеченные дубликаты (если есть исходная запись rac).
-        var migrationRows = vm.SelectedRowsForMigration();
-        Assert.Contains("Бухгалтерия", migrationRows.Select(r => r.Name));
     }
 
     [Fact]

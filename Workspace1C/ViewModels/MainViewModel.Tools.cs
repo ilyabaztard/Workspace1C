@@ -2782,10 +2782,12 @@ public partial class MainViewModel : ViewModelBase
         // Без Owner (issue #3, 7OH 17.10): окно с владельцем в WPF всегда остаётся НАД
         // главным окном, и вернуться к главному было нельзя — оно перекрывалось монитором.
         // Немодальное рабочее окно — самостоятельное, со своей кнопкой в панели задач;
-        // открывается по центру главного окна. Кнопка «Импорт» под списком баз (issue #27)
-        // открывает «Импорт из кластера 1С» с сервером, текущим на момент нажатия.
+        // открывается по центру главного окна. Кнопки «Импорт»/«Миграция» под списком баз
+        // (issue #27, #41) открывают «Импорт из кластера 1С» / «Миграцию между кластерами
+        // 1С» с сервером, текущим на момент нажатия.
         var window = new ServerMonitorWindow(
-            (server, clusterId) => ExecuteImportClusterInfobases(server, clusterId, autoConnect: true));
+            (server, clusterId) => ExecuteImportClusterInfobases(server, clusterId, autoConnect: true),
+            (server, clusterId) => ExecuteMigrateClusterInfobases(server, clusterId));
         var main = System.Windows.Application.Current.MainWindow;
         if (main is { IsLoaded: true } && main.WindowState != System.Windows.WindowState.Minimized)
         {
@@ -2903,7 +2905,45 @@ public partial class MainViewModel : ViewModelBase
             return;
 
         ApplyClusterImportResult(window.SelectedBases);
-        ApplyClusterMigrationResult(window.MigrationResult);
+    }
+
+    // ======================= Миграция между кластерами 1С (issue #41) =======================
+
+    private ICommand? _migrateClusterInfobasesCommand;
+
+    /// <summary>
+    /// Команда «Миграция между кластерами 1С…»: перенос информационных баз между
+    /// кластерами серверов 1С (issue #41, переработка по комментарию 7OH) — отдельное
+    /// окно с двухпанельной раскладкой «Источник»/«Приёмник», статусами источника и
+    /// приёмника, опциями «Создавать группу по имени кластера» и «Не удалять в старом
+    /// кластере». Активна всегда — кластер не привязан к конкретной базе списка.
+    /// </summary>
+    public ICommand MigrateClusterInfobasesCommand =>
+        _migrateClusterInfobasesCommand ??= new RelayCommand(_ => ExecuteMigrateClusterInfobases());
+
+    /// <summary>
+    /// Открывает окно «Миграция между кластерами 1С». Команда меню вызывает без параметров;
+    /// из окна «Серверы 1С» передаётся <paramref name="initialSourceServer"/> и выбранный
+    /// кластер <paramref name="initialSourceClusterId"/> (issue #41) — окно подставляет
+    /// сервер-источник и сразу подключается. Логика применения результата — в общем
+    /// <see cref="ApplyClusterMigrationResult"/> (единая для WPF и Avalonia).
+    /// </summary>
+    private void ExecuteMigrateClusterInfobases(
+        ManagementServer? initialSourceServer = null, Guid? initialSourceClusterId = null)
+    {
+        var window = new ClusterMigrationWindow(
+            AppServices.GetRequiredService<IRacClient>(),
+            Infobases.ToList(),
+            AppServices.GetRequiredService<IServerListStore>().Load(),
+            initialSourceServer,
+            initialSourceClusterId)
+        {
+            Owner = WindowOwnerResolver.ActiveOrMain()
+        };
+        if (window.ShowDialog() != true)
+            return;
+
+        ApplyClusterMigrationResult(window.Result);
     }
 
     /// <summary>
@@ -2951,32 +2991,66 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Применяет результат миграции баз между кластерами (issue #41): при подтверждении
-    /// пользователем «Хотите заменить строку подключения?» заменяет сервер/порт в базах
-    /// списка приложения, имена которых совпадают с перенесёнными (по Ref, без учёта
-    /// регистра; только клиент-серверные базы). Сохраняет список и показывает сводку.
-    /// Замена выполняется на РЕАЛЬНОМ списке (в окно импорта уходит снимок — там мутировать
-    /// нечего), после закрытия окна импорта.
+    /// Применяет результат миграции баз между кластерами (issue #41): добавляет перенесённые
+    /// базы в список приложения (в новой группе — имя кластера приёмника, как в импорте),
+    /// а при подтверждении пользователем «Хотите заменить строку подключения?» заменяет
+    /// сервер/порт в базах списка, имена которых совпадают с перенесёнными (по Ref, без
+    /// учёта регистра; только клиент-серверные базы). Сохраняет список и показывает сводку.
     /// </summary>
     private void ApplyClusterMigrationResult(ClusterMigrationResult? result)
     {
-        if (result is null || !result.ReplaceConnectionStrings || result.MigratedBaseNames.Count == 0)
+        if (result is null || result.MigratedBaseNames.Count == 0)
             return;
 
-        var replaced = ClusterMigrationService.ReplaceServerAndPort(
-            Infobases, result.MigratedBaseNames, result.NewServer, result.NewPort);
-        if (replaced == 0)
+        var changed = false;
+
+        // 1) Перенесённые базы добавляются в новую группу (имя кластера — приёмник).
+        var added = (result.AddedInfobases ?? Array.Empty<Infobase>())
+            .Where(b => !RacInfobaseMapper.IsDuplicate(Infobases, b))
+            .ToList();
+        if (added.Count > 0)
+        {
+            foreach (var infobase in added)
+                Infobases.Add(infobase);
+
+            var existingGroupNames = new HashSet<string>(
+                Groups.Select(g => (g.Name ?? "").Trim()), StringComparer.OrdinalIgnoreCase);
+            foreach (var groupName in added
+                .Select(b => (b.Group ?? "").Trim())
+                .Where(n => n.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (existingGroupNames.Add(groupName))
+                    Groups.Add(new Group { Name = groupName });
+            }
+            changed = true;
+        }
+
+        // 2) При подтверждении — замена сервера/порта в существующих базах с теми же именами.
+        var replaced = 0;
+        if (result.ReplaceConnectionStrings)
+        {
+            replaced = ClusterMigrationService.ReplaceServerAndPort(
+                Infobases, result.MigratedBaseNames, result.NewServer, result.NewPort);
+            changed |= replaced > 0;
+        }
+
+        if (!changed)
             return;
 
         InfobasesView.Refresh();
         Save();
+        SaveGroups();
         RebuildGroupTree();
 
-        _dialogs.ShowInfo(
-            string.Format(LocalizationManager.T("ClusterMigration.ReplacedCountFormat"), replaced),
-            LocalizationManager.T("ClusterMigration.Title"));
-        _logger.Info($"Миграция баз между кластерами: заменено строк подключения у {replaced} баз " +
-                     $"(новый сервер: {result.NewServer}:{result.NewPort}, issue #41)");
+        if (replaced > 0)
+        {
+            _dialogs.ShowInfo(
+                string.Format(LocalizationManager.T("ClusterMigration.ReplacedCountFormat"), replaced),
+                LocalizationManager.T("ClusterMigration.Title"));
+        }
+        _logger.Info($"Миграция баз между кластерами: добавлено {added.Count} баз, " +
+                     $"заменено строк подключения у {replaced} (новый сервер: {result.NewServer}:{result.NewPort}, issue #41)");
     }
 
     // ======================= Статистика использования баз (0.3.9.95) =======================

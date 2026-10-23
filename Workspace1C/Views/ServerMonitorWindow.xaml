@@ -345,18 +345,30 @@
                     </Style>
                 </TextBlock.Style>
             </TextBlock>
-            <!-- Кнопка «Импорт» (issue #27): внизу панели баз, по аналогии с «Службы»
-                 под списком серверов; открывает «Импорт из кластера 1С» с текущим
-                 сервером (SelectedServer, иначе ConnectedServer, иначе первый). -->
-            <Button DockPanel.Dock="Bottom" x:Name="InfobasesImportButton"
-                    Style="{StaticResource ModernButton}"
-                    Background="{DynamicResource ItemHoverBrush}"
-                    Margin="0,8,0,0" Padding="0,8"
-                    Click="OnImport_Click">
-                <TextBlock Text="{loc:Loc ServerMonitor.Infobase.Import}"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           FontWeight="SemiBold"/>
-            </Button>
+            <!-- Кнопки «Импорт» и «Миграция» (issue #41): внизу панели баз, по аналогии
+                 с «Службы» под списком серверов; открывают «Импорт из кластера 1С» /
+                 «Миграцию между кластерами 1С» с текущим сервером (SelectedServer,
+                 иначе ConnectedServer, иначе первый). -->
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                <Button x:Name="InfobasesImportButton"
+                        Style="{StaticResource ModernButton}"
+                        Background="{DynamicResource ItemHoverBrush}"
+                        Padding="0,8" Margin="0,0,6,0" HorizontalAlignment="Stretch"
+                        Click="OnImport_Click">
+                    <TextBlock Text="{loc:Loc ServerMonitor.Infobase.Import}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               FontWeight="SemiBold"/>
+                </Button>
+                <Button x:Name="InfobasesMigrateButton"
+                        Style="{StaticResource ModernButton}"
+                        Background="{DynamicResource ItemHoverBrush}"
+                        Padding="0,8" HorizontalAlignment="Stretch"
+                        Click="OnMigrate_Click">
+                    <TextBlock Text="{loc:Loc ServerMonitor.Infobase.Migrate}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               FontWeight="SemiBold"/>
+                </Button>
+            </StackPanel>
             <!-- Список баз: одна колонка с именем; клик по строке включает фильтр. -->
             <ListBox x:Name="InfobasesList" ItemsSource="{Binding Infobases}"
                      SelectedItem="{Binding SelectedInfobase}"

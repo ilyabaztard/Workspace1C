@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Windows.Input;
@@ -10,40 +11,51 @@ using Workspace1C.Services;
 namespace Workspace1C.ViewModels;
 
 /// <summary>
-/// ViewModel диалога «Миграция баз» (issue #41): перенос информационных баз между
-/// кластерами серверов 1С. Окно импорта передаёт отмеченные строки с исходными
-/// записями rac (<see cref="ClusterImportRow.Source"/>) и параметры подключения к
-/// серверу-источнику; здесь выбирается сервер назначения из справочника «Серверы 1С»
-/// (БЕЗ сервера-источника), его кластер, вводятся учётные данные СУБД (для регистрации
-/// базы в новом кластере) и галочка «Не удалять в старом» (копия без удаления).
-/// По «Перенести» для КАЖДОЙ базы: сначала <c>infobase create</c> в новом кластере
-/// (те же данные, что в старом), затем — если галочка не отмечена — <c>infobase drop</c>
-/// без <c>--drop-database</c> (БД на сервере СУБД остаётся). Фоном показывается прогресс
-/// «N из M: база». При успехе формируется <see cref="Result"/> — окно спрашивает
-/// «Хотите заменить строку подключения?» и закрывается (MainViewModel заменит сервер/порт
-/// в списке приложения). Чистый .NET без платформенных зависимостей — обе платформы.
+/// ViewModel окна «Миграция между кластерами 1С» (issue #41, переработка по комментарию
+/// 7OH): перенос информационных баз между кластерами серверов 1С. Окно самостоятельное
+/// (не вызывается из импорта) и имеет ДВУХПАНЕЛЬНУЮ раскладку: группа «Источник»
+/// (Сервер 1С + «Подключиться», Кластер + «Получить базы», «Загружено баз») и группа
+/// «Приёмник» (те же поля; кнопка «Получить статусы» проставляет статусы приёмника
+/// «Есть в кластере»/пусто по совпадению имени базы). Сервера источника и приёмника
+/// не должны пересекаться — проверяется по выбору, но из списков не удаляются.
+/// Галочки: после получения баз источника — ВСЕ; после получения статусов приёмника —
+/// только там, где базы нет в приёмнике. Доступность «Мигрировать» зависит от галочек
+/// и статусов: если у отмеченной строки статус приёмника «Есть в кластере» — кнопка
+/// недоступна. По «Мигрировать» для КАЖДОЙ отмеченной базы: сначала <c>infobase create</c>
+/// в новом кластере (те же данные, что в старом), затем — если галочка «Не удалять
+/// в старом» не отмечена — <c>infobase drop</c> без <c>--drop-database</c>. Базы
+/// добавляются в новую группу (имя кластера — приёмник), как в импорте. Чистый .NET
+/// без платформенных зависимостей — обе платформы.
 /// </summary>
 public sealed class ClusterMigrationViewModel : ViewModelBase
 {
     private readonly IRacClient _rac;
-    private readonly RacConnectionParams _sourceParams;
-    private readonly Guid _sourceClusterId;
-    private readonly IReadOnlyList<ClusterImportRow> _rows;
+    private readonly IReadOnlyList<Infobase> _existingInfobases;
     private readonly Action<Action>? _dispatchToUi;
     private readonly IAppLogger? _logger;
 
+    // ===================== Источник =====================
+    private IReadOnlyList<ManagementServer> _availableSourceServers = Array.Empty<ManagementServer>();
+    private ManagementServer? _selectedSourceServer;
+    private IReadOnlyList<RacCluster> _sourceClusters = Array.Empty<RacCluster>();
+    private Guid? _selectedSourceClusterId;
+    private string _sourceStatusText = string.Empty;
+    private string _sourceError = string.Empty;
+
+    // ===================== Приёмник =====================
+    private IReadOnlyList<ManagementServer> _availableTargetServers = Array.Empty<ManagementServer>();
+    private ManagementServer? _selectedTargetServer;
+    private IReadOnlyList<RacCluster> _targetClusters = Array.Empty<RacCluster>();
+    private Guid? _selectedTargetClusterId;
+    private string _targetStatusText = string.Empty;
+    private string _targetError = string.Empty;
+
+    // ===================== Общее =====================
     private int _busy;
-    private IReadOnlyList<ManagementServer> _availableServers = Array.Empty<ManagementServer>();
-    private ManagementServer? _selectedServer;
-    private IReadOnlyList<RacCluster> _clusters = Array.Empty<RacCluster>();
-    private Guid? _selectedClusterId;
-    private IReadOnlyList<string> _conflictingBaseNames = Array.Empty<string>();
-    // Версия запроса проверки конфликтов: смена сервера/кластера помечает вполоборота
-    // устаревший запрос (его результат игнорируется), новый — перечитывает приёмник.
-    private long _conflictCheckVersion;
     private string _dbUser = string.Empty;
     private string _dbPassword = string.Empty;
     private bool _keepInSource;
+    private bool _useClusterGrouping = true;
     private string _statusText = string.Empty;
     private string _errorMessage = string.Empty;
     private int _progressIndex;
@@ -52,31 +64,29 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     private bool _migrationCompleted;
     private ClusterMigrationResult? _result;
 
-    private ICommand? _connectCommand;
+    private ICommand? _connectSourceCommand;
+    private ICommand? _loadSourceBasesCommand;
+    private ICommand? _connectTargetCommand;
+    private ICommand? _getTargetStatusesCommand;
     private ICommand? _migrateCommand;
+    private ICommand? _selectAllCommand;
+    private ICommand? _selectNoneCommand;
 
-    /// <param name="rac">Клиент rac (кластеры назначения, «infobase create/drop»).</param>
-    /// <param name="sourceParams">Подключение к серверу-источнику (для удаления баз из старого кластера).</param>
-    /// <param name="sourceClusterId">Идентификатор кластера-источника (откуда переносятся базы).</param>
-    /// <param name="rows">Отмеченные строки импорта с исходными записями rac (<see cref="ClusterImportRow.Source"/>); строки без источника отбрасываются.</param>
-    /// <param name="availableServers">Справочник «Серверы 1С» — сервер-источник исключается по Id.</param>
-    /// <param name="sourceServer">Запись справочника сервера-источника (для исключения из списка назначения); null — список целиком.</param>
+    /// <param name="rac">Клиент rac (кластеры, «infobase summary list/create/drop»).</param>
+    /// <param name="existingInfobases">Базы, уже присутствующие в списке приложения — для статуса источника («уже есть в списке»).</param>
+    /// <param name="availableServers">Справочник «Серверы 1С» — полный список для обеих панелей (сервера не удаляются).</param>
     /// <param name="dispatchToUi">Доставка применения результатов в UI-поток; null — сразу (тесты).</param>
     public ClusterMigrationViewModel(
         IRacClient rac,
-        RacConnectionParams sourceParams,
-        Guid sourceClusterId,
-        IReadOnlyList<ClusterImportRow> rows,
+        IReadOnlyList<Infobase> existingInfobases,
         IReadOnlyList<ManagementServer> availableServers,
-        ManagementServer? sourceServer,
         Action<Action>? dispatchToUi = null)
     {
         _rac = rac ?? throw new ArgumentNullException(nameof(rac));
-        _sourceParams = sourceParams ?? new RacConnectionParams();
-        _sourceClusterId = sourceClusterId;
-        _rows = rows?.Where(r => r?.Source is not null).ToList() ?? new List<ClusterImportRow>();
+        _existingInfobases = existingInfobases ?? throw new ArgumentNullException(nameof(existingInfobases));
         _dispatchToUi = dispatchToUi;
-        AvailableServers = ClusterMigrationService.ExcludeSourceServer(availableServers, sourceServer);
+        AvailableSourceServers = availableServers;
+        AvailableTargetServers = availableServers;
         try
         {
             _logger = AppServices.GetRequiredService<IAppLogger>();
@@ -87,144 +97,182 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         }
     }
 
-    // ===================== Справочник «Серверы 1С» (цель) =====================
+    // ===================== Справочник «Серверы 1С» =====================
 
-    /// <summary>
-    /// Записи справочника «Серверы 1С» для выбора сервера назначения: сервер-источник
-    /// исключён по Id (issue #41 — «желательно НЕ показывать сервер формы импорта»).
-    /// </summary>
-    public IReadOnlyList<ManagementServer> AvailableServers
+    /// <summary>Записи справочника для панели «Источник» (полный список — сервера не удаляются).</summary>
+    public IReadOnlyList<ManagementServer> AvailableSourceServers
     {
-        get => _availableServers;
+        get => _availableSourceServers;
         private set
         {
-            if (SetProperty(ref _availableServers, value ?? Array.Empty<ManagementServer>()))
+            if (SetProperty(ref _availableSourceServers, value ?? Array.Empty<ManagementServer>()))
                 OnPropertyChanged(nameof(HasAvailableServers));
         }
     }
 
-    /// <summary>Есть ли сервер назначения в списке (иначе «Перенести» недоступно).</summary>
-    public bool HasAvailableServers => AvailableServers.Count > 0;
-
-    /// <summary>
-    /// Выбранный сервер назначения. При установке значения запускается загрузка его
-    /// кластеров («cluster list») — повторное использование состояния сбрасывается.
-    /// </summary>
-    public ManagementServer? SelectedServer
+    /// <summary>Записи справочника для панели «Приёмник» (полный список — сервера не удаляются).</summary>
+    public IReadOnlyList<ManagementServer> AvailableTargetServers
     {
-        get => _selectedServer;
-        set
-        {
-            if (ReferenceEquals(_selectedServer, value))
-                return;
-            _selectedServer = value;
-            OnPropertyChanged(nameof(SelectedServer));
-            // Смена сервера погашает незавершённую проверку конфликтов прежнего кластера.
-            _conflictCheckVersion++;
-            if (value is not null)
-                StartConnect();
-        }
-    }
-
-    // ===================== Кластеры назначения =====================
-
-    /// <summary>Кластеры выбранного сервера назначения (модели rac «cluster list»).</summary>
-    public IReadOnlyList<RacCluster> Clusters
-    {
-        get => _clusters;
+        get => _availableTargetServers;
         private set
         {
-            if (SetProperty(ref _clusters, value ?? Array.Empty<RacCluster>()))
-                OnPropertyChanged(nameof(Clusters));
+            if (SetProperty(ref _availableTargetServers, value ?? Array.Empty<ManagementServer>()))
+                OnPropertyChanged(nameof(HasAvailableServers));
+        }
+    }
+
+    /// <summary>Есть ли серверы в справочнике (иначе «Подключиться» недоступно).</summary>
+    public bool HasAvailableServers => AvailableSourceServers.Count > 0;
+
+    // ===================== Панель «Источник» =====================
+
+    /// <summary>
+    /// Выбранный сервер-источник. При установке значения запускается загрузка его
+    /// кластеров («cluster list»); состояние прежнего подключения сбрасывается.
+    /// </summary>
+    public ManagementServer? SelectedSourceServer
+    {
+        get => _selectedSourceServer;
+        set
+        {
+            if (ReferenceEquals(_selectedSourceServer, value))
+                return;
+            _selectedSourceServer = value;
+            OnPropertyChanged(nameof(SelectedSourceServer));
+            OnPropertyChanged(nameof(ServersOverlap));
+            OnPropertyChanged(nameof(CanMigrate));
+            OnPropertyChanged(nameof(MigrateHint));
+            if (value is not null)
+                StartConnectSource();
+        }
+    }
+
+    /// <summary>Кластеры выбранного сервера-источника (модели rac «cluster list»).</summary>
+    public IReadOnlyList<RacCluster> SourceClusters
+    {
+        get => _sourceClusters;
+        private set
+        {
+            if (SetProperty(ref _sourceClusters, value ?? Array.Empty<RacCluster>()))
+                OnPropertyChanged(nameof(SourceClusters));
         }
     }
 
     /// <summary>
-    /// Выбранный кластер назначения. Единственный кластер сервера выбирается
-    /// автоматически после загрузки (как в окне импорта, issue #25). При выборе
-    /// кластера выполняется фоновая проверка конфликтов: какие из переносимых баз
-    /// уже существуют в приёмнике (см. <see cref="ConflictingBaseNames"/>).
+    /// Выбранный кластер-источник. Единственный кластер сервера выбирается автоматически
+    /// после загрузки. При выборе кластера запускается загрузка его баз («Получить базы»).
     /// </summary>
-    public Guid? SelectedClusterId
+    public Guid? SelectedSourceClusterId
     {
-        get => _selectedClusterId;
+        get => _selectedSourceClusterId;
         set
         {
-            if (SetProperty(ref _selectedClusterId, value))
+            if (SetProperty(ref _selectedSourceClusterId, value))
             {
-                _conflictCheckVersion++;
-                _ = RefreshConflictsAsync(_conflictCheckVersion);
+                OnPropertyChanged(nameof(CanMigrate));
+                OnPropertyChanged(nameof(MigrateHint));
+                if (value is Guid id)
+                    StartLoadSourceBases(id);
             }
         }
     }
 
-    // ===================== Конфликты в кластере-приёмнике (issue #41, 1.0.0.52) =====================
+    /// <summary>Строки чеклиста баз кластера-источника.</summary>
+    public ObservableCollection<ClusterMigrationRow> SourceRows { get; } = new();
 
-    /// <summary>
-    /// Имена переносимых баз, которые УЖЕ существуют в выбранном кластере назначения
-    /// (проверка «infobase summary list» приёмника). Пустой список — конфликтов нет.
-    /// Проверка не блокирует перенос: окно при нажатии «Перенести» предупреждает
-    /// пользователя и спрашивает подтверждение (повторный перенос после сбоя —
-    /// типичный легальный сценарий).
-    /// </summary>
-    public IReadOnlyList<string> ConflictingBaseNames => _conflictingBaseNames;
-
-    /// <summary>Есть ли конфликты имён между переносимыми базами и приёмником.</summary>
-    public bool HasConflicts => _conflictingBaseNames.Count > 0;
-
-    /// <summary>Текст предупреждения о конфликтах (для статусной строки окна).</summary>
-    public string ConflictsText => HasConflicts
-        ? string.Format(
-            LocalizationManager.T("ClusterMigration.ConflictsWarningFormat"),
-            string.Join(", ", _conflictingBaseNames))
-        : string.Empty;
-
-    /// <summary>
-    /// Перечитывает список баз кластера назначения и вычисляет пересечение имён
-    /// с переносимыми базами. Результат применяется, только если версия запроса
-    /// актуальна (сервер/кластер не сменились). Ошибка проверки НЕ блокирует
-    /// перенос — конфликты просто не показываются.
-    /// </summary>
-    private async Task RefreshConflictsAsync(long version)
+    /// <summary>Статус панели «Источник» («Загружено баз: N», ошибки подключения).</summary>
+    public string SourceStatusText
     {
-        if (SelectedServer is not { } server || SelectedClusterId is not Guid clusterId)
-        {
-            SetConflicts(Array.Empty<string>(), version);
-            return;
-        }
+        get => _sourceStatusText;
+        private set => SetProperty(ref _sourceStatusText, value);
+    }
 
-        try
+    /// <summary>Ошибка панели «Источник» (текст rac/stderr как есть).</summary>
+    public string SourceError
+    {
+        get => _sourceError;
+        private set => SetProperty(ref _sourceError, value);
+    }
+
+    // ===================== Панель «Приёмник» =====================
+
+    /// <summary>
+    /// Выбранный сервер-приёмник. При установке значения запускается загрузка его
+    /// кластеров («cluster list»); состояние прежнего подключения сбрасывается.
+    /// </summary>
+    public ManagementServer? SelectedTargetServer
+    {
+        get => _selectedTargetServer;
+        set
         {
-            var bases = await _rac.GetInfobasesAsync(BuildTargetParams(server), clusterId).ConfigureAwait(false);
-            if (version != _conflictCheckVersion)
-                return; // сервер/кластер уже сменились — результат устарел
-            var targetNames = new HashSet<string>(
-                bases.Select(b => b.Name), StringComparer.OrdinalIgnoreCase);
-            var conflicts = _rows
-                .Where(r => targetNames.Contains(r.Name))
-                .Select(r => r.Name)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            SetConflicts(conflicts, version);
-        }
-        catch
-        {
-            if (version == _conflictCheckVersion)
-                SetConflicts(Array.Empty<string>(), version);
+            if (ReferenceEquals(_selectedTargetServer, value))
+                return;
+            _selectedTargetServer = value;
+            OnPropertyChanged(nameof(SelectedTargetServer));
+            OnPropertyChanged(nameof(ServersOverlap));
+            OnPropertyChanged(nameof(CanMigrate));
+            OnPropertyChanged(nameof(MigrateHint));
+            if (value is not null)
+                StartConnectTarget();
         }
     }
 
-    private void SetConflicts(IReadOnlyList<string> names, long version)
+    /// <summary>Кластеры выбранного сервера-приёмника (модели rac «cluster list»).</summary>
+    public IReadOnlyList<RacCluster> TargetClusters
     {
-        if (version != _conflictCheckVersion)
-            return;
-        _conflictingBaseNames = names ?? Array.Empty<string>();
-        OnPropertyChanged(nameof(ConflictingBaseNames));
-        OnPropertyChanged(nameof(HasConflicts));
-        OnPropertyChanged(nameof(ConflictsText));
+        get => _targetClusters;
+        private set
+        {
+            if (SetProperty(ref _targetClusters, value ?? Array.Empty<RacCluster>()))
+                OnPropertyChanged(nameof(TargetClusters));
+        }
     }
 
-    // ===================== Учётные данные СУБД =====================
+    /// <summary>
+    /// Выбранный кластер-приёмник. Единственный кластер сервера выбирается автоматически
+    /// после загрузки. При выборе кластера запускается «Получить статусы» (если базы
+    /// источника уже загружены).
+    /// </summary>
+    public Guid? SelectedTargetClusterId
+    {
+        get => _selectedTargetClusterId;
+        set
+        {
+            if (SetProperty(ref _selectedTargetClusterId, value))
+            {
+                OnPropertyChanged(nameof(CanMigrate));
+                OnPropertyChanged(nameof(MigrateHint));
+                if (value is Guid id)
+                    StartGetTargetStatuses(id);
+            }
+        }
+    }
+
+    /// <summary>Статус панели «Приёмник» («Кластеров: N», ошибки подключения).</summary>
+    public string TargetStatusText
+    {
+        get => _targetStatusText;
+        private set => SetProperty(ref _targetStatusText, value);
+    }
+
+    /// <summary>Ошибка панели «Приёмник» (текст rac/stderr как есть).</summary>
+    public string TargetError
+    {
+        get => _targetError;
+        private set => SetProperty(ref _targetError, value);
+    }
+
+    /// <summary>
+    /// Сервера источника и приёмника не должны пересекаться (issue #41): true — выбран
+    /// один и тот же сервер (по Id) в обеих панелях. Из списков сервера НЕ удаляются —
+    /// пользователь может вернуть прежний выбор; «Мигрировать» при пересечении недоступна.
+    /// </summary>
+    public bool ServersOverlap =>
+        SelectedSourceServer is { } source
+        && SelectedTargetServer is { } target
+        && string.Equals(source.Id?.Trim(), target.Id?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    // ===================== Учётные данные СУБД и опции =====================
 
     /// <summary>Пользователь СУБД для регистрации баз в новом кластере (rac «--db-user»).</summary>
     public string DbUser
@@ -245,10 +293,10 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// «Не удалять в старом» (issue #41): true — база копируется в новый кластер
-    /// БЕЗ удаления из старого; false — после успешного добавления база удаляется
-    /// из старого кластера командой rac «infobase drop» БЕЗ --drop-database (файл/
-    /// БД на сервере СУБД остаётся).
+    /// «Не удалять в старом кластере (копия без удаления)» (issue #41): true — база
+    /// копируется в новый кластер БЕЗ удаления из старого; false — после успешного
+    /// добавления база удаляется из старого кластера командой rac «infobase drop»
+    /// БЕЗ --drop-database (файл/БД на сервере СУБД остаётся).
     /// </summary>
     public bool KeepInSource
     {
@@ -256,10 +304,69 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         set => SetProperty(ref _keepInSource, value);
     }
 
-    // ===================== Сводка и прогресс =====================
+    /// <summary>
+    /// «Создавать группу по имени кластера» (как в импорте): true — перенесённые базы
+    /// добавляются в новую группу с именем кластера-приёмника; false — без группы.
+    /// </summary>
+    public bool UseClusterGrouping
+    {
+        get => _useClusterGrouping;
+        set => SetProperty(ref _useClusterGrouping, value);
+    }
 
-    /// <summary>Число баз к переносу (напоминание в диалоге).</summary>
-    public int BaseCount => _rows.Count;
+    // ===================== Сводка, галочки и доступность =====================
+
+    /// <summary>Число отмеченных строк (для переноса).</summary>
+    public int CheckedCount => SourceRows.Count(r => r.IsChecked);
+
+    /// <summary>
+    /// Есть ли отмеченная строка со статусом приёмника «Есть в кластере» (issue #41):
+    /// если да — «Мигрировать» недоступна (перенос такой базы rac не выполнит).
+    /// </summary>
+    public bool HasCheckedInTarget =>
+        SourceRows.Any(r => r.IsChecked && !string.IsNullOrEmpty(r.TargetStatus));
+
+    /// <summary>
+    /// Доступность «Мигрировать» (issue #41): меняется после изменения галочек и
+    /// статусов. Кнопка недоступна, если сервера пересекаются, не выбраны сервер/кластер
+    /// источника или приёмника, не отмечено ни одной базы или у отмеченной строки
+    /// статус приёмника «Есть в кластере».
+    /// </summary>
+    public bool CanMigrate =>
+        !IsBusy
+        && !ServersOverlap
+        && SelectedSourceServer is not null
+        && SelectedSourceClusterId is not null
+        && SelectedTargetServer is not null
+        && SelectedTargetClusterId is not null
+        && CheckedCount > 0
+        && !HasCheckedInTarget;
+
+    /// <summary>
+    /// Причина недоступности «Мигрировать» (над кнопкой). Пустая строка — кнопка
+    /// доступна или идёт запрос (виден индикатор занятости).
+    /// </summary>
+    public string MigrateHint
+    {
+        get
+        {
+            if (IsBusy)
+                return string.Empty;
+            if (ServersOverlap)
+                return LocalizationManager.T("ClusterMigration.Hint.SameServer");
+            if (SelectedSourceServer is null || SelectedSourceClusterId is null)
+                return LocalizationManager.T("ClusterMigration.Hint.NoSource");
+            if (SelectedTargetServer is null || SelectedTargetClusterId is null)
+                return LocalizationManager.T("ClusterMigration.Hint.NoTarget");
+            if (CheckedCount == 0)
+                return LocalizationManager.T("ClusterMigration.Hint.NothingChecked");
+            if (HasCheckedInTarget)
+                return LocalizationManager.T("ClusterMigration.Hint.InTarget");
+            return string.Empty;
+        }
+    }
+
+    // ===================== Прогресс и результат =====================
 
     /// <summary>Текущая обрабатываемая база («какая база обрабатывается», issue #41).</summary>
     public string CurrentBaseName
@@ -297,8 +404,6 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             : string.Format(
                 LocalizationManager.T("ClusterMigration.Progress.Format"), ProgressIndex, ProgressTotal, CurrentBaseName);
 
-    // ===================== Результат =====================
-
     /// <summary>Флаг успешного завершения переноса (окно спрашивает «заменить строку подключения?»).</summary>
     public bool MigrationCompleted
     {
@@ -316,7 +421,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     /// <summary>
     /// Выставляет ответ пользователя на вопрос «Хотите заменить строку подключения?»
     /// (окно показывает его после <see cref="MigrationCompleted"/>): true — MainViewModel
-    /// заменит сервер/порт в отмеченных базах списка приложения.
+    /// заменит сервер/порт в базах списка приложения.
     /// </summary>
     public void SetReplaceConnectionStrings(bool value)
     {
@@ -326,13 +431,33 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
 
     // ===================== Команды =====================
 
-    /// <summary>Загрузить кластеры выбранного сервера назначения.</summary>
-    public ICommand ConnectCommand =>
-        _connectCommand ??= new RelayCommand(() => _ = ConnectAsync());
+    /// <summary>«Подключиться» (источник): загрузить кластеры выбранного сервера-источника.</summary>
+    public ICommand ConnectSourceCommand =>
+        _connectSourceCommand ??= new RelayCommand(() => _ = ConnectSourceAsync());
 
-    /// <summary>«Перенести»: добавить базы в новый кластер и удалить из старого (по настройке).</summary>
+    /// <summary>«Получить базы» (источник): загрузить базы выбранного кластера-источника.</summary>
+    public ICommand LoadSourceBasesCommand =>
+        _loadSourceBasesCommand ??= new RelayCommand(LoadSourceBases);
+
+    /// <summary>«Подключиться» (приёмник): загрузить кластеры выбранного сервера-приёмника.</summary>
+    public ICommand ConnectTargetCommand =>
+        _connectTargetCommand ??= new RelayCommand(() => _ = ConnectTargetAsync());
+
+    /// <summary>«Получить статусы» (приёмник): проставить статусы приёмника по совпадению имён.</summary>
+    public ICommand GetTargetStatusesCommand =>
+        _getTargetStatusesCommand ??= new RelayCommand(() => _ = GetTargetStatusesAsync());
+
+    /// <summary>«Мигрировать»: добавить базы в новый кластер и удалить из старого (по настройке).</summary>
     public ICommand MigrateCommand =>
         _migrateCommand ??= new RelayCommand(() => _ = MigrateAsync());
+
+    /// <summary>«Выделить все»: отметить все строки чеклиста.</summary>
+    public ICommand SelectAllCommand =>
+        _selectAllCommand ??= new RelayCommand(SelectAll);
+
+    /// <summary>«Снять все»: снять отметки со всех строк чеклиста.</summary>
+    public ICommand SelectNoneCommand =>
+        _selectNoneCommand ??= new RelayCommand(SelectNone);
 
     // ===================== Статус =====================
 
@@ -353,15 +478,15 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     /// <summary>Выполняется ли сейчас запрос (флаг занятости исключает наложение).</summary>
     public bool IsBusy => _busy == 1;
 
-    // ===================== Действия =====================
+    // ===================== Действия: источник =====================
 
     /// <summary>
-    /// Загружает кластеры выбранного сервера назначения («cluster list», фазовый паттерн
+    /// Загружает кластеры выбранного сервера-источника («cluster list», фазовый паттерн
     /// окна импорта, issue #25): результат применяется в UI-потоке единым блоком,
     /// автовыбор единственного кластера выполняется там же. Ошибки не роняют окно —
-    /// пишутся в <see cref="ErrorMessage"/>/<see cref="StatusText"/>.
+    /// пишутся в <see cref="SourceError"/>/<see cref="SourceStatusText"/>.
     /// </summary>
-    public async Task ConnectAsync()
+    public async Task ConnectSourceAsync()
     {
         if (!TryEnterBusy())
             return;
@@ -369,29 +494,29 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         IReadOnlyList<RacCluster> clusters;
         try
         {
-            ErrorMessage = string.Empty;
-            StatusText = LocalizationManager.T("ClusterMigration.Status.LoadingClusters");
-            if (SelectedServer is not { } server)
+            SourceError = string.Empty;
+            SourceStatusText = LocalizationManager.T("ClusterMigration.Status.LoadingClusters");
+            if (SelectedSourceServer is not { } server)
                 return;
 
-            clusters = await _rac.GetClustersAsync(BuildTargetParams(server)).ConfigureAwait(false);
+            clusters = await _rac.GetClustersAsync(BuildParams(server)).ConfigureAwait(false);
         }
         catch (RacClientException ex)
         {
-            ErrorMessage = ex.Message;
-            StatusText = LocalizationManager.T("ClusterMigration.Status.ConnectFailed");
+            SourceError = ex.Message;
+            SourceStatusText = LocalizationManager.T("ClusterMigration.Status.ConnectFailed");
             return;
         }
         catch (OperationCanceledException)
         {
-            StatusText = LocalizationManager.T("ClusterMigration.Status.Cancelled");
+            SourceStatusText = LocalizationManager.T("ClusterMigration.Status.Cancelled");
             return;
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
-            StatusText = LocalizationManager.T("ClusterMigration.Status.ConnectFailed");
-            _logger?.Error("Ошибка загрузки кластеров сервера назначения (миграция баз)", ex);
+            SourceError = ex.Message;
+            SourceStatusText = LocalizationManager.T("ClusterMigration.Status.ConnectFailed");
+            _logger?.Error("Ошибка загрузки кластеров сервера-источника (миграция баз)", ex);
             return;
         }
         finally
@@ -399,48 +524,274 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             ExitBusy();
         }
 
-        if (_dispatchToUi is null)
-            ApplyClusters(clusters);
-        else
+        Dispatch(() => ApplySourceClusters(clusters));
+    }
+
+    /// <summary>Применяет список кластеров источника в UI-потоке единым блоком (автовыбор единственного).</summary>
+    private void ApplySourceClusters(IReadOnlyList<RacCluster> clusters)
+    {
+        SourceClusters = clusters;
+        SelectedSourceClusterId = null;
+        SourceStatusText = clusters.Count == 0
+            ? LocalizationManager.T("ClusterMigration.Status.NoClusters")
+            : string.Format(LocalizationManager.T("ClusterMigration.Status.LoadedClustersFormat"), clusters.Count);
+        if (clusters.Count == 1)
+            SelectedSourceClusterId = clusters[0].Id;
+    }
+
+    /// <summary>«Получить базы»: перечитать базы выбранного кластера-источника (без подключения — no-op).</summary>
+    public void LoadSourceBases()
+    {
+        if (SelectedSourceClusterId is Guid id)
+            StartLoadSourceBases(id);
+    }
+
+    /// <summary>
+    /// Загружает информационные базы кластера-источника (rac «infobase summary list»),
+    /// строит чеклист <see cref="SourceRows"/> и ставит ВСЕ галочки (issue #41).
+    /// Статус источника («уже есть в списке») вычисляется по <see cref="_existingInfobases"/>.
+    /// </summary>
+    public async Task LoadSourceBasesAsync(Guid clusterId)
+    {
+        if (!TryEnterBusy())
+            return;
+
+        try
         {
-            try
+            SourceError = string.Empty;
+            SourceStatusText = LocalizationManager.T("ClusterMigration.Status.LoadingBases");
+            if (SelectedSourceServer is not { } server)
+                return;
+
+            var cluster = SourceClusters.FirstOrDefault(c => c.Id == clusterId);
+            if (cluster is null)
+                return;
+
+            var summaries = await _rac.GetInfobasesAsync(BuildParams(server), clusterId).ConfigureAwait(false);
+            if (SelectedSourceClusterId != clusterId)
+                return; // кластер сменился — результат устарел
+
+            Dispatch(() => ApplySourceBases(summaries, cluster));
+        }
+        catch (RacClientException ex)
+        {
+            SourceError = ex.Message;
+            SourceStatusText = LocalizationManager.T("ClusterMigration.Status.LoadFailed");
+        }
+        catch (OperationCanceledException)
+        {
+            SourceStatusText = LocalizationManager.T("ClusterMigration.Status.Cancelled");
+        }
+        catch (Exception ex)
+        {
+            SourceError = ex.Message;
+            SourceStatusText = LocalizationManager.T("ClusterMigration.Status.LoadFailed");
+            _logger?.Error("Ошибка загрузки баз кластера-источника (миграция баз)", ex);
+        }
+        finally
+        {
+            ExitBusy();
+        }
+    }
+
+    /// <summary>Применяет список баз источника в UI-потоке: чеклист, ВСЕ галочки, статус источника.</summary>
+    private void ApplySourceBases(IReadOnlyList<RacInfobaseSummary> summaries, RacCluster cluster)
+    {
+        var rows = summaries
+            .Where(s => s is not null)
+            .Select(s => BuildRow(s, cluster))
+            .ToList();
+
+        SourceRows.Clear();
+        foreach (var row in rows)
+            SourceRows.Add(row);
+
+        // После получения баз источника — ставим ВСЕ галочки (issue #41).
+        foreach (var row in SourceRows)
+            row.IsChecked = true;
+
+        SourceStatusText = rows.Count == 0
+            ? LocalizationManager.T("ClusterMigration.Error.NoBases")
+            : string.Format(LocalizationManager.T("ClusterMigration.Status.LoadedBasesFormat"), rows.Count);
+        OnPropertyChanged(nameof(CheckedCount));
+        OnPropertyChanged(nameof(CanMigrate));
+        OnPropertyChanged(nameof(MigrateHint));
+    }
+
+    // ===================== Действия: приёмник =====================
+
+    /// <summary>
+    /// Загружает кластеры выбранного сервера-приёмника («cluster list»). Ошибки не роняют
+    /// окно — пишутся в <see cref="TargetError"/>/<see cref="TargetStatusText"/>.
+    /// </summary>
+    public async Task ConnectTargetAsync()
+    {
+        if (!TryEnterBusy())
+            return;
+
+        IReadOnlyList<RacCluster> clusters;
+        try
+        {
+            TargetError = string.Empty;
+            TargetStatusText = LocalizationManager.T("ClusterMigration.Status.LoadingClusters");
+            if (SelectedTargetServer is not { } server)
+                return;
+
+            clusters = await _rac.GetClustersAsync(BuildParams(server)).ConfigureAwait(false);
+        }
+        catch (RacClientException ex)
+        {
+            TargetError = ex.Message;
+            TargetStatusText = LocalizationManager.T("ClusterMigration.Status.ConnectFailed");
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            TargetStatusText = LocalizationManager.T("ClusterMigration.Status.Cancelled");
+            return;
+        }
+        catch (Exception ex)
+        {
+            TargetError = ex.Message;
+            TargetStatusText = LocalizationManager.T("ClusterMigration.Status.ConnectFailed");
+            _logger?.Error("Ошибка загрузки кластеров сервера-приёмника (миграция баз)", ex);
+            return;
+        }
+        finally
+        {
+            ExitBusy();
+        }
+
+        Dispatch(() => ApplyTargetClusters(clusters));
+    }
+
+    /// <summary>Применяет список кластеров приёмника в UI-потоке единым блоком (автовыбор единственного).</summary>
+    private void ApplyTargetClusters(IReadOnlyList<RacCluster> clusters)
+    {
+        TargetClusters = clusters;
+        SelectedTargetClusterId = null;
+        TargetStatusText = clusters.Count == 0
+            ? LocalizationManager.T("ClusterMigration.Status.NoClusters")
+            : string.Format(LocalizationManager.T("ClusterMigration.Status.LoadedClustersFormat"), clusters.Count);
+        if (clusters.Count == 1)
+            SelectedTargetClusterId = clusters[0].Id;
+    }
+
+    /// <summary>
+    /// «Получить статусы» (приёмник, issue #41): если базы источника загружены и выбран
+    /// кластер-приёмник — загружает список баз приёмника и проставляет статусы
+    /// «Есть в кластере»/пусто по совпадению имени. После получения статусов галочки
+    /// остаются только там, где базы в приёмнике НЕТ.
+    /// </summary>
+    public async Task GetTargetStatusesAsync()
+    {
+        if (!TryEnterBusy())
+            return;
+
+        try
+        {
+            TargetError = string.Empty;
+            TargetStatusText = LocalizationManager.T("ClusterMigration.Status.LoadingStatuses");
+            if (SelectedTargetServer is not { } server)
+                return;
+            if (SelectedTargetClusterId is not Guid clusterId)
+                return;
+            if (SourceRows.Count == 0)
             {
-                _dispatchToUi(() => ApplyClusters(clusters));
+                TargetStatusText = LocalizationManager.T("ClusterMigration.Error.NoSourceBases");
+                return;
             }
-            catch
-            {
-                ApplyClusters(clusters);
-            }
+
+            var bases = await _rac.GetInfobasesAsync(BuildParams(server), clusterId).ConfigureAwait(false);
+            if (SelectedTargetClusterId != clusterId)
+                return; // кластер сменился — результат устарел
+
+            Dispatch(() => ApplyTargetStatuses(bases));
+        }
+        catch (RacClientException ex)
+        {
+            TargetError = ex.Message;
+            TargetStatusText = LocalizationManager.T("ClusterMigration.Status.LoadFailed");
+        }
+        catch (OperationCanceledException)
+        {
+            TargetStatusText = LocalizationManager.T("ClusterMigration.Status.Cancelled");
+        }
+        catch (Exception ex)
+        {
+            TargetError = ex.Message;
+            TargetStatusText = LocalizationManager.T("ClusterMigration.Status.LoadFailed");
+            _logger?.Error("Ошибка получения статусов приёмника (миграция баз)", ex);
+        }
+        finally
+        {
+            ExitBusy();
         }
     }
 
     /// <summary>
-    /// Применяет список кластеров назначения в UI-потоке единым блоком: наполнение
-    /// <see cref="Clusters"/>, сброс выбора кластера и автовыбор единственного — так же,
-    /// как <see cref="ClusterImportViewModel.CompleteConnect"/> (issue #25).
+    /// Применяет статусы приёмника в UI-потоке: «Есть в кластере»/пусто по совпадению
+    /// имени; галочки остаются только там, где базы в приёмнике НЕТ (issue #41).
     /// </summary>
-    private void ApplyClusters(IReadOnlyList<RacCluster> clusters)
+    private void ApplyTargetStatuses(IReadOnlyList<RacInfobaseSummary> bases)
     {
-        Clusters = clusters;
-        SelectedClusterId = null;
-        StatusText = clusters.Count == 0
-            ? LocalizationManager.T("ClusterMigration.Status.NoClusters")
-            : string.Format(LocalizationManager.T("ClusterMigration.Status.LoadedClustersFormat"), clusters.Count);
-        if (clusters.Count == 1)
-            SelectedClusterId = clusters[0].Id;
+        var targetNames = new HashSet<string>(
+            bases.Select(b => b.Name), StringComparer.OrdinalIgnoreCase);
+        var inTargetText = LocalizationManager.T("ClusterMigration.Status.InTarget");
+
+        foreach (var row in SourceRows)
+        {
+            row.TargetStatus = targetNames.Contains(row.Name) ? inTargetText : string.Empty;
+            if (!string.IsNullOrEmpty(row.TargetStatus))
+                row.IsChecked = false; // база уже есть в приёмнике — переносить нечего
+        }
+
+        TargetStatusText = string.Format(
+            LocalizationManager.T("ClusterMigration.Status.StatusesAppliedFormat"),
+            SourceRows.Count(r => !string.IsNullOrEmpty(r.TargetStatus)));
+        OnPropertyChanged(nameof(CheckedCount));
+        OnPropertyChanged(nameof(HasCheckedInTarget));
+        OnPropertyChanged(nameof(CanMigrate));
+        OnPropertyChanged(nameof(MigrateHint));
     }
 
+    // ===================== Галочки =====================
+
+    /// <summary>«Выделить все»: отметить все строки чеклиста.</summary>
+    public void SelectAll()
+    {
+        foreach (var row in SourceRows)
+            row.IsChecked = true;
+        OnPropertyChanged(nameof(CheckedCount));
+        OnPropertyChanged(nameof(HasCheckedInTarget));
+        OnPropertyChanged(nameof(CanMigrate));
+        OnPropertyChanged(nameof(MigrateHint));
+    }
+
+    /// <summary>«Снять все»: снять отметки со всех строк чеклиста.</summary>
+    public void SelectNone()
+    {
+        foreach (var row in SourceRows)
+            row.IsChecked = false;
+        OnPropertyChanged(nameof(CheckedCount));
+        OnPropertyChanged(nameof(HasCheckedInTarget));
+        OnPropertyChanged(nameof(CanMigrate));
+        OnPropertyChanged(nameof(MigrateHint));
+    }
+
+    // ===================== Миграция =====================
+
     /// <summary>
-    /// «Перенести» (issue #41): для КАЖДОЙ отмеченной базы — добавить базу с теми же
+    /// «Мигрировать» (issue #41): для КАЖДОЙ отмеченной базы — добавить базу с теми же
     /// данными в новый кластер (rac «infobase create», данные источника + учётные данные
     /// СУБД из диалога), затем, если <see cref="KeepInSource"/> НЕ отмечен — удалить базу
     /// из старого кластера БЕЗ удаления БД на сервере СУБД (rac «infobase drop» без
-    /// --drop-database). Фоновый прогресс: <see cref="ProgressIndex"/> из
+    /// --drop-database). Перенесённые базы добавляются в новую группу (имя кластера —
+    /// приёмник, как в импорте). Фоновый прогресс: <see cref="ProgressIndex"/> из
     /// <see cref="ProgressTotal"/>, <see cref="CurrentBaseName"/>. При успехе формирует
-    /// <see cref="Result"/> (новый сервер/порт — из «cluster info» кластера назначения)
+    /// <see cref="Result"/> (новый сервер/порт — из «cluster info» кластера приёмника)
     /// и устанавливает <see cref="MigrationCompleted"/>. Первая ошибка останавливает
-    /// перенос и показывается в <see cref="ErrorMessage"/> (настройки настоятельно
-    /// рекомендуют переносить базы по одной — частичный перенос корректен).
+    /// перенос и показывается в <see cref="ErrorMessage"/>.
     /// </summary>
     public async Task MigrateAsync()
     {
@@ -451,35 +802,61 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         {
             ErrorMessage = string.Empty;
 
-            if (_rows.Count == 0)
+            if (ServersOverlap)
             {
-                ErrorMessage = LocalizationManager.T("ClusterMigration.Error.NoBases");
+                ErrorMessage = LocalizationManager.T("ClusterMigration.Error.SameServer");
                 return;
             }
 
-            if (SelectedServer is not { } targetServer)
+            if (SelectedSourceServer is not { } sourceServer)
+            {
+                ErrorMessage = LocalizationManager.T("ClusterMigration.Error.NoSourceServer");
+                return;
+            }
+
+            if (SelectedSourceClusterId is not Guid sourceClusterId)
+            {
+                ErrorMessage = LocalizationManager.T("ClusterMigration.Error.NoSourceCluster");
+                return;
+            }
+
+            if (SelectedTargetServer is not { } targetServer)
             {
                 ErrorMessage = LocalizationManager.T("ClusterMigration.Error.NoTargetServer");
                 return;
             }
 
-            if (SelectedClusterId is not Guid targetClusterId)
+            if (SelectedTargetClusterId is not Guid targetClusterId)
             {
                 ErrorMessage = LocalizationManager.T("ClusterMigration.Error.NoTargetCluster");
                 return;
             }
 
-            var targetCluster = Clusters.FirstOrDefault(c => c.Id == targetClusterId);
+            var targetCluster = TargetClusters.FirstOrDefault(c => c.Id == targetClusterId);
             if (targetCluster is null)
             {
                 ErrorMessage = LocalizationManager.T("ClusterMigration.Error.NoTargetCluster");
                 return;
             }
 
-            var targetParams = BuildTargetParams(targetServer);
+            var rows = SourceRows.Where(r => r.IsChecked && r.Source is not null).ToList();
+            if (rows.Count == 0)
+            {
+                ErrorMessage = LocalizationManager.T("ClusterMigration.Error.NoBases");
+                return;
+            }
 
-            // Хост строки подключения после миграции: «cluster info» кластера назначения
-            // (корректен для удалённого RAS) → host-часть адреса сервера назначения.
+            if (rows.Any(r => !string.IsNullOrEmpty(r.TargetStatus)))
+            {
+                ErrorMessage = LocalizationManager.T("ClusterMigration.Error.InTarget");
+                return;
+            }
+
+            var sourceParams = BuildParams(sourceServer);
+            var targetParams = BuildParams(targetServer);
+
+            // Хост строки подключения после миграции: «cluster info» кластера приёмника
+            // (корректен для удалённого RAS) → host-часть адреса сервера приёмника.
             RacClusterInfo? info = null;
             try
             {
@@ -496,13 +873,15 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
 
             var newServer = ClusterMigrationService.ResolveClusterHost(targetServer.Address, info?.HostName);
             var newPort = targetCluster.Port > 0 ? targetCluster.Port : IRacClient.DefaultPort;
+            var groupName = UseClusterGrouping ? (targetCluster.Name ?? string.Empty).Trim() : string.Empty;
 
-            ProgressTotal = _rows.Count;
-            var migrated = new List<string>(_rows.Count);
+            ProgressTotal = rows.Count;
+            var migrated = new List<string>(rows.Count);
+            var addedInfobases = new List<Infobase>(rows.Count);
 
-            for (var i = 0; i < _rows.Count; i++)
+            for (var i = 0; i < rows.Count; i++)
             {
-                var row = _rows[i];
+                var row = rows[i];
                 ProgressIndex = i + 1;
                 CurrentBaseName = row.Name;
 
@@ -521,7 +900,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                 if (!KeepInSource)
                 {
                     var dropped = await _rac.DropInfobaseAsync(
-                        _sourceParams, _sourceClusterId, row.Source!.InfobaseId, dropDatabase: false).ConfigureAwait(false);
+                        sourceParams, sourceClusterId, row.Source!.InfobaseId, dropDatabase: false).ConfigureAwait(false);
                     if (!dropped)
                     {
                         ErrorMessage = string.Format(
@@ -530,10 +909,13 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                     }
                 }
 
+                // 3) База добавляется в новую группу (имя кластера — приёмник), как в импорте.
+                addedInfobases.Add(RacInfobaseMapper.ToInfobase(
+                    row.Source!, targetServer.Address, newPort, info?.HostName, groupName));
                 migrated.Add(row.Name);
             }
 
-            Result = new ClusterMigrationResult(migrated, newServer, newPort, ReplaceConnectionStrings: false);
+            Result = new ClusterMigrationResult(migrated, addedInfobases, newServer, newPort, ReplaceConnectionStrings: false);
             StatusText = string.Format(LocalizationManager.T("ClusterMigration.SuccessFormat"), migrated.Count);
             MigrationCompleted = true;
         }
@@ -555,12 +937,53 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
 
     // ===================== Внутреннее =====================
 
-    /// <summary>Запуск загрузки кластеров без ожидания (fire-and-forget, как в окне импорта).</summary>
-    private void StartConnect() => _ = ConnectAsync();
+    /// <summary>Строит строку чеклиста из записи базы источника (статус источника — «уже есть в списке»).</summary>
+    private ClusterMigrationRow BuildRow(RacInfobaseSummary source, RacCluster cluster)
+    {
+        var connection = RacInfobaseMapper.ToInfobase(
+            source, SelectedSourceServer?.Address ?? string.Empty, cluster.Port, null, string.Empty);
+        var duplicate = RacInfobaseMapper.IsDuplicate(_existingInfobases, connection);
 
-    /// <summary>Параметры подключения к серверу назначения из записи справочника
+        var row = new ClusterMigrationRow(
+            source.Name ?? string.Empty,
+            BuildSubtitle(source),
+            cluster.Name ?? string.Empty,
+            connection.Connection?.ToConnectionString() ?? string.Empty,
+            source);
+        row.SourceStatus = duplicate ? LocalizationManager.T("ClusterImport.AlreadyExists") : string.Empty;
+        return row;
+    }
+
+    /// <summary>Подпись строки: описание / тип СУБД и сервер / имя БД в СУБД (как в импорте).</summary>
+    private static string BuildSubtitle(RacInfobaseSummary source)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(source.Descr))
+            parts.Add(source.Descr!);
+        if (!string.IsNullOrWhiteSpace(source.Dbms))
+            parts.Add(source.Dbms!);
+        if (!string.IsNullOrWhiteSpace(source.DbServer))
+            parts.Add(source.DbServer!);
+        if (!string.IsNullOrWhiteSpace(source.DbName))
+            parts.Add(source.DbName!);
+        return string.Join(" • ", parts);
+    }
+
+    /// <summary>Запуск загрузки кластеров источника без ожидания (fire-and-forget).</summary>
+    private void StartConnectSource() => _ = ConnectSourceAsync();
+
+    /// <summary>Запуск загрузки баз источника без ожидания (fire-and-forget).</summary>
+    private void StartLoadSourceBases(Guid clusterId) => _ = LoadSourceBasesAsync(clusterId);
+
+    /// <summary>Запуск загрузки кластеров приёмника без ожидания (fire-and-forget).</summary>
+    private void StartConnectTarget() => _ = ConnectTargetAsync();
+
+    /// <summary>Запуск «Получить статусы» без ожидания (fire-and-forget).</summary>
+    private void StartGetTargetStatuses(Guid clusterId) => _ = GetTargetStatusesAsync();
+
+    /// <summary>Параметры подключения к серверу из записи справочника
     /// (адрес «host[:port]» с приоритетом порта из адреса, issue #324).</summary>
-    private static RacConnectionParams BuildTargetParams(ManagementServer server)
+    private static RacConnectionParams BuildParams(ManagementServer server)
     {
         var (host, port) = RacConnectionAddress.Split(server.Address, server.Port);
         return new RacConnectionParams
@@ -570,6 +993,24 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             User = server.User?.Trim() ?? string.Empty,
             Password = server.Password ?? string.Empty
         };
+    }
+
+    /// <summary>Доставляет действие в UI-поток (или выполняет сразу в тестах).</summary>
+    private void Dispatch(Action action)
+    {
+        if (_dispatchToUi is null)
+        {
+            action();
+            return;
+        }
+        try
+        {
+            _dispatchToUi(action);
+        }
+        catch
+        {
+            action();
+        }
     }
 
     private bool TryEnterBusy()
@@ -592,8 +1033,15 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         if (_dispatchToUi is null)
         {
             OnPropertyChanged(nameof(IsBusy));
+            OnPropertyChanged(nameof(CanMigrate));
+            OnPropertyChanged(nameof(MigrateHint));
             return;
         }
-        _dispatchToUi(() => OnPropertyChanged(nameof(IsBusy)));
+        _dispatchToUi(() =>
+        {
+            OnPropertyChanged(nameof(IsBusy));
+            OnPropertyChanged(nameof(CanMigrate));
+            OnPropertyChanged(nameof(MigrateHint));
+        });
     }
 }

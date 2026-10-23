@@ -33,6 +33,12 @@ namespace Workspace1C
         /// </summary>
         private readonly Action<ManagementServer?, Guid?>? _openClusterImport;
 
+        /// <summary>
+        /// Открытие «Миграции между кластерами 1С» (issue #41): делегат MainViewModel —
+        /// окно монитора к репозиторию напрямую не обращается.
+        /// </summary>
+        private readonly Action<ManagementServer?, Guid?>? _openClusterMigration;
+
         /// <summary>Фоновое обновление кэша статусов служб (5 с; issue #3, часть 2).</summary>
         private System.Threading.Timer? _servicesStatusTimer;
 
@@ -43,10 +49,18 @@ namespace Workspace1C
         /// нажатия «Импорт» (issue #27; кластер — issue #25); null — кнопка «Импорт»
         /// под списком баз скрыта/не активна.
         /// </param>
-        public ServerMonitorWindow(Action<ManagementServer?, Guid?>? openClusterImport = null)
+        /// <param name="openClusterMigration">
+        /// Открытие окна миграции с сервером и выбранным кластером, текущими на момент
+        /// нажатия «Миграция» (issue #41); null — кнопка «Миграция» под списком баз
+        /// скрыта/не активна.
+        /// </param>
+        public ServerMonitorWindow(
+            Action<ManagementServer?, Guid?>? openClusterImport = null,
+            Action<ManagementServer?, Guid?>? openClusterMigration = null)
         {
             InitializeComponent();
             _openClusterImport = openClusterImport;
+            _openClusterMigration = openClusterMigration;
 
             var rac = AppServices.GetRequiredService<IRacClient>();
             var dialogs = AppServices.GetRequiredService<IDialogService>();
@@ -290,6 +304,27 @@ namespace Workspace1C
             }
 
             _openClusterImport?.Invoke(server, _vm.SelectedClusterId);
+        }
+
+        /// <summary>
+        /// «Миграция» (issue #41): открывает «Миграцию между кластерами 1С» с текущим
+        /// сервером — выбранный в списке, иначе подключённый, иначе первый из справочника.
+        /// При пустом справочнике — подсказка и выход. Сам перенос выполняет делегат
+        /// MainViewModel (логика добавления баз/групп — там, окно к репозиторию не ходит).
+        /// </summary>
+        private void OnMigrate_Click(object sender, RoutedEventArgs e)
+        {
+            var server = _vm.SelectedServer ?? _vm.ConnectedServer ?? _vm.Servers.FirstOrDefault();
+            if (server is null)
+            {
+                MessageBox.Show(
+                    LocalizationManager.T("ClusterImport.ServersEmpty"),
+                    LocalizationManager.T("ServerMonitor.Title"),
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            _openClusterMigration?.Invoke(server, _vm.SelectedClusterId);
         }
 
         // ===================== Справочник «Сервера управления» (issue #3) =====================

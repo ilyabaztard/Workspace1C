@@ -12,119 +12,208 @@ using Xunit;
 namespace Workspace1C.Tests;
 
 /// <summary>
-/// Тесты вью-модели диалога миграции баз между кластерами 1С (1.0.0.51, issue #41):
-/// выбор сервера/кластера назначения (сервер-источник скрыт), загрузка кластеров
-/// назначения с автовыбором единственного, перенос баз (сначала «infobase create»
-/// в новом кластере, затем «infobase drop» без --drop-database из старого при снятой
-/// галочке «Не удалять в старом»), прогресс «N из M: база», обработка ошибок create/drop
-/// и формирование результата (перенесённые базы + новый сервер/порт).
+/// Тесты вью-модели окна «Миграция между кластерами 1С» (issue #41, переработка по
+/// комментарию 7OH): двухпанельная раскладка «Источник»/«Приёмник» (сервера не
+/// пересекаются — проверка по выбору, из списков не удаляются), загрузка кластеров
+/// с автовыбором единственного, «Получить базы» (ВСЕ галочки), «Получить статусы»
+/// («Есть в кластере»/пусто по совпадению имени; галочки остаются только там, где
+/// базы нет в приёмнике), доступность «Мигрировать» по галочкам и статусам, перенос
+/// (create в приёмнике + drop из источника при снятой «Не удалять в старом»), добавление
+/// баз в новую группу (имя кластера — приёмник) и формирование результата.
 /// </summary>
 public sealed class ClusterMigrationViewModelTests
 {
     [Fact]
-    public void Ctor_ExcludesSourceServer_FromAvailableServers()
+    public void Ctor_KeepsAllServersInBothPanels()
     {
         var source = BuildServer("src", "srv-old");
         var target = BuildServer("tgt", "srv-new");
 
         var vm = new ClusterMigrationViewModel(
-            new FakeRacClient(), BuildParams(), ClusterId,
-            BuildRows("База1"), new ManagementServer[] { source, target }, source);
+            new FakeRacClient(), Array.Empty<Infobase>(),
+            new ManagementServer[] { source, target });
 
-        Assert.Single(vm.AvailableServers);
-        Assert.Same(target, vm.AvailableServers[0]);
+        // Сервера НЕ удаляются из списков (issue #41): оба сервера в обеих панелях.
+        Assert.Equal(2, vm.AvailableSourceServers.Count);
+        Assert.Equal(2, vm.AvailableTargetServers.Count);
         Assert.True(vm.HasAvailableServers);
-        Assert.Equal(1, vm.BaseCount);
         Assert.False(vm.IsBusy);
         Assert.False(vm.MigrationCompleted);
         Assert.Null(vm.Result);
+        Assert.False(vm.ServersOverlap);
     }
 
     [Fact]
-    public void Ctor_FiltersRowsWithoutSource()
-    {
-        var withSource = BuildRow("База1", FakeRacClient.FirstInfobaseId);
-        var withoutSource = new ClusterImportRow(
-            "База2", "sub", "cluster", "", true, false, null, new Infobase(), null!);
-
-        var vm = new ClusterMigrationViewModel(
-            new FakeRacClient(), BuildParams(), ClusterId,
-            new[] { withSource, withoutSource }, Array.Empty<ManagementServer>(), null);
-
-        Assert.Equal(1, vm.BaseCount);
-    }
-
-    [Fact]
-    public async Task SelectedServerChange_LoadsClusters_SingleClusterAutoSelected()
+    public async Task SourceServerChange_LoadsClusters_SingleClusterAutoSelected()
     {
         var client = new FakeRacClient(singleCluster: true);
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, BuildRows("База1"),
-            new[] { BuildServer("tgt", "srv-new") }, null);
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
 
-        vm.SelectedServer = vm.AvailableServers[0];
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
 
-        // Дожидаемся загрузки кластеров (fire-and-forget из сеттера).
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (vm.Clusters.Count == 0 && DateTime.UtcNow < deadline)
-            await Task.Delay(10);
+        await AwaitSourceClusters(vm);
 
-        Assert.Single(vm.Clusters);
-        Assert.Equal(FakeRacClient.TargetClusterId, vm.SelectedClusterId); // автовыбор единственного
-        Assert.Equal("srv-new", client.LastParams!.Address);
-        Assert.Empty(vm.ErrorMessage);
+        Assert.Single(vm.SourceClusters);
+        Assert.Equal(FakeRacClient.SourceClusterId, vm.SelectedSourceClusterId); // автовыбор единственного
+        Assert.Equal("srv-old", client.LastParams!.Address);
+        Assert.Empty(vm.SourceError);
         Assert.False(vm.IsBusy);
     }
 
     [Fact]
-    public async Task ClusterSelection_WithTargetBases_ExposesConflicts()
+    public async Task TargetServerChange_LoadsClusters_SingleClusterAutoSelected()
     {
-        // Имитация приёмника, где «База1» уже существует (issue #41, 1.0.0.52).
-        var client = new FakeRacClient(
-            singleCluster: true, targetBaseNames: new[] { "База1", "ДругаяБаза" });
+        var client = new FakeRacClient(singleCluster: true);
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, BuildRows("База1", "База2"),
-            new[] { BuildServer("tgt", "srv-new") }, null);
+            client, Array.Empty<Infobase>(), new[] { BuildServer("tgt", "srv-new") });
 
-        vm.SelectedServer = vm.AvailableServers[0];
-        await AwaitClusters(vm);                  // автовыбор единственного кластера
-        await Task.Delay(150);                    // завершение фоновой проверки конфликтов
+        vm.SelectedTargetServer = vm.AvailableTargetServers[0];
 
-        Assert.True(vm.HasConflicts);
-        Assert.Equal(new[] { "База1" }, vm.ConflictingBaseNames);
-        Assert.Equal(1, vm.ConflictingBaseNames.Count);
+        await AwaitTargetClusters(vm);
+
+        Assert.Single(vm.TargetClusters);
+        Assert.Equal(FakeRacClient.TargetClusterId, vm.SelectedTargetClusterId);
+        Assert.Equal("srv-new", client.LastParams!.Address);
+        Assert.Empty(vm.TargetError);
     }
 
     [Fact]
-    public async Task ClusterSelection_WithoutConflicts_HasEmptyConflicts()
+    public async Task LoadSourceBases_BuildsRows_ChecksAll()
     {
-        var client = new FakeRacClient(
-            singleCluster: true, targetBaseNames: new[] { "СовсемДругаяБаза" });
+        var client = new FakeRacClient(singleCluster: true);
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, BuildRows("База1", "База2"),
-            new[] { BuildServer("tgt", "srv-new") }, null);
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
 
-        vm.SelectedServer = vm.AvailableServers[0];
-        await AwaitClusters(vm);
-        await Task.Delay(150);
+        await AwaitSourceRows(vm);
 
-        Assert.False(vm.HasConflicts);
-        Assert.Empty(vm.ConflictingBaseNames);
+        Assert.Equal(2, vm.SourceRows.Count);
+        // После получения баз источника — ВСЕ галочки (issue #41).
+        Assert.All(vm.SourceRows, r => Assert.True(r.IsChecked));
+        Assert.Equal(2, vm.CheckedCount);
+        Assert.False(vm.HasCheckedInTarget);
+        Assert.Equal(
+            string.Format(LocalizationManager.T("ClusterMigration.Status.LoadedBasesFormat"), 2),
+            vm.SourceStatusText);
     }
 
     [Fact]
-    public async Task Migrate_CreatesInTarget_AndDropsFromSourceEachBase()
+    public async Task LoadSourceBases_MarksDuplicatesInSourceStatus()
+    {
+        var existing = new Infobase
+        {
+            Name = "База1",
+            Connection = new ConnectionSettings
+            {
+                Type = ConnectionType.ClientServer,
+                Server = "srv-old",
+                Port = 1542, // порт кластера-источника из FakeRacClient
+                DatabaseName = "База1"
+            }
+        };
+        var client = new FakeRacClient(singleCluster: true);
+        var vm = new ClusterMigrationViewModel(
+            client, new[] { existing }, new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+
+        await AwaitSourceRows(vm);
+
+        var row = vm.SourceRows.First(r => r.Name == "База1");
+        Assert.Equal(LocalizationManager.T("ClusterImport.AlreadyExists"), row.SourceStatus);
+        // Статус источника не мешает переносу — галочка стоит.
+        Assert.True(row.IsChecked);
+    }
+
+    [Fact]
+    public async Task GetTargetStatuses_SetsInTarget_UnchecksExisting()
+    {
+        var client = new FakeRacClient(singleCluster: true, targetBaseNames: new[] { "База1" });
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        Assert.Equal(2, vm.CheckedCount);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+
+        await vm.GetTargetStatusesAsync();
+
+        // «Есть в кластере» по совпадению имени; галочка снята у существующей в приёмнике.
+        var inTarget = vm.SourceRows.First(r => r.Name == "База1");
+        var free = vm.SourceRows.First(r => r.Name == "База2");
+        Assert.Equal(LocalizationManager.T("ClusterMigration.Status.InTarget"), inTarget.TargetStatus);
+        Assert.Equal(string.Empty, free.TargetStatus);
+        Assert.False(inTarget.IsChecked);
+        Assert.True(free.IsChecked);
+        Assert.Equal(1, vm.CheckedCount);
+        // Отмеченных строк со статусом «Есть в кластере» нет — «Мигрировать» доступна.
+        Assert.False(vm.HasCheckedInTarget);
+        Assert.True(vm.CanMigrate);
+
+        // Пользователь вручную отмечает базу, которая есть в приёмнике — кнопка недоступна.
+        inTarget.IsChecked = true;
+        Assert.True(vm.HasCheckedInTarget);
+        Assert.False(vm.CanMigrate);
+        Assert.NotEqual(string.Empty, vm.MigrateHint);
+    }
+
+    [Fact]
+    public async Task GetTargetStatuses_NoMatches_KeepsAllChecked()
+    {
+        var client = new FakeRacClient(singleCluster: true, targetBaseNames: new[] { "СовсемДругаяБаза" });
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        Assert.All(vm.SourceRows, r => Assert.Equal(string.Empty, r.TargetStatus));
+        Assert.All(vm.SourceRows, r => Assert.True(r.IsChecked));
+        Assert.False(vm.HasCheckedInTarget);
+    }
+
+    [Fact]
+    public void ServersOverlap_WhenSameServerSelectedInBothPanels()
+    {
+        var server = BuildServer("srv", "srv-1");
+        var vm = new ClusterMigrationViewModel(
+            new FakeRacClient(), Array.Empty<Infobase>(), new[] { server });
+
+        vm.SelectedSourceServer = server;
+        vm.SelectedTargetServer = server;
+
+        Assert.True(vm.ServersOverlap);
+        Assert.False(vm.CanMigrate);
+        Assert.NotEqual(string.Empty, vm.MigrateHint);
+    }
+
+    [Fact]
+    public async Task Migrate_CreatesInTarget_DropsFromSource_AddsToGroup()
     {
         var client = new FakeRacClient();
-        var rows = BuildRows("База1", "База2");
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, rows,
-            new[] { BuildServer("tgt", "srv-new") }, null);
-        vm.SelectedServer = vm.AvailableServers[0];
-        await AwaitClusters(vm);
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
         vm.DbUser = "db-user";
         vm.DbPassword = "db-pass";
         vm.KeepInSource = false;
+        vm.UseClusterGrouping = true;
 
         await vm.MigrateAsync();
 
@@ -134,19 +223,21 @@ public sealed class ClusterMigrationViewModelTests
         Assert.Equal(2, vm.Result!.MigratedBaseNames.Count);
         Assert.Equal(new[] { "База1", "База2" }, vm.Result.MigratedBaseNames);
         Assert.Equal("srv-new-host", vm.Result.NewServer);   // hostName из «cluster info»
-        Assert.Equal(1542, vm.Result.NewPort);               // порт кластера назначения
+        Assert.Equal(1542, vm.Result.NewPort);               // порт кластера приёмника
 
-        // Каждая база: create в новом кластере + drop из старого (dropDatabase=false).
+        // Базы добавляются в новую группу (имя кластера — приёмник), как в импорте.
+        Assert.Equal(2, vm.Result.AddedInfobases.Count);
+        Assert.All(vm.Result.AddedInfobases, b => Assert.Equal("Новый кластер", b.Group));
+        Assert.All(vm.Result.AddedInfobases, b => Assert.Equal("srv-new-host", b.Connection!.Server));
+
+        // Каждая база: create в приёмнике + drop из источника (dropDatabase=false).
         Assert.Equal(2, client.Created.Count);
         Assert.Equal(2, client.Dropped.Count);
         Assert.All(client.Created, c => Assert.Equal(FakeRacClient.TargetClusterId, c.ClusterId));
         Assert.All(client.Dropped, d => Assert.False(d.DropDatabase));
-        // Drop шёл по соответствию очереди create: те же базы, тот же порядок.
-        Assert.Equal(rows.Select(r => r.Source.InfobaseId), client.Dropped.Select(d => d.InfobaseId));
         Assert.Equal("db-user", client.Created[0].Request.DbUser);
         Assert.Equal("db-pass", client.Created[0].Request.DbPassword);
-        Assert.Equal("MSSQLServer", client.Created[0].Request.Dbms);   // те же данные, что в источнике
-        Assert.Equal(rows.Select(r => r.Name), client.Created.Select(c => c.Request.Name));
+        Assert.Equal("MSSQLServer", client.Created[0].Request.Dbms);
     }
 
     [Fact]
@@ -154,17 +245,44 @@ public sealed class ClusterMigrationViewModelTests
     {
         var client = new FakeRacClient();
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, BuildRows("База1"),
-            new[] { BuildServer("tgt", "srv-new") }, null);
-        vm.SelectedServer = vm.AvailableServers[0];
-        await AwaitClusters(vm);
-        vm.KeepInSource = true; // «Не удалять в старом»
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        vm.KeepInSource = true; // «Не удалять в старом» — копия без удаления
 
         await vm.MigrateAsync();
 
         Assert.True(vm.MigrationCompleted);
-        Assert.Single(client.Created);
-        Assert.Empty(client.Dropped); // копия в другой кластер БЕЗ удаления
+        Assert.Equal(2, client.Created.Count); // обе базы источника копируются
+        Assert.Empty(client.Dropped);
+    }
+
+    [Fact]
+    public async Task Migrate_NoGrouping_AddsBasesWithoutGroup()
+    {
+        var client = new FakeRacClient();
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        vm.UseClusterGrouping = false;
+
+        await vm.MigrateAsync();
+
+        Assert.True(vm.MigrationCompleted);
+        Assert.All(vm.Result!.AddedInfobases, b => Assert.Equal(string.Empty, b.Group));
     }
 
     [Fact]
@@ -172,18 +290,20 @@ public sealed class ClusterMigrationViewModelTests
     {
         var client = new FakeRacClient();
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, BuildRows("База1", "База2", "База3"),
-            new[] { BuildServer("tgt", "srv-new") }, null);
-        vm.SelectedServer = vm.AvailableServers[0];
-        await AwaitClusters(vm);
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
 
         await vm.MigrateAsync();
 
-        Assert.Equal(3, vm.ProgressTotal);
-        Assert.Equal(3, vm.ProgressIndex);
-        Assert.Equal("База3", vm.CurrentBaseName);
-        // Прогресс не пуст: «N из M: база» — но в тестовом окружении локализация
-        // может вернуть ключ, поэтому проверяем только отсутствие нулевых значений.
+        Assert.Equal(2, vm.ProgressTotal);
+        Assert.Equal(2, vm.ProgressIndex);
+        Assert.Equal("База2", vm.CurrentBaseName);
         Assert.NotEmpty(vm.ProgressText);
     }
 
@@ -192,10 +312,14 @@ public sealed class ClusterMigrationViewModelTests
     {
         var client = new FakeRacClient(failCreate: true);
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, BuildRows("База1", "База2"),
-            new[] { BuildServer("tgt", "srv-new") }, null);
-        vm.SelectedServer = vm.AvailableServers[0];
-        await AwaitClusters(vm);
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
 
         await vm.MigrateAsync();
 
@@ -203,7 +327,6 @@ public sealed class ClusterMigrationViewModelTests
         Assert.Null(vm.Result);
         Assert.NotEmpty(vm.ErrorMessage);
         Assert.False(vm.IsBusy);
-        // Первая база не создана — drop не выполнялся, вторая не обработана.
         Assert.Empty(client.Dropped);
         Assert.Single(client.Created);
     }
@@ -213,32 +336,50 @@ public sealed class ClusterMigrationViewModelTests
     {
         var client = new FakeRacClient(failDrop: true);
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, BuildRows("База1"),
-            new[] { BuildServer("tgt", "srv-new") }, null);
-        vm.SelectedServer = vm.AvailableServers[0];
-        await AwaitClusters(vm);
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
 
         await vm.MigrateAsync();
 
         Assert.False(vm.MigrationCompleted);
         Assert.NotEmpty(vm.ErrorMessage);
-        Assert.Single(client.Created);   // база добавлена в новый кластер
-        Assert.Single(client.Dropped);   // попытка удаления была, но не удалась
+        Assert.Single(client.Created);
+        Assert.Single(client.Dropped);
         Assert.False(vm.IsBusy);
     }
 
     [Fact]
-    public async Task Migrate_NoTargetServer_Validates()
+    public async Task Migrate_SameServer_Validates()
     {
+        var server = BuildServer("srv", "srv-1");
         var vm = new ClusterMigrationViewModel(
-            new FakeRacClient(), BuildParams(), ClusterId, BuildRows("База1"),
-            Array.Empty<ManagementServer>(), null);
+            new FakeRacClient(), Array.Empty<Infobase>(), new[] { server });
+        vm.SelectedSourceServer = server;
+        vm.SelectedTargetServer = server;
 
         await vm.MigrateAsync();
 
         Assert.False(vm.MigrationCompleted);
         Assert.NotEmpty(vm.ErrorMessage);
-        Assert.Empty(vm.Clusters);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Migrate_NoSourceServer_Validates()
+    {
+        var vm = new ClusterMigrationViewModel(
+            new FakeRacClient(), Array.Empty<Infobase>(), Array.Empty<ManagementServer>());
+
+        await vm.MigrateAsync();
+
+        Assert.False(vm.MigrationCompleted);
+        Assert.NotEmpty(vm.ErrorMessage);
         Assert.False(vm.IsBusy);
     }
 
@@ -247,17 +388,20 @@ public sealed class ClusterMigrationViewModelTests
     {
         var client = new FakeRacClient(singleCluster: false); // несколько кластеров — автовыбора нет
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, BuildRows("База1"),
-            new[] { BuildServer("tgt", "srv-new") }, null);
-        vm.SelectedServer = vm.AvailableServers[0];
-        await AwaitClusters(vm);
-        Assert.Null(vm.SelectedClusterId);
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        Assert.Null(vm.SelectedTargetClusterId);
 
         await vm.MigrateAsync();
 
         Assert.False(vm.MigrationCompleted);
         Assert.NotEmpty(vm.ErrorMessage);
-        Assert.Empty(client.Created);    // кластер не выбран — rac не трогаем
+        Assert.Empty(client.Created);
         Assert.False(vm.IsBusy);
     }
 
@@ -265,14 +409,13 @@ public sealed class ClusterMigrationViewModelTests
     public async Task Migrate_NoBases_Validates()
     {
         var vm = new ClusterMigrationViewModel(
-            new FakeRacClient(), BuildParams(), ClusterId,
-            Array.Empty<ClusterImportRow>(), Array.Empty<ManagementServer>(), null);
+            new FakeRacClient(), Array.Empty<Infobase>(), Array.Empty<ManagementServer>());
 
         await vm.MigrateAsync();
 
         Assert.False(vm.MigrationCompleted);
         Assert.NotEmpty(vm.ErrorMessage);
-        Assert.Equal(0, vm.BaseCount);
+        Assert.Equal(0, vm.CheckedCount);
     }
 
     [Fact]
@@ -280,10 +423,14 @@ public sealed class ClusterMigrationViewModelTests
     {
         var client = new FakeRacClient();
         var vm = new ClusterMigrationViewModel(
-            client, BuildParams(), ClusterId, BuildRows("База1"),
-            new[] { BuildServer("tgt", "srv-new") }, null);
-        vm.SelectedServer = vm.AvailableServers[0];
-        await AwaitClusters(vm);
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
 
         await vm.MigrateAsync();
 
@@ -295,24 +442,46 @@ public sealed class ClusterMigrationViewModelTests
         Assert.False(vm.Result.ReplaceConnectionStrings);
     }
 
+    [Fact]
+    public async Task SelectAll_SelectNone_ToggleChecks()
+    {
+        var client = new FakeRacClient();
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectNone();
+        Assert.Equal(0, vm.CheckedCount);
+        Assert.False(vm.CanMigrate);
+
+        vm.SelectAll();
+        Assert.Equal(2, vm.CheckedCount);
+    }
+
     // ===================== Хелперы =====================
 
-    private static readonly Guid ClusterId = FakeRacClient.SourceClusterId;
-
-    private static async Task AwaitClusters(ClusterMigrationViewModel vm)
+    private static async Task AwaitSourceClusters(ClusterMigrationViewModel vm)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (vm.Clusters.Count == 0 && DateTime.UtcNow < deadline)
+        while (vm.SourceClusters.Count == 0 && DateTime.UtcNow < deadline)
             await Task.Delay(10);
     }
 
-    private static RacConnectionParams BuildParams() => new()
+    private static async Task AwaitSourceRows(ClusterMigrationViewModel vm)
     {
-        Address = "srv-old",
-        Port = 1540,
-        User = "admin",
-        Password = "secret"
-    };
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (vm.SourceRows.Count == 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+    }
+
+    private static async Task AwaitTargetClusters(ClusterMigrationViewModel vm)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (vm.TargetClusters.Count == 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+    }
 
     private static ManagementServer BuildServer(string id, string address) => new()
     {
@@ -324,41 +493,18 @@ public sealed class ClusterMigrationViewModelTests
         Password = "secret"
     };
 
-    private static List<ClusterImportRow> BuildRows(params string[] names) =>
-        names.Select(name => BuildRow(name, Guid.NewGuid())).ToList();
-
-    private static ClusterImportRow BuildRow(string name, Guid infobaseId) => new(
-        name,
-        "Описание • MSSQLServer",
-        "Кластер-источник",
-        $"Srvr=\"srv-old\";Ref=\"{name}\"",
-        isChecked: true,
-        isDuplicate: false,
-        skipReason: null,
-        tag: new Infobase { Name = name },
-        source: new RacInfobaseSummary
-        {
-            InfobaseId = infobaseId,
-            Name = name,
-            Descr = "Описание",
-            Dbms = "MSSQLServer",
-            DbServer = "sql-01",
-            DbName = name.ToLowerInvariant()
-        });
-
     // ===================== Fake =====================
 
     /// <summary>
-    /// Fake-клиент rac для тестов миграции: кластеры назначения (один по умолчанию,
-    /// несколько по запросу), «cluster info» с hostName, подсчёт и запись вызовов
-    /// «infobase create»/«infobase drop» (с параметрами) и имитация сбоев.
+    /// Fake-клиент rac для тестов миграции: кластеры источника/приёмника (один по умолчанию,
+    /// несколько по запросу), «cluster info» с hostName, базы источника/приёмника, подсчёт
+    /// и запись вызовов «infobase create»/«infobase drop» (с параметрами) и имитация сбоев.
     /// </summary>
     private sealed class FakeRacClient : IRacClient
     {
         public static readonly Guid SourceClusterId = Guid.Parse("99000000-0000-0000-0000-000000000001");
         public static readonly Guid TargetClusterId = Guid.Parse("88000000-0000-0000-0000-000000000002");
         public static readonly Guid TargetCluster2Id = Guid.Parse("77000000-0000-0000-0000-000000000003");
-        public static readonly Guid FirstInfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000001");
 
         private readonly bool _singleCluster;
         private readonly bool _failCreate;
@@ -385,11 +531,14 @@ public sealed class ClusterMigrationViewModelTests
             RacConnectionParams parameters, CancellationToken cancellationToken = default)
         {
             LastParams = parameters;
+            // Сервер-источник (srv-old) отдаёт кластер-источник, приёмник — кластер-приёмник.
+            var isSource = string.Equals(parameters.Address, "srv-old", StringComparison.OrdinalIgnoreCase);
+            var clusterId = isSource ? SourceClusterId : TargetClusterId;
             IReadOnlyList<RacCluster> clusters = _singleCluster
-                ? new RacCluster[] { new() { Id = TargetClusterId, Name = "Новый кластер", Port = 1542 } }
+                ? new RacCluster[] { new() { Id = clusterId, Name = "Новый кластер", Port = 1542 } }
                 : new RacCluster[]
                 {
-                    new() { Id = TargetClusterId, Name = "Новый кластер", Port = 1542 },
+                    new() { Id = clusterId, Name = "Новый кластер", Port = 1542 },
                     new() { Id = TargetCluster2Id, Name = "Второй новый", Port = 2542 }
                 };
             return Task.FromResult(clusters);
@@ -405,9 +554,20 @@ public sealed class ClusterMigrationViewModelTests
             });
 
         public Task<IReadOnlyList<RacInfobaseSummary>> GetInfobasesAsync(
-            RacConnectionParams parameters, Guid clusterId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(
+            RacConnectionParams parameters, Guid clusterId, CancellationToken cancellationToken = default)
+        {
+            // Источник: две базы; приёмник: заданные имена (по умолчанию — пусто).
+            if (clusterId == SourceClusterId)
+            {
+                return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(new RacInfobaseSummary[]
+                {
+                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000001"), Name = "База1", Descr = "Описание", Dbms = "MSSQLServer", DbServer = "sql-01", DbName = "база1" },
+                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000002"), Name = "База2", Descr = "Описание", Dbms = "MSSQLServer", DbServer = "sql-01", DbName = "база2" }
+                });
+            }
+            return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(
                 _targetBaseNames.Select(name => new RacInfobaseSummary { Name = name }).ToList());
+        }
 
         public Task<bool> CreateInfobaseAsync(
             RacConnectionParams parameters, Guid clusterId, RacInfobaseCreateRequest request,

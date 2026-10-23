@@ -21,47 +21,55 @@ using Workspace1C.ViewModels;
 namespace Workspace1C
 {
     /// <summary>
-    /// Окно «Миграция баз» (1.0.0.51, issue #41, Avalonia/Linux): перенос информационных
-    /// баз из кластера-источника (окно «Импорт из кластера 1С») в выбранный кластер
-    /// другого сервера 1С. Тонкая обёртка над <see cref="ClusterMigrationViewModel"/>
-    /// (аналогично <see cref="ClusterImportWindow"/>): выбор сервера/кластера назначения
-    /// (сервер-источник скрыт), учётные данные СУБД, вопрос «Хотите заменить строку
-    /// подключения?» после успешного переноса и закрытие с результатом.
+    /// Окно «Миграция между кластерами 1С» (issue #41, переработка по комментарию 7OH,
+    /// Avalonia/Linux): перенос информационных баз между кластерами серверов 1С.
+    /// Двухпанельная раскладка «Источник»/«Приёмник» (сервер + кластер + статусы),
+    /// чеклист баз источника со статусами источника/приёмника, опции «Создавать группу
+    /// по имени кластера» и «Не удалять в старом кластере», учётные данные СУБД и кнопка
+    /// «Мигрировать». Тонкая обёртка над <see cref="ClusterMigrationViewModel"/>
+    /// (аналогично <see cref="ClusterImportWindow"/>).
     /// После <c>ShowDialogSync()==true</c> результат доступен через <see cref="Result"/>.
     /// </summary>
     public partial class ClusterMigrationWindow : ModalWindowBase
     {
         private readonly ClusterMigrationViewModel _vm;
-        private readonly ComboBox _serverCombo;
-        private readonly ComboBox _clusterCombo;
+        private readonly ComboBox _sourceServerCombo;
+        private readonly ComboBox _sourceClusterCombo;
+        private readonly ComboBox _targetServerCombo;
+        private readonly ComboBox _targetClusterCombo;
         private readonly TextBlock _progressText;
         private readonly ProgressBar _progressBar;
         private readonly Button _migrateButton;
+        private readonly Button _sourceConnectButton;
+        private readonly Button _sourceLoadBasesButton;
+        private readonly Button _targetConnectButton;
+        private readonly Button _targetGetStatusesButton;
+        private readonly Button _selectAllButton;
+        private readonly Button _selectNoneButton;
         private readonly TextBox _dbPasswordBox;
+        private readonly ContentControl _sourceConnectHost = new() { VerticalAlignment = VerticalAlignment.Center };
+        private readonly ContentControl _sourceLoadHost = new() { VerticalAlignment = VerticalAlignment.Center };
+        private readonly ContentControl _targetConnectHost = new() { VerticalAlignment = VerticalAlignment.Center };
+        private readonly ContentControl _targetStatusesHost = new() { VerticalAlignment = VerticalAlignment.Center };
 
-        /// <param name="rac">Клиент rac (кластеры назначения, «infobase create/drop»).</param>
-        /// <param name="sourceParams">Подключение к серверу-источнику (удаление баз из старого кластера).</param>
-        /// <param name="sourceClusterId">Идентификатор кластера-источника.</param>
-        /// <param name="rows">Отмеченные строки импорта с исходными записями rac.</param>
-        /// <param name="availableServers">Справочник «Серверы 1С» (сервер-источник будет исключён).</param>
-        /// <param name="sourceServer">Запись сервера-источника для исключения из списка назначения.</param>
+        /// <param name="rac">Клиент rac (кластеры, «infobase summary list/create/drop»).</param>
+        /// <param name="existingInfobases">Базы, уже присутствующие в списке приложения — для статуса источника.</param>
+        /// <param name="availableServers">Справочник «Серверы 1С» (полный список для обеих панелей).</param>
+        /// <param name="initialSourceServer">Сервер, открытый из окна «Серверы 1С» (issue #41); null — обычное открытие.</param>
+        /// <param name="initialSourceClusterId">Кластер, выбранный в окне «Серверы 1С» (issue #41).</param>
         public ClusterMigrationWindow(
             IRacClient rac,
-            RacConnectionParams sourceParams,
-            Guid sourceClusterId,
-            IReadOnlyList<ClusterImportRow> rows,
+            IReadOnlyList<Infobase> existingInfobases,
             IReadOnlyList<ManagementServer> availableServers,
-            ManagementServer? sourceServer)
+            ManagementServer? initialSourceServer = null,
+            Guid? initialSourceClusterId = null)
         {
             AvaloniaXamlLoader.Load(this);
 
             _vm = new ClusterMigrationViewModel(
                 rac,
-                sourceParams,
-                sourceClusterId,
-                rows,
+                existingInfobases,
                 availableServers,
-                sourceServer,
                 action => Dispatcher.UIThread.Post(action));
 
             Title = LocalizationManager.T("ClusterMigration.Title");
@@ -69,13 +77,12 @@ namespace Workspace1C
             _vm.PropertyChanged += OnVmPropertyChanged;
             Closed += (_, _) => _vm.PropertyChanged -= OnVmPropertyChanged;
 
-            this.FindControl<TextBlock>("BaseCountText")!.Text = string.Format(
-                LocalizationManager.T("ClusterMigration.BaseCountFormat"), _vm.BaseCount);
+            this.FindControl<ListBox>("BasesList")!.ItemsSource = _vm.SourceRows;
 
-            // ---- Выбор сервера назначения: список БЕЗ сервера-источника. ----
-            _serverCombo = this.FindControl<ComboBox>("ServerCombo")!;
-            _serverCombo.ItemsSource = _vm.AvailableServers;
-            _serverCombo.ItemTemplate = new FuncDataTemplate<ManagementServer>((server, _) =>
+            // ---- Панель «Источник»: сервер + кластер + статус (строится кодом). ----
+            _sourceServerCombo = new ComboBox { Width = 300, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(6, 2) };
+            _sourceServerCombo.ItemsSource = _vm.AvailableSourceServers;
+            _sourceServerCombo.ItemTemplate = new FuncDataTemplate<ManagementServer>((server, _) =>
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -86,18 +93,15 @@ namespace Workspace1C
                         new TextBlock { Text = $"{server.Address}:{server.Port}", Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center }
                     }
                 });
-            _serverCombo.SelectionChanged += (_, _) =>
+            _sourceServerCombo.SelectionChanged += (_, _) =>
             {
-                if (_serverCombo.SelectedItem is ManagementServer server)
-                    _vm.SelectedServer = server;
+                if (_sourceServerCombo.SelectedItem is ManagementServer server)
+                    _vm.SelectedSourceServer = server;
             };
-            this.FindControl<TextBlock>("ServersEmptyHint")!
-                .Bind(IsVisibleProperty, new Binding("!HasAvailableServers"));
 
-            // ---- Выбор кластера назначения: список из VM, синхронизация в обе стороны. ----
-            _clusterCombo = this.FindControl<ComboBox>("ClusterCombo")!;
-            _clusterCombo.Bind(ItemsControl.ItemsSourceProperty, new Binding("Clusters"));
-            _clusterCombo.ItemTemplate = new FuncDataTemplate<RacCluster>((cluster, _) =>
+            _sourceClusterCombo = new ComboBox { Width = 300, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(6, 2) };
+            _sourceClusterCombo.Bind(ItemsControl.ItemsSourceProperty, new Binding("SourceClusters"));
+            _sourceClusterCombo.ItemTemplate = new FuncDataTemplate<RacCluster>((cluster, _) =>
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -108,29 +112,163 @@ namespace Workspace1C
                         new TextBlock { Text = $"[{cluster.Port}]", Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center }
                     }
                 });
-            _clusterCombo.SelectionChanged += (_, _) =>
+            _sourceClusterCombo.SelectionChanged += (_, _) =>
             {
-                if (_clusterCombo.SelectedItem is RacCluster cluster)
-                    _vm.SelectedClusterId = cluster.Id;
+                if (_sourceClusterCombo.SelectedItem is RacCluster cluster)
+                    _vm.SelectedSourceClusterId = cluster.Id;
             };
 
+            var sourceStatusText = new TextBlock { FontSize = 12, Opacity = 0.65 };
+            sourceStatusText.Bind(TextBlock.TextProperty, new Binding("SourceStatusText"));
+
+            var sourcePanel = new Grid();
+            sourcePanel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            sourcePanel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            sourcePanel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            var sourceServerRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Margin = new Thickness(0, 0, 0, 6),
+                Children = { new TextBlock { Text = LocalizationManager.T("ClusterMigration.SourceServer"), VerticalAlignment = VerticalAlignment.Center }, _sourceServerCombo }
+            };
+            sourceServerRow.Children.Add(_sourceConnectHost);
+            Grid.SetRow(sourceServerRow, 0);
+            sourcePanel.Children.Add(sourceServerRow);
+
+            var sourceClusterRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Margin = new Thickness(0, 0, 0, 6),
+                Children = { new TextBlock { Text = LocalizationManager.T("ClusterMigration.SourceCluster"), VerticalAlignment = VerticalAlignment.Center }, _sourceClusterCombo }
+            };
+            sourceClusterRow.Children.Add(_sourceLoadHost);
+            Grid.SetRow(sourceClusterRow, 1);
+            sourcePanel.Children.Add(sourceClusterRow);
+
+            Grid.SetRow(sourceStatusText, 2);
+            sourcePanel.Children.Add(sourceStatusText);
+            this.FindControl<ContentControl>("SourcePanelHost")!.Content =
+                Controls.GroupBoxPanel.Build("ClusterMigration.SourceGroup", sourcePanel, padding: new Thickness(12, 8));
+
+            // ---- Панель «Приёмник»: сервер + кластер + статус (строится кодом). ----
+            _targetServerCombo = new ComboBox { Width = 300, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(6, 2) };
+            _targetServerCombo.ItemsSource = _vm.AvailableTargetServers;
+            _targetServerCombo.ItemTemplate = new FuncDataTemplate<ManagementServer>((server, _) =>
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        new TextBlock { Text = server.Description, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = $"{server.Address}:{server.Port}", Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center }
+                    }
+                });
+            _targetServerCombo.SelectionChanged += (_, _) =>
+            {
+                if (_targetServerCombo.SelectedItem is ManagementServer server)
+                    _vm.SelectedTargetServer = server;
+            };
+
+            _targetClusterCombo = new ComboBox { Width = 300, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(6, 2) };
+            _targetClusterCombo.Bind(ItemsControl.ItemsSourceProperty, new Binding("TargetClusters"));
+            _targetClusterCombo.ItemTemplate = new FuncDataTemplate<RacCluster>((cluster, _) =>
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        new TextBlock { Text = cluster.Name, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = $"[{cluster.Port}]", Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center }
+                    }
+                });
+            _targetClusterCombo.SelectionChanged += (_, _) =>
+            {
+                if (_targetClusterCombo.SelectedItem is RacCluster cluster)
+                    _vm.SelectedTargetClusterId = cluster.Id;
+            };
+
+            var targetStatusText = new TextBlock { FontSize = 12, Opacity = 0.65 };
+            targetStatusText.Bind(TextBlock.TextProperty, new Binding("TargetStatusText"));
+
+            var targetPanel = new Grid();
+            targetPanel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            targetPanel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            targetPanel.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            var targetServerRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Margin = new Thickness(0, 0, 0, 6),
+                Children = { new TextBlock { Text = LocalizationManager.T("ClusterMigration.TargetServer"), VerticalAlignment = VerticalAlignment.Center }, _targetServerCombo }
+            };
+            targetServerRow.Children.Add(_targetConnectHost);
+            Grid.SetRow(targetServerRow, 0);
+            targetPanel.Children.Add(targetServerRow);
+
+            var targetClusterRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Margin = new Thickness(0, 0, 0, 6),
+                Children = { new TextBlock { Text = LocalizationManager.T("ClusterMigration.TargetCluster"), VerticalAlignment = VerticalAlignment.Center }, _targetClusterCombo }
+            };
+            targetClusterRow.Children.Add(_targetStatusesHost);
+            Grid.SetRow(targetClusterRow, 1);
+            targetPanel.Children.Add(targetClusterRow);
+
+            Grid.SetRow(targetStatusText, 2);
+            targetPanel.Children.Add(targetStatusText);
+            this.FindControl<ContentControl>("TargetPanelHost")!.Content =
+                Controls.GroupBoxPanel.Build("ClusterMigration.TargetGroup", targetPanel, padding: new Thickness(12, 8));
+
             // ---- Статусные строки и прогресс. ----
-            this.FindControl<TextBlock>("StatusText")!
-                .Bind(TextBlock.TextProperty, new Binding("StatusText"));
             this.FindControl<TextBlock>("ErrorText")!
                 .Bind(TextBlock.TextProperty, new Binding("ErrorMessage"));
             _progressText = this.FindControl<TextBlock>("ProgressText")!;
             _progressBar = this.FindControl<ProgressBar>("BusyProgress")!;
 
-            // ---- Учётные данные СУБД и «Не удалять в старом». ----
+            // ---- Опции: «Создавать группу по имени кластера» + «Не удалять в старом». ----
+            var groupCheck = this.FindControl<CheckBox>("GroupByClusterCheck")!;
+            groupCheck.Bind(CheckBox.IsCheckedProperty, new Binding("UseClusterGrouping", BindingMode.TwoWay));
+            var keepCheck = this.FindControl<CheckBox>("KeepInSourceCheck")!;
+            keepCheck.Bind(CheckBox.IsCheckedProperty, new Binding("KeepInSource", BindingMode.TwoWay));
+
+            // ---- Учётные данные СУБД. ----
             var dbUserBox = this.FindControl<TextBox>("DbUserBox")!;
             dbUserBox.Bind(TextBox.TextProperty, new Binding("DbUser", BindingMode.TwoWay));
             _dbPasswordBox = this.FindControl<TextBox>("DbPasswordBox")!;
             _dbPasswordBox.TextChanged += (_, _) => _vm.DbPassword = _dbPasswordBox.Text ?? string.Empty;
-            var keepCheck = this.FindControl<CheckBox>("KeepInSourceCheck")!;
-            keepCheck.Bind(CheckBox.IsCheckedProperty, new Binding("KeepInSource", BindingMode.TwoWay));
 
-            // ---- Кнопки «Перенести» (зелёная, как «Импортировать») и «Отмена». ----
+            // ---- Кнопки (паттерн BaseSelectionWindow: строятся в коде, хост — в панели). ----
+            _sourceConnectButton = BuildActionButton(LocalizationManager.T("ClusterMigration.Connect"), "🔌",
+                () => _vm.ConnectSourceCommand.Execute(null));
+            _sourceConnectHost.Content = _sourceConnectButton;
+
+            _sourceLoadBasesButton = BuildActionButton(LocalizationManager.T("ClusterMigration.LoadBases"), "⟳",
+                () => _vm.LoadSourceBasesCommand.Execute(null));
+            _sourceLoadHost.Content = _sourceLoadBasesButton;
+
+            _targetConnectButton = BuildActionButton(LocalizationManager.T("ClusterMigration.Connect"), "🔌",
+                () => _vm.ConnectTargetCommand.Execute(null));
+            _targetConnectHost.Content = _targetConnectButton;
+
+            _targetGetStatusesButton = BuildActionButton(LocalizationManager.T("ClusterMigration.GetStatuses"), "⟳",
+                () => _vm.GetTargetStatusesCommand.Execute(null));
+            _targetStatusesHost.Content = _targetGetStatusesButton;
+
+            var bulk = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            _selectAllButton = BuildSecondaryButton(LocalizationManager.T("Selection.SelectAll"),
+                () => _vm.SelectAllCommand.Execute(null));
+            _selectNoneButton = BuildSecondaryButton(LocalizationManager.T("Selection.None"),
+                () => _vm.SelectNoneCommand.Execute(null));
+            bulk.Children.Add(_selectAllButton);
+            bulk.Children.Add(_selectNoneButton);
+            this.FindControl<ContentControl>("BulkHost")!.Content = bulk;
+
             _migrateButton = BuildPrimaryButton(LocalizationManager.T("ClusterMigration.MigrateButton"), "➜",
                 OnMigrateClick);
             this.FindControl<ContentControl>("MigrateHost")!.Content = _migrateButton;
@@ -140,11 +278,20 @@ namespace Workspace1C
             this.FindControl<ContentControl>("CancelHost")!.Content = cancelButton;
 
             UpdateCommandStates();
+
+            // Открытие из окна «Серверы 1С»: выбранный сервер-источник + автоподключение.
+            if (initialSourceServer is not null)
+            {
+                _vm.SelectedSourceServer = initialSourceServer;
+                if (initialSourceClusterId is Guid clusterId)
+                    _vm.SelectedSourceClusterId = clusterId;
+            }
         }
 
         /// <summary>
-        /// Результат миграции (при <c>ShowDialogSync()==true</c>): перенесённые базы, новый
-        /// сервер/порт и ответ на вопрос о замене строки подключения.
+        /// Результат миграции (при <c>ShowDialogSync()==true</c>): перенесённые базы, базы
+        /// для добавления в список приложения, новый сервер/порт и ответ на вопрос о замене
+        /// строки подключения.
         /// </summary>
         public ClusterMigrationResult? Result => _vm.Result;
 
@@ -157,76 +304,49 @@ namespace Workspace1C
             {
                 case nameof(ClusterMigrationViewModel.IsBusy):
                 case nameof(ClusterMigrationViewModel.HasAvailableServers):
-                case nameof(ClusterMigrationViewModel.SelectedServer):
+                case nameof(ClusterMigrationViewModel.SelectedSourceServer):
+                case nameof(ClusterMigrationViewModel.SelectedTargetServer):
+                case nameof(ClusterMigrationViewModel.SelectedSourceClusterId):
+                case nameof(ClusterMigrationViewModel.SelectedTargetClusterId):
+                case nameof(ClusterMigrationViewModel.CheckedCount):
+                case nameof(ClusterMigrationViewModel.HasCheckedInTarget):
+                case nameof(ClusterMigrationViewModel.ServersOverlap):
                 case nameof(ClusterMigrationViewModel.ProgressText):
                     UpdateCommandStates();
                     break;
                 case nameof(ClusterMigrationViewModel.MigrationCompleted):
                     OnMigrationCompleted();
                     break;
-                case nameof(ClusterMigrationViewModel.SelectedClusterId):
-                    SyncSelectedCluster();
-                    break;
             }
         }
 
         /// <summary>
-        /// Единый пересчёт кнопок и индикатора занятости: «Перенести» доступна при выбранных
-        /// сервере/кластере назначения и хотя бы одной базе, пока не выполняется запрос.
+        /// Единый пересчёт кнопок и индикатора занятости: «Подключиться» доступна при
+        /// выбранном сервере и неактивном запросе; «Получить базы»/«Получить статусы» —
+        /// при выбранном кластере; «Мигрировать» — по <see cref="ClusterMigrationViewModel.CanMigrate"/>.
         /// </summary>
         private void UpdateCommandStates()
         {
             var busy = _vm.IsBusy;
-            _migrateButton.IsEnabled = !busy
-                && _vm.HasAvailableServers
-                && _vm.SelectedServer is not null
-                && _vm.SelectedClusterId is not null
-                && _vm.BaseCount > 0;
-            // Сервер можно сменить, только когда запрос не идёт (кластеры грузятся при выборе).
-            _serverCombo.IsEnabled = !busy;
-            _clusterCombo.IsEnabled = !busy;
+            _sourceConnectButton.IsEnabled = !busy && _vm.HasAvailableServers;
+            _sourceLoadBasesButton.IsEnabled = !busy && _vm.SelectedSourceClusterId is not null;
+            _targetConnectButton.IsEnabled = !busy && _vm.HasAvailableServers;
+            _targetGetStatusesButton.IsEnabled = !busy && _vm.SelectedTargetClusterId is not null && _vm.SourceRows.Count > 0;
+            _selectAllButton.IsEnabled = !busy;
+            _selectNoneButton.IsEnabled = !busy;
+            _migrateButton.IsEnabled = _vm.CanMigrate;
+            _sourceServerCombo.IsEnabled = !busy;
+            _sourceClusterCombo.IsEnabled = !busy;
+            _targetServerCombo.IsEnabled = !busy;
+            _targetClusterCombo.IsEnabled = !busy;
             _progressBar.IsVisible = busy;
             _progressText.Text = _vm.ProgressText;
-        }
-
-        /// <summary>Автовыбор единственного кластера VM синхронизируется с комбобоксом
-        /// (как в <see cref="ClusterImportWindow"/>): исключение обратных срабатываний.</summary>
-        private void SyncSelectedCluster()
-        {
-            if (_vm.SelectedClusterId is not Guid id)
-                return;
-            if (_clusterCombo.SelectedItem is RacCluster current && current.Id == id)
-                return;
-            _clusterCombo.SelectedItem = _vm.Clusters.FirstOrDefault(c => c.Id == id);
-        }
-
-        /// <summary>
-        /// «Перенести» (issue #41, 1.0.0.52). При наличии в кластере назначения баз
-        /// с теми же именами сначала показываем предупреждение и запрашиваем
-        /// подтверждение — повторный перенос после сбоя легален, но пользователь
-        /// должен знать о конфликте заранее. Иначе — запускаем перенос сразу.
-        /// </summary>
-        private void OnMigrateClick()
-        {
-            if (_vm.HasConflicts)
-            {
-                var confirmed = AppServices.GetRequiredService<IDialogService>().Confirm(
-                    string.Format(
-                        LocalizationManager.T("ClusterMigration.ConfirmConflictsFormat"),
-                        _vm.ConflictingBaseNames.Count,
-                        string.Join(", ", _vm.ConflictingBaseNames)),
-                    LocalizationManager.T("ClusterMigration.ConfirmConflictsTitle"));
-                if (!confirmed)
-                    return;
-            }
-
-            _vm.MigrateCommand.Execute(null);
         }
 
         /// <summary>
         /// Перенос завершён без ошибок (issue #41): вопрос «Хотите заменить строку
         /// подключения?» → если ДА — результат помечается (MainViewModel заменит сервер/порт
-        /// в списке приложения после закрытия окна импорта) → окно закрывается.
+        /// в списке приложения) → окно закрывается.
         /// </summary>
         private void OnMigrationCompleted()
         {
@@ -243,6 +363,8 @@ namespace Workspace1C
             DialogResult = true;
             Close();
         }
+
+        private void OnMigrateClick() => _vm.MigrateCommand.Execute(null);
 
         private Button BuildPrimaryButton(string text, string icon, Action onClick)
         {
@@ -267,9 +389,31 @@ namespace Workspace1C
             return button;
         }
 
+        private Button BuildActionButton(string text, string icon, Action onClick)
+        {
+            var button = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6,
+                    Children =
+                    {
+                        new TextBlock { Text = icon, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center }
+                    }
+                },
+                Padding = new Thickness(10, 5)
+            };
+            button.Styled(ControlThemes.ModernButton);
+            ThemeBrushes.Bind(button, Button.BackgroundProperty, "ItemHoverBrush");
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
         private Button BuildSecondaryButton(string text, Action onClick)
         {
-            var button = new Button { Content = text, Padding = new Thickness(14, 6) };
+            var button = new Button { Content = text, Padding = new Thickness(12, 6) };
             button.Styled(ControlThemes.SecondaryButton);
             button.Click += (_, _) => onClick();
             return button;

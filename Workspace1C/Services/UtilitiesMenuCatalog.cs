@@ -99,6 +99,9 @@ public enum UtilitiesMenuCommandKind
     /// <summary>Импорт баз из кластера сервера 1С.</summary>
     ImportClusterInfobases,
 
+    /// <summary>Миграция баз между кластерами серверов 1С (issue #41).</summary>
+    MigrateClusterInfobases,
+
     /// <summary>Инспектор процессов 1С.</summary>
     ProcessInspector,
 
@@ -435,10 +438,14 @@ public static class UtilitiesMenuCatalog
                 "FileExport", "IconFileExport", "#22C55E", UtilitiesMenuCommandKind.ExportBasesV8iFile),
             new("ImportV8iFile", "Settings.Bases.ImportV8iFile", GroupOperations,
                 "DatabaseImport", "IconImport", "#22C55E", UtilitiesMenuCommandKind.ImportBasesV8iFile),
-            // «Импорт \ миграция из кластера 1С…» (1.0.0.51, issue #41): отдельный ключ от
-            // заголовка окна — меню переименовано, а заголовок окна «Импорт из кластера 1С» остался.
+            // «Импорт из кластера 1С» (issue #27) и «Миграция между кластерами 1С»
+            // (issue #41, переработка): отдельные пункты — импорт остаётся импортом,
+            // миграция вынесена в самостоятельное окно. Хоткея у миграции нет — это
+            // не частая операция (комментарий 7OH).
             new("ClusterImport", "ClusterImport.MenuItem", GroupOperations,
                 "DatabaseImport", "IconImport", "#06B6D4", UtilitiesMenuCommandKind.ImportClusterInfobases),
+            new("ClusterMigration", "ClusterMigration.MenuItem", GroupOperations,
+                "DatabaseExport", "IconDatabaseExport", "#16A34A", UtilitiesMenuCommandKind.MigrateClusterInfobases),
             new("ProcessInspector", "ProcessInspector.Title", GroupOperations,
                 "ApplicationCog", "IconApplicationCog", "#0EA5E9", UtilitiesMenuCommandKind.ProcessInspector),
             new("KillOneCProcesses", "Settings.Bases.KillProcesses", GroupOperations,
@@ -528,6 +535,7 @@ public static class UtilitiesMenuLayouts
                 Item("ExportV8iFile"),
                 Item("ImportV8iFile"),
                 Item("ClusterImport"),
+                Item("ClusterMigration"),
                 Separator(),
                 Item("ProcessInspector"),
                 Item("KillOneCProcesses"),

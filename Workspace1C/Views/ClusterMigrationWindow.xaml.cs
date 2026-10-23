@@ -10,84 +10,87 @@ using Workspace1C.ViewModels;
 namespace Workspace1C
 {
     /// <summary>
-    /// Окно «Миграция баз» (1.0.0.51, issue #41, Windows/WPF): перенос информационных баз
-    /// из кластера-источника (окно «Импорт из кластера 1С») в выбранный кластер другого
-    /// сервера 1С. Вся логика — в чистой ViewModel <see cref="ClusterMigrationViewModel"/>;
-    /// окно — тонкая обёртка: выбор сервера/кластера назначения (сервер-источник скрыт),
-    /// учётные данные СУБД (пароль из PasswordBox в память VM), вопрос «Хотите заменить
-    /// строку подключения?» после успешного переноса и закрытие с результатом.
+    /// Окно «Миграция между кластерами 1С» (issue #41, переработка по комментарию 7OH,
+    /// Windows/WPF): перенос информационных баз между кластерами серверов 1С. Двухпанельная
+    /// раскладка «Источник»/«Приёмник» (сервер + кластер + статусы), чеклист баз источника
+    /// со статусами источника/приёмника, опции «Создавать группу по имени кластера» и
+    /// «Не удалять в старом кластере», учётные данные СУБД и кнопка «Мигрировать».
+    /// Вся логика — в чистой ViewModel <see cref="ClusterMigrationViewModel"/>; окно —
+    /// тонкая обёртка (источник серверов, подстановка выбранного сервера, вопрос
+    /// «Хотите заменить строку подключения?» после успешного переноса).
     /// После <c>ShowDialog()==true</c> результат доступен через <see cref="Result"/>.
     /// </summary>
     public partial class ClusterMigrationWindow : Window
     {
         private readonly ClusterMigrationViewModel _vm;
 
-        /// <param name="rac">Клиент rac (кластеры назначения, «infobase create/drop»).</param>
-        /// <param name="sourceParams">Подключение к серверу-источнику (удаление баз из старого кластера).</param>
-        /// <param name="sourceClusterId">Идентификатор кластера-источника.</param>
-        /// <param name="rows">Отмеченные строки импорта с исходными записями rac.</param>
-        /// <param name="availableServers">Справочник «Серверы 1С» (сервер-источник будет исключён).</param>
-        /// <param name="sourceServer">Запись сервера-источника для исключения из списка назначения.</param>
+        /// <param name="rac">Клиент rac (кластеры, «infobase summary list/create/drop»).</param>
+        /// <param name="existingInfobases">Базы, уже присутствующие в списке приложения — для статуса источника.</param>
+        /// <param name="availableServers">Справочник «Серверы 1С» (полный список для обеих панелей).</param>
+        /// <param name="initialSourceServer">Сервер, открытый из окна «Серверы 1С» (issue #41); null — обычное открытие.</param>
+        /// <param name="initialSourceClusterId">Кластер, выбранный в окне «Серверы 1С» (issue #41).</param>
         public ClusterMigrationWindow(
             IRacClient rac,
-            RacConnectionParams sourceParams,
-            Guid sourceClusterId,
-            IReadOnlyList<ClusterImportRow> rows,
+            IReadOnlyList<Infobase> existingInfobases,
             IReadOnlyList<ManagementServer> availableServers,
-            ManagementServer? sourceServer)
+            ManagementServer? initialSourceServer = null,
+            Guid? initialSourceClusterId = null)
         {
             InitializeComponent();
 
             _vm = new ClusterMigrationViewModel(
                 rac,
-                sourceParams,
-                sourceClusterId,
-                rows,
+                existingInfobases,
                 availableServers,
-                sourceServer,
                 action => Application.Current?.Dispatcher.BeginInvoke(action));
 
             DataContext = _vm;
             Title = LocalizationManager.T("ClusterMigration.Title");
-            BaseCountText.Text = string.Format(
-                LocalizationManager.T("ClusterMigration.BaseCountFormat"), _vm.BaseCount);
+            BasesGrid.ItemsSource = _vm.SourceRows;
 
-            // Остальные элементы (ServerCombo/ClusterCombo/KeepInSourceCheck/StatusText/
-            // ErrorText) привязаны в XAML — код их не трогает (DataContext уже установлен).
             _vm.PropertyChanged += OnVmPropertyChanged;
             Closed += (_, _) => _vm.PropertyChanged -= OnVmPropertyChanged;
             UpdateCommandStates();
+
+            // Открытие из окна «Серверы 1С»: выбранный сервер-источник + автоподключение.
+            if (initialSourceServer is not null)
+            {
+                _vm.SelectedSourceServer = initialSourceServer;
+                if (initialSourceClusterId is Guid clusterId)
+                    _vm.SelectedSourceClusterId = clusterId;
+            }
         }
 
         /// <summary>
-        /// Результат миграции (при <c>ShowDialog()==true</c>): перенесённые базы, новый
-        /// сервер/порт и ответ на вопрос о замене строки подключения.
+        /// Результат миграции (при <c>ShowDialog()==true</c>): перенесённые базы, базы для
+        /// добавления в список приложения, новый сервер/порт и ответ на вопрос о замене
+        /// строки подключения.
         /// </summary>
         public ClusterMigrationResult? Result => _vm.Result;
+
+        private void OnSourceConnect_Click(object sender, RoutedEventArgs e) =>
+            _vm.ConnectSourceCommand.Execute(null);
+
+        private void OnSourceLoadBases_Click(object sender, RoutedEventArgs e) =>
+            _vm.LoadSourceBasesCommand.Execute(null);
+
+        private void OnTargetConnect_Click(object sender, RoutedEventArgs e) =>
+            _vm.ConnectTargetCommand.Execute(null);
+
+        private void OnTargetGetStatuses_Click(object sender, RoutedEventArgs e) =>
+            _vm.GetTargetStatusesCommand.Execute(null);
+
+        private void OnSelectAll_Click(object sender, RoutedEventArgs e) =>
+            _vm.SelectAllCommand.Execute(null);
+
+        private void OnSelectNone_Click(object sender, RoutedEventArgs e) =>
+            _vm.SelectNoneCommand.Execute(null);
 
         private void OnDbPasswordChanged(object sender, RoutedEventArgs e) =>
             _vm.DbPassword = DbPasswordBox.Password;
 
-        private void OnMigrate_Click(object sender, RoutedEventArgs e)
-        {
-            // Наличие баз с теми же именами в приёмнике (issue #41, 1.0.0.52):
-            // предупреждаем и спрашиваем подтверждение — повторный перенос после
-            // сбоя легален, но пользователь должен знать о конфликте заранее.
-            if (_vm.HasConflicts)
-            {
-                var answer = MessageBox.Show(
-                    string.Format(
-                        LocalizationManager.T("ClusterMigration.ConfirmConflictsFormat"),
-                        _vm.ConflictingBaseNames.Count,
-                        string.Join(", ", _vm.ConflictingBaseNames)),
-                    LocalizationManager.T("ClusterMigration.ConfirmConflictsTitle"),
-                    MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (answer != MessageBoxResult.Yes)
-                    return;
-            }
-
+        private void OnMigrate_Click(object sender, RoutedEventArgs e) =>
             _vm.MigrateCommand.Execute(null);
-        }
 
         private void OnCancel_Click(object sender, RoutedEventArgs e)
         {
@@ -101,7 +104,13 @@ namespace Workspace1C
             {
                 case nameof(ClusterMigrationViewModel.IsBusy):
                 case nameof(ClusterMigrationViewModel.HasAvailableServers):
-                case nameof(ClusterMigrationViewModel.SelectedServer):
+                case nameof(ClusterMigrationViewModel.SelectedSourceServer):
+                case nameof(ClusterMigrationViewModel.SelectedTargetServer):
+                case nameof(ClusterMigrationViewModel.SelectedSourceClusterId):
+                case nameof(ClusterMigrationViewModel.SelectedTargetClusterId):
+                case nameof(ClusterMigrationViewModel.CheckedCount):
+                case nameof(ClusterMigrationViewModel.HasCheckedInTarget):
+                case nameof(ClusterMigrationViewModel.ServersOverlap):
                 case nameof(ClusterMigrationViewModel.ProgressText):
                     UpdateCommandStates();
                     break;
@@ -112,40 +121,39 @@ namespace Workspace1C
         }
 
         /// <summary>
-        /// Единый пересчёт кнопок и индикатора занятости: «Перенести» доступна при выбранных
-        /// сервере/кластере назначения и хотя бы одной базе, пока не выполняется запрос.
+        /// Единый пересчёт кнопок и индикатора занятости из состояния VM: «Подключиться»
+        /// доступна при выбранном сервере и неактивном запросе; «Получить базы»/«Получить
+        /// статусы» — при выбранном кластере; «Мигрировать» — по <see cref="ClusterMigrationViewModel.CanMigrate"/>.
         /// </summary>
         private void UpdateCommandStates()
         {
             var busy = _vm.IsBusy;
-            MigrateButton.IsEnabled = !busy
-                && _vm.HasAvailableServers
-                && _vm.SelectedServer is not null
-                && _vm.SelectedClusterId is not null
-                && _vm.BaseCount > 0;
-            // Сервер можно сменить, только когда запрос не идёт (кластеры грузятся при выборе).
-            ServerCombo.IsEnabled = !busy;
-            ClusterCombo.IsEnabled = !busy;
+            SourceConnectButton.IsEnabled = !busy && _vm.HasAvailableServers;
+            SourceLoadBasesButton.IsEnabled = !busy && _vm.SelectedSourceClusterId is not null;
+            TargetConnectButton.IsEnabled = !busy && _vm.HasAvailableServers;
+            TargetGetStatusesButton.IsEnabled = !busy && _vm.SelectedTargetClusterId is not null && _vm.SourceRows.Count > 0;
+            SelectAllButton.IsEnabled = !busy;
+            SelectNoneButton.IsEnabled = !busy;
+            MigrateButton.IsEnabled = _vm.CanMigrate;
             BusyProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            ProgressText.Text = _vm.ProgressText;
         }
 
         /// <summary>
         /// Перенос завершён без ошибок (issue #41): вопрос «Хотите заменить строку
         /// подключения?» → если ДА — результат помечается (MainViewModel заменит сервер/порт
-        /// в списке приложения после закрытия окна импорта) → окно закрывается, окно импорта
-        /// обновит список баз кластера.
+        /// в списке приложения) → окно закрывается.
         /// </summary>
         private void OnMigrationCompleted()
         {
             if (_vm.Result is null)
                 return;
 
-            var replace = MessageBox.Show(
+            var answer = MessageBox.Show(
                 LocalizationManager.T("ClusterMigration.ConfirmReplaceConnection"),
                 LocalizationManager.T("ClusterMigration.ReplaceConnectionTitle"),
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question) == MessageBoxResult.Yes;
-            if (replace)
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Yes)
                 _vm.SetReplaceConnectionStrings(true);
 
             DialogResult = true;

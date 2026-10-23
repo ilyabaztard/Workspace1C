@@ -57,6 +57,12 @@ namespace Workspace1C
         /// </summary>
         private readonly Action<ManagementServer?, Guid?>? _openClusterImport;
 
+        /// <summary>
+        /// Открытие «Миграции между кластерами 1С» (issue #41): делегат MainViewModel —
+        /// окно монитора к репозиторию напрямую не обращается.
+        /// </summary>
+        private readonly Action<ManagementServer?, Guid?>? _openClusterMigration;
+
         /// <summary>Заголовки вкладок с количеством строк (обновляются по PropertyChanged).</summary>
         private readonly List<(TabItem Tab, string Property)> _dynamicTabHeaders = new();
 
@@ -69,9 +75,16 @@ namespace Workspace1C
         /// Открытие окна импорта с сервером, текущим на момент нажатия «Импорт»
         /// (issue #27); null — кнопка «Импорт» под списком баз не показывает импорт.
         /// </param>
-        public ServerMonitorWindow(Action<ManagementServer?, Guid?>? openClusterImport = null)
+        /// <param name="openClusterMigration">
+        /// Открытие окна миграции с сервером, текущим на момент нажатия «Миграция»
+        /// (issue #41); null — кнопка «Миграция» под списком баз не показывает миграцию.
+        /// </param>
+        public ServerMonitorWindow(
+            Action<ManagementServer?, Guid?>? openClusterImport = null,
+            Action<ManagementServer?, Guid?>? openClusterMigration = null)
         {
             _openClusterImport = openClusterImport;
+            _openClusterMigration = openClusterMigration;
             Title = LocalizationManager.T("ServerMonitor.Title");
             Width = 1400;
             Height = 760;
@@ -1070,8 +1083,9 @@ namespace Workspace1C
                 }
             };
 
-            // Кнопка «Импорт» (issue #27): внизу панели баз, по аналогии с «Службы» под
-            // списком серверов; открывает «Импорт из кластера 1С» с текущим сервером.
+            // Кнопки «Импорт» и «Миграция» (issue #41): внизу панели баз, по аналогии
+            // с «Службы» под списком серверов; открывают «Импорт из кластера 1С» /
+            // «Миграцию между кластерами 1С» с текущим сервером.
             var importButton = new Button
             {
                 Content = new TextBlock
@@ -1081,13 +1095,35 @@ namespace Workspace1C
                     FontWeight = FontWeight.SemiBold
                 },
                 Padding = new Thickness(0, 8),
-                Margin = new Thickness(0, 8, 0, 0),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
             importButton.Styled(ControlThemes.ModernButton);
             ThemeBrushes.Bind(importButton, Button.BackgroundProperty, "ItemHoverBrush");
             importButton.Click += (_, _) => OpenInfobaseImport();
-            DockPanel.SetDock(importButton, Dock.Bottom);
+
+            var migrateButton = new Button
+            {
+                Content = new TextBlock
+                {
+                    Text = LocalizationManager.T("ServerMonitor.Infobase.Migrate"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    FontWeight = FontWeight.SemiBold
+                },
+                Padding = new Thickness(0, 8),
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            migrateButton.Styled(ControlThemes.ModernButton);
+            ThemeBrushes.Bind(migrateButton, Button.BackgroundProperty, "ItemHoverBrush");
+            migrateButton.Click += (_, _) => OpenInfobaseMigration();
+
+            var bottomButtons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Margin = new Thickness(0, 8, 0, 0),
+                Children = { importButton, migrateButton }
+            };
+            DockPanel.SetDock(bottomButtons, Dock.Bottom);
 
             var dock = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(_infobasesTitle, Dock.Top);
@@ -1096,7 +1132,7 @@ namespace Workspace1C
             dock.Children.Add(_infobasesTitle);
             dock.Children.Add(toolbar);
             dock.Children.Add(_infobasesEmptyHint);
-            dock.Children.Add(importButton);
+            dock.Children.Add(bottomButtons);
             dock.Children.Add(_infobasesList);
             return dock;
         }
@@ -1120,6 +1156,27 @@ namespace Workspace1C
             }
 
             _openClusterImport?.Invoke(server, _vm.SelectedClusterId);
+        }
+
+        /// <summary>
+        /// «Миграция» (issue #41): открывает «Миграцию между кластерами 1С» с текущим
+        /// сервером — выбранный в списке, иначе подключённый, иначе первый из справочника.
+        /// При пустом справочнике — подсказка и выход. Сам перенос выполняет делегат
+        /// MainViewModel (логика добавления баз/групп — там, окно к репозиторию не ходит).
+        /// </summary>
+        private void OpenInfobaseMigration()
+        {
+            var server = _vm.SelectedServer ?? _vm.ConnectedServer ?? _vm.Servers.FirstOrDefault();
+            if (server is null)
+            {
+                AppServices.GetRequiredService<IDialogService>()
+                    .ShowInfo(
+                        LocalizationManager.T("ClusterImport.ServersEmpty"),
+                        LocalizationManager.T("ServerMonitor.Title"));
+                return;
+            }
+
+            _openClusterMigration?.Invoke(server, _vm.SelectedClusterId);
         }
 
         /// <summary>Вертикальный разделитель групп кнопок панели баз (issue #3).</summary>
