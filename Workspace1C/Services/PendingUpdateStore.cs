@@ -57,14 +57,20 @@ public sealed class PendingUpdateStore
     /// обновления. Предыдущий маркер перезаписывается. Ошибки записи не всплывают —
     /// маркер сервисный, его потеря не должна ронять обновление.
     /// </summary>
-    public void Write(string version)
+    /// <param name="version">Целевая версия (тег релиза).</param>
+    /// <param name="releaseNotes">Описание изменений выпуска (issue #44): попадает в
+    /// уведомление «Приложение обновлено до версии X» после перезапуска.</param>
+    /// <param name="releaseUrl">Ссылка на страницу релиза.</param>
+    public void Write(string version, string? releaseNotes = null, string? releaseUrl = null)
     {
         try
         {
             Directory.CreateDirectory(DataDirectory);
             var json = JsonSerializer.Serialize(new PendingUpdateMarker
             {
-                Version = version ?? string.Empty
+                Version = version ?? string.Empty,
+                ReleaseNotes = releaseNotes ?? string.Empty,
+                ReleaseUrl = releaseUrl ?? string.Empty
             });
             // Атомарная запись (как ServerListStore.Save): временный файл + замена.
             var tempPath = FilePath + ".tmp";
@@ -83,19 +89,26 @@ public sealed class PendingUpdateStore
     /// если маркера нет / файл повреждён. Вызывается при старте новой версии.
     /// Файл удаляется в любом случае, чтобы не копить устаревшие маркеры.
     /// </summary>
-    public string? ReadAndClear()
+    public string? ReadAndClear() => ReadMarkerAndClear()?.Version;
+
+    /// <summary>
+    /// Читает маркер целиком (версия, описание изменений, ссылка — issue #44) и
+    /// УДАЛЯЕТ файл. Возвращает null, если маркера нет, файл повреждён или версия
+    /// пуста. Маркер, записанный прежними версиями (только «Version»), читается
+    /// с пустым описанием.
+    /// </summary>
+    public PendingUpdateMarker? ReadMarkerAndClear()
     {
         try
         {
             if (!File.Exists(FilePath))
                 return null;
 
-            string? version = null;
+            PendingUpdateMarker? marker = null;
             try
             {
                 var json = File.ReadAllText(FilePath);
-                var marker = JsonSerializer.Deserialize<PendingUpdateMarker>(json);
-                version = marker?.Version;
+                marker = JsonSerializer.Deserialize<PendingUpdateMarker>(json);
             }
             catch
             {
@@ -106,7 +119,11 @@ public sealed class PendingUpdateStore
                 TryDelete(FilePath);
             }
 
-            return string.IsNullOrWhiteSpace(version) ? null : version;
+            if (marker is null || string.IsNullOrWhiteSpace(marker.Version))
+                return null;
+            marker.ReleaseNotes ??= string.Empty;
+            marker.ReleaseUrl ??= string.Empty;
+            return marker;
         }
         catch
         {
@@ -152,8 +169,14 @@ public sealed class PendingUpdateStore
 }
 
 /// <summary>Содержимое файла-маркера <c>pending_update.json</c>.</summary>
-internal sealed class PendingUpdateMarker
+public sealed class PendingUpdateMarker
 {
     /// <summary>Версия, до которой выполнено обновление (тег релиза).</summary>
     public string Version { get; set; } = string.Empty;
+
+    /// <summary>Описание изменений выпуска (issue #44); пусто у маркеров прежних версий.</summary>
+    public string? ReleaseNotes { get; set; } = string.Empty;
+
+    /// <summary>Ссылка на страницу релиза (issue #44).</summary>
+    public string? ReleaseUrl { get; set; } = string.Empty;
 }

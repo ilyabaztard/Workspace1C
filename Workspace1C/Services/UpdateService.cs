@@ -329,7 +329,7 @@ public sealed class UpdateService : IAppUpdateService
             // применится уже после нашего выхода, поэтому уведомление о завершении
             // из этого процесса до Telegram не доедет. Пишем версию, на которую
             // обновляемся; новая версия отправит уведомление при следующем старте.
-            try { _pendingUpdate.Write(release.TagName); }
+            try { _pendingUpdate.Write(release.TagName, release.Body, release.HtmlUrl); }
             catch { /* маркер сервисный — обновление не должно срываться */ }
 
             // Помощник запущен — закрываем приложение, чтобы exe освободился и был заменён.

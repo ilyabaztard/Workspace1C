@@ -408,19 +408,44 @@ namespace Workspace1C
         /// (Telegram/email/system) при событии <see cref="NotificationEvent.Update"/>,
         /// поэтому уважает фильтр «Уведомлять о новых версиях». Ошибки не роняют старт.
         /// </summary>
-        private static void NotifyPendingUpdate()
+        private static async void NotifyPendingUpdate()
         {
             try
             {
-                var marker = AppServices.GetRequiredService<PendingUpdateStore>();
-                var markerVersion = marker.ReadAndClear();
-                if (!PendingUpdateStore.ShouldNotify(markerVersion, VersionInfo.Display()))
+                var store = AppServices.GetRequiredService<PendingUpdateStore>();
+                var marker = store.ReadMarkerAndClear();
+                if (marker is null || !PendingUpdateStore.ShouldNotify(marker.Version, VersionInfo.Display()))
                     return;
+
+                // Описание изменений (issue #44): из маркера, а если его записала прежняя
+                // версия приложения без описания — из GitHub Releases по тегу (с таймаутом,
+                // при недоступности сети уведомление уходит без описания).
+                var notes = marker.ReleaseNotes;
+                var url = marker.ReleaseUrl;
+                if (string.IsNullOrWhiteSpace(notes))
+                {
+                    try
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                        var fetched = await AppServices.GetRequiredService<GitHubReleaseService>()
+                            .GetReleaseNotesByTagAsync(marker.Version, cts.Token).ConfigureAwait(true);
+                        if (fetched is { } f)
+                        {
+                            notes = f.Body;
+                            if (string.IsNullOrWhiteSpace(url))
+                                url = f.HtmlUrl;
+                        }
+                    }
+                    catch
+                    {
+                        // Без описания — как раньше.
+                    }
+                }
 
                 var notifications = AppServices.GetRequiredService<INotificationService>();
                 notifications.Show(
                     LocalizationManager.T("App.Title"),
-                    string.Format(LocalizationManager.T("Notify.UpdateInstalled"), markerVersion),
+                    UpdateNotificationText.BuildInstalledMessage(marker.Version, notes, url),
                     NotificationKind.Success,
                     NotificationEvent.Update);
             }

@@ -53,6 +53,40 @@ public class GitHubReleaseService
         return await GetLatestFromAtomAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>Шаблон URL выпуска по тегу в GitHub Releases API.</summary>
+    private const string ApiTagUrlTemplate = "https://api.github.com/repos/sivatorov/Workspace1C/releases/tags/{0}";
+
+    /// <summary>
+    /// Описание изменений выпуска по тегу (issue #44): для уведомления «Приложение
+    /// обновлено до версии X», когда маркер обновления описания не содержит (маркер
+    /// записан прежней версией приложения). Возвращает (описание, ссылка) или null
+    /// при любой ошибке; исключения наружу не бросает.
+    /// </summary>
+    public virtual async Task<(string Body, string HtmlUrl)?> GetReleaseNotesByTagAsync(string tag, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+            return null;
+        try
+        {
+            var url = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                ApiTagUrlTemplate, Uri.EscapeDataString(tag.Trim()));
+            using var response = await HttpClient.GetAsync(url, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                return null;
+            return (GetString(root, "body"), GetString(root, "html_url"));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>Получает последний выпуск через GitHub Releases API.</summary>
     private static async Task<ReleaseInfo?> GetLatestFromApiAsync(CancellationToken ct)
     {
