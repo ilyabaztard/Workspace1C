@@ -351,7 +351,11 @@ namespace Workspace1C
             {
                 var scrollable = Math.Max(0, treeScroll.ScrollableHeight);
                 var visible = scrollable > 0.5 && treeScroll.ViewportHeight > 0.5;
-                var wantedVisibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                // Hidden, а не Collapsed (issue #21, 1.0.0.62): место под полосу резервируется
+                // всегда, поэтому ширина вьюпорта списка не прыгает на ширину полосы при
+                // переключении вкладок с разным числом строк («Недавние» ↔ «Все») — именно
+                // этот скачок давал мигающую горизонтальную полосу.
+                var wantedVisibility = visible ? Visibility.Visible : Visibility.Hidden;
                 if (ListVerticalBar.Visibility != wantedVisibility)
                     ListVerticalBar.Visibility = wantedVisibility;
 

@@ -465,7 +465,11 @@ namespace Workspace1C
                         $"resetMode={resetMode}, detach={detachCount}, flushPanels={_lastTreePoolFlushPanels}, " +
                         $"flushMs={_lastTreePoolFlushMs}, " +
                         $"gc0={System.GC.CollectionCount(0)}, gc1={System.GC.CollectionCount(1)}, " +
-                        $"gc2={System.GC.CollectionCount(2)}");
+                        $"gc2={System.GC.CollectionCount(2)}, " +
+                        // issue #21, 1.0.0.62: число живых записей метрик компактного режима —
+                        // не должно расти от переключения вкладок (слабые ключи).
+                        $"compact={_viewModel.CompactMode}, compactEntries={ThemeManager.CompactMetricEntries}, " +
+                        $"rowsAlive={CountAliveProbeRows()}");
                 }
 
                 // Виртуализация создаёт новые контейнеры строк в проходе разметки ПОСЛЕ события

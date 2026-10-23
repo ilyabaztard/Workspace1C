@@ -514,10 +514,18 @@ namespace Workspace1C.Themes
         // из ресурсов нет, но при их появлении правило надо уточнить.
         private readonly record struct CompactMetric(Thickness Value, bool WasLocal);
 
-        private static readonly Dictionary<FrameworkElement, CompactMetric> _compactMargin = new();
-        private static readonly Dictionary<Control, CompactMetric> _compactPadding = new();
-        private static readonly Dictionary<DependencyObject, double> _compactFont = new();
-        private static readonly Dictionary<ColumnDefinition, double> _compactColumn = new();
+        // Issue #21: таблицы со СЛАБЫМИ ключами. Раньше это были Dictionary с сильными
+        // ссылками: каждая строка списка баз, созданная в компактном режиме, оставалась
+        // в них навсегда после ухода из визуального дерева (переключение вкладок
+        // пересоздаёт строки) — утечка ~5 МБ на переключение и растущие задержки.
+        private static readonly Workspace1C.Collections.WeakKeyTable<FrameworkElement, CompactMetric> _compactMargin = new();
+        private static readonly Workspace1C.Collections.WeakKeyTable<Control, CompactMetric> _compactPadding = new();
+        private static readonly Workspace1C.Collections.WeakKeyTable<DependencyObject, double> _compactFont = new();
+        private static readonly Workspace1C.Collections.WeakKeyTable<ColumnDefinition, double> _compactColumn = new();
+
+        /// <summary>Число живых записей метрик компактного режима (диагностика issue #21).</summary>
+        public static int CompactMetricEntries
+            => _compactMargin.Count + _compactPadding.Count + _compactFont.Count + _compactColumn.Count;
 
         // Колонки, навсегда исключённые из компактизации ширины (колонка-компенсатор
         // заголовка, ширина которой целиком управляется AlignHeaderToData). В отличие от
@@ -586,8 +594,8 @@ namespace Workspace1C.Themes
         /// в обычный режим нечего, и обход поддерева строки можно не делать вовсе.
         /// </summary>
         public static bool HasCompactMetrics
-            => _compactMargin.Count > 0 || _compactPadding.Count > 0
-               || _compactFont.Count > 0 || _compactColumn.Count > 0;
+            => !_compactMargin.IsEmpty || !_compactPadding.IsEmpty
+               || !_compactFont.IsEmpty || !_compactColumn.IsEmpty;
 
         /// <summary>
         /// Применяет метрики компактного режима к поддереву в два прохода: сначала по всему

@@ -782,6 +782,15 @@ namespace Workspace1C
             if (viewport <= 0)
                 return;
 
+            // Явная видимость горизонтальной полосы (issue #21, 1.0.0.62, паритет с WPF):
+            // решение только по сумме колонок и вьюпорту, не по числу строк вкладки —
+            // пока колонки помещаются, полоса отключена и мигнуть не может.
+            var wantedHBar = ListMinWidthCalculator.NeedsHorizontalScroll(_listMinWidth, viewport)
+                ? global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+                : global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+            if (ScrollViewer.GetHorizontalScrollBarVisibility(_listScroll) != wantedHBar)
+                ScrollViewer.SetHorizontalScrollBarVisibility(_listScroll, wantedHBar);
+
             // Guard «полоса не нужна» (issue #21, паритет с WPF): если фактическая полоса
             // меньше 1px (доли пикселя от округления последней колонки) и расчётная сумма
             // колонок помещается во вьюпорт (с допуском 1px) — схлопываем контент до

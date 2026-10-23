@@ -2122,7 +2122,7 @@
                                  подсвечивает сами закреплённые строки, а копии выбранных
                                  баз в общем списке при этом не светятся (и наоборот). -->
                             <DataTemplate DataType="{x:Type vm:PinnedInfobaseItem}">
-                                <ContentControl Content="{Binding Base}"
+                                <ContentControl Content="{Binding Base, Mode=OneTime}"
                                                 ContentTemplate="{StaticResource InfobaseRowTemplate}"
                                                 Tag="pinned"/>
                             </DataTemplate>
@@ -2515,7 +2515,7 @@
                              Геометрию полосы ведёт MainWindow.Scroll.cs (SyncVerticalScrollBar). -->
                         <ScrollBar x:Name="ListVerticalBar" Grid.Column="1" Orientation="Vertical"
                                    Minimum="0" Maximum="0" ViewportSize="0"
-                                   SmallChange="24" LargeChange="100" Visibility="Collapsed"/>
+                                   SmallChange="24" LargeChange="100" Visibility="Hidden"/>
                     
                 </Grid>
                 </Grid>

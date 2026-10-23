@@ -434,6 +434,10 @@ namespace Workspace1C
             }
             grid.Tag = RowGridMarker;
             ApplyRowCompact(grid);
+            // Проба утечки строк (issue #21, 1.0.0.62): при включённом CM_TREESWITCH
+            // запоминаем строку слабой ссылкой; после GC в логе — сколько строк живо.
+            if (TraceFlags.IsEnabled(TraceFlags.TreeSwitchFlag))
+                TrackRowForLeakProbe(grid);
             // Намеренно НЕ вызываем QueueHeaderAlign здесь: обработчик Loaded срабатывает на
             // каждую реализацию строки при прокрутке/виртуализации, и перезапуск цикла
             // стабилизации на каждую строку держал компенсатор заголовка «в работе» всё время
@@ -898,6 +902,20 @@ namespace Workspace1C
             var effective = ListMinWidthCalculator.EffectiveContentWidth(
                 total, headerSumNow, viewportNow, scrollableNow);
 
+            // Явная видимость горизонтальной полосы (issue #21, 1.0.0.62): решение только
+            // по сумме колонок и вьюпорту — до отложенной записи ширины, чтобы и во время
+            // перестроения дерева (смена вкладки) полоса оставалась отключённой, пока колонки
+            // помещаются. Режим Auto сам по себе показывал полосу на кадр-два, когда
+            // промежуточная ширина контента временно превышала вьюпорт.
+            if (DbListScroll is not null)
+            {
+                var wantedHBar = ListMinWidthCalculator.NeedsHorizontalScroll(total, viewportNow)
+                    ? ScrollBarVisibility.Auto
+                    : ScrollBarVisibility.Disabled;
+                if (DbListScroll.HorizontalScrollBarVisibility != wantedHBar)
+                    DbListScroll.HorizontalScrollBarVisibility = wantedHBar;
+            }
+
             // Во время перестроения дерева (смена вкладки) НЕ фиксируем промежуточные
             // значения: строки ещё не материализованы, headerSumNow/viewportNow могут быть
             // промежуточными, и записанный effective «залипал» бы (issue #21). Сумма колонок
@@ -1335,6 +1353,27 @@ namespace Workspace1C
             e.Handled = true;
         }
 
+
+        // Слабые ссылки на созданные строки для пробы утечки (issue #21, только при трассировке).
+        private readonly List<WeakReference> _leakProbeRows = new();
+
+        private void TrackRowForLeakProbe(FrameworkElement row)
+        {
+            foreach (var w in _leakProbeRows)
+                if (ReferenceEquals(w.Target, row))
+                    return;
+            _leakProbeRows.Add(new WeakReference(row));
+        }
+
+        /// <summary>
+        /// Число живых строк из когда-либо созданных (после GC). Видимых строк ~20;
+        /// если число растёт с каждым переключением — старые строки кто-то удерживает.
+        /// </summary>
+        internal int CountAliveProbeRows()
+        {
+            _leakProbeRows.RemoveAll(w => !w.IsAlive);
+            return _leakProbeRows.Count;
+        }
     }
 }
 #endif

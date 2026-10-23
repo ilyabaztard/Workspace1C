@@ -352,4 +352,27 @@ public sealed class ListMinWidthCalculatorTests
 
         Assert.Equal(1000.4, effective);
     }
+
+    // ---- issue #21, 1.0.0.62: решение о горизонтальной полосе не зависит от вкладки ----
+
+    [Theory]
+    [InlineData(900, 1000, false)]
+    [InlineData(1000, 1000, false)]
+    [InlineData(1000.4, 1000, false)]
+    [InlineData(1000.6, 1000, true)]
+    [InlineData(1500, 1000, true)]
+    [InlineData(1500, 0, false)]
+    public void NeedsHorizontalScroll_OnlyWhenColumnsWiderThanViewport(double total, double viewport, bool expected)
+        => Assert.Equal(expected, ListMinWidthCalculator.NeedsHorizontalScroll(total, viewport));
+
+    [Fact]
+    public void NeedsHorizontalScroll_DependsOnlyOnColumnsAndViewport()
+    {
+        // Одинаковые колонки и ширина области — одинаковое решение для любой вкладки
+        // (число строк в функцию не входит вовсе): полоса не может «мигнуть» при смене вкладки.
+        var columns = new[] { new ListMinWidthCalculator.Column(120, true), new ListMinWidthCalculator.Column(200, true) };
+        var total = ListMinWidthCalculator.Compute(300, 200, columns, 0, columns);
+        Assert.False(ListMinWidthCalculator.NeedsHorizontalScroll(total, total + 50));
+        Assert.True(ListMinWidthCalculator.NeedsHorizontalScroll(total, total - 50));
+    }
 }
