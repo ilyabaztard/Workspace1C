@@ -11,6 +11,27 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.70] — 2026-10-24
+
+### Исправлено
+
+- **Миграция баз: поле «Имя БД» (db-name) и понятная ошибка вместо исключения
+  (issue #41, Windows и Linux)** — на форму миграции добавлено поле **«Имя БД»** (db-name):
+  в группе с «Тип СУБД»/«Сервер СУБД», строкой выше логина/пароля
+  ([`ClusterMigrationWindow.xaml`](Workspace1C/Views/ClusterMigrationWindow.xaml),
+  [`ClusterMigrationWindow.axaml`](Workspace1C/Views/ClusterMigrationWindow.axaml)); оно
+  автозаполняется из первой базы источника и не перезаписывается после ручного изменения.
+  При создании базы в кластере-приёмнике значение формы используется как запасное
+  (fallback) для баз, где rac не вернул `db-name`, — остальные переносятся со своими
+  именами
+  ([`ClusterMigrationService.BuildCreateRequest`](Workspace1C/Services/ClusterMigrationService.cs));
+  если имя БД так и не указано — вместо прежнего исключения
+  «ArgumentException: Не указано имя базы данных» показывается понятное сообщение с именем
+  базы и подсказкой заполнить поле «Имя БД»
+  ([`ClusterMigrationViewModel.MigrateAsync`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs)).
+  Покрыто тестами
+  `ClusterMigrationViewModelTests`/`ClusterMigrationServiceTests`/`Issue41WindowLayoutTests`.
+
 ## [1.0.0.69] — 2026-10-23
 
 ### Добавлено
