@@ -44,6 +44,14 @@ namespace Workspace1C
                 WpfUi.BoundTextBox(nameof(WebPublishViewModel.ApacheConfPath), 420));
             confRow.SetBinding(UIElement.IsEnabledProperty, new Binding(nameof(WebPublishViewModel.IsApache)));
             form.Children.Add(confRow);
+            // Выбор конфиг-файла для webinst: основной conf или include-файл (issue #63).
+            var confTargetRow = WpfUi.Wrap(WpfUi.Label("WebPublish.ConfTarget"),
+                WpfUi.BoundCombo(_vm.ConfTargets, nameof(WebPublishViewModel.ConfTargetIndex), 420));
+            confTargetRow.SetBinding(UIElement.VisibilityProperty, new Binding(nameof(WebPublishViewModel.HasConfTargets))
+            {
+                Converter = new BooleanToVisibilityConverter()
+            });
+            form.Children.Add(confTargetRow);
             form.Children.Add(WpfUi.Wrap(WpfUi.Label("WebPublish.ConnStr"),
                 WpfUi.BoundTextBox(nameof(WebPublishViewModel.ConnectionString), 420)));
             WpfUi.Place(root, WpfUi.Card(form), 1);

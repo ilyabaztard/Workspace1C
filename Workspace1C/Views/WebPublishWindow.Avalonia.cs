@@ -52,6 +52,11 @@ namespace Workspace1C
                 AvaloniaUi.BoundTextBox(nameof(WebPublishViewModel.ApacheConfPath), 420));
             confRow.Bind(IsEnabledProperty, new Binding(nameof(WebPublishViewModel.IsApache)));
             form.Children.Add(confRow);
+            // Выбор конфиг-файла для webinst: основной conf или include-файл (issue #63).
+            var confTargetRow = AvaloniaUi.Wrap(AvaloniaUi.Label("WebPublish.ConfTarget"),
+                AvaloniaUi.BoundCombo(_vm.ConfTargets, nameof(WebPublishViewModel.ConfTargetIndex), 420));
+            confTargetRow.Bind(IsVisibleProperty, new Binding(nameof(WebPublishViewModel.HasConfTargets)));
+            form.Children.Add(confTargetRow);
             form.Children.Add(AvaloniaUi.Wrap(AvaloniaUi.Label("WebPublish.ConnStr"),
                 AvaloniaUi.BoundTextBox(nameof(WebPublishViewModel.ConnectionString), 420)));
             AvaloniaUi.Place(root, AvaloniaUi.Card(form), 1);

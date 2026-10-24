@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+using System.IO;
 using System.Text;
 using Workspace1C.Localization;
 using Workspace1C.Models;
@@ -8,42 +10,73 @@ namespace Workspace1C.ViewModels;
 /// <summary>
 /// ViewModel окна «Публикация на веб-сервере» (выпуск 1.0.0.69): параметры webinst
 /// для выбранной базы, публикация, удаление публикации и журнал вывода утилиты.
+/// С 1.0.0.71 (#63) список веб-серверов дополнен обнаруженными инстансами Apache
+/// (служба/конфиг), при выборе инстанса автозаполняются конфигурация и каталог
+/// публикации, а пользователь может выбрать конфиг-файл для webinst: основной conf
+/// или include-файл.
 /// </summary>
 public sealed class WebPublishViewModel : ViewModelBase
 {
-    private static readonly WebServerKind[] Servers = { WebServerKind.Iis, WebServerKind.Apache24, WebServerKind.Apache22 };
+    private readonly record struct ServerOption(WebServerKind Kind, ApacheInstance? Instance);
 
     private readonly IReadOnlyList<Infobase> _infobases;
+    private readonly IReadOnlyList<ServerOption> _servers;
     private readonly StringBuilder _log = new();
+    private readonly List<string> _confTargetPaths = new();
+
     private int _selectedIndex = -1;
     private int _serverIndex;
+    private int _confTargetIndex = -1;
+    private ApacheInstance? _selectedInstance;
     private string _virtualDirectory = string.Empty;
     private string _physicalDirectory = string.Empty;
-    private string _apacheConfPath = WebPublishService.SuggestApacheConf();
+    private string _apacheConfPath = string.Empty;
     private string _connectionString = string.Empty;
+    private readonly ObservableCollection<string> _confTargets = new();
     private bool _isBusy;
 
-    public WebPublishViewModel(IEnumerable<Infobase> infobases, Infobase? selected)
+    public WebPublishViewModel(IEnumerable<Infobase> infobases, Infobase? selected,
+        IReadOnlyList<ApacheInstance>? apacheInstances = null)
     {
         _infobases = (infobases ?? Array.Empty<Infobase>())
             .Where(ib => ib is not null && ib.Connection.Type != ConnectionType.WebServer)
             .OrderBy(ib => ib.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
         InfobaseNames = _infobases.Select(ib => ib.Name).ToList();
-        ServerOptions = new[]
-        {
-            LocalizationManager.T("WebPublish.Server.Iis"),
-            "Apache 2.4",
-            "Apache 2.2"
-        };
-        _serverIndex = OperatingSystem.IsWindows() ? 0 : 1;
+
+        var instances = apacheInstances ?? ApacheInstanceDetector.Detect();
+        var servers = new List<ServerOption>();
+        if (OperatingSystem.IsWindows())
+            servers.Add(new ServerOption(WebServerKind.Iis, null));
+        foreach (var instance in instances ?? Array.Empty<ApacheInstance>())
+            servers.Add(new ServerOption(instance.Kind, instance));
+        // Fallback: инстансы не найдены — остаётся вариант Apache по умолчанию
+        // (конфиг/каталог — прежние SuggestApacheConf/SuggestPhysicalDirectory).
+        if (servers.All(s => s.Kind == WebServerKind.Iis))
+            servers.Add(new ServerOption(WebServerKind.Apache24, null));
+        _servers = servers;
+        ServerOptions = _servers.Select(DisplayServerOption).ToList();
+
+        _serverIndex = 0;
+        ApplyCurrentServerDefaults(initial: true);
+
         var index = selected is null ? -1 : _infobases.ToList().FindIndex(ib => ib.Id == selected.Id);
         SelectedIndex = index >= 0 ? index : (_infobases.Count > 0 ? 0 : -1);
     }
 
     public IReadOnlyList<string> InfobaseNames { get; }
 
+    /// <summary>Отображаемые варианты веб-серверов: «IIS» (Windows) + инстансы Apache.</summary>
     public IReadOnlyList<string> ServerOptions { get; }
+
+    /// <summary>Варианты конфиг-файла webinst: основной conf и include-файлы (пусто — не применимо).</summary>
+    public ObservableCollection<string> ConfTargets => _confTargets;
+
+    /// <summary>Выбран ли инстанс Apache (а не IIS или fallback Apache).</summary>
+    public bool IsInstanceSelected => _selectedInstance is not null;
+
+    /// <summary>Есть ли выбор конфиг-файла для webinst.</summary>
+    public bool HasConfTargets => _confTargets.Count > 0;
 
     public Infobase? SelectedInfobase =>
         _selectedIndex >= 0 && _selectedIndex < _infobases.Count ? _infobases[_selectedIndex] : null;
@@ -68,15 +101,29 @@ public sealed class WebPublishViewModel : ViewModelBase
         get => _serverIndex;
         set
         {
-            if (SetProperty(ref _serverIndex, Math.Clamp(value, 0, Servers.Length - 1)))
-            {
-                PhysicalDirectory = WebPublishService.SuggestPhysicalDirectory(VirtualDirectory, Servers[_serverIndex]);
-                OnPropertyChanged(nameof(IsApache));
-            }
+            if (!SetProperty(ref _serverIndex, Math.Clamp(value, 0, _servers.Count - 1)))
+                return;
+            ApplyCurrentServerDefaults(initial: false);
         }
     }
 
-    public bool IsApache => Servers[_serverIndex] != WebServerKind.Iis;
+    public int ConfTargetIndex
+    {
+        get => _confTargetIndex;
+        set
+        {
+            if (_servers.Count == 0 || _confTargetPaths.Count == 0)
+                value = -1;
+            else
+                value = Math.Clamp(value, 0, _confTargetPaths.Count - 1);
+            if (!SetProperty(ref _confTargetIndex, value))
+                return;
+            if (_confTargetIndex >= 0 && _confTargetIndex < _confTargetPaths.Count)
+                ApacheConfPath = _confTargetPaths[_confTargetIndex];
+        }
+    }
+
+    public bool IsApache => _servers.Count > 0 && _servers[_serverIndex].Kind != WebServerKind.Iis;
 
     public string VirtualDirectory
     {
@@ -85,7 +132,7 @@ public sealed class WebPublishViewModel : ViewModelBase
         {
             if (SetProperty(ref _virtualDirectory, value ?? string.Empty))
             {
-                PhysicalDirectory = WebPublishService.SuggestPhysicalDirectory(_virtualDirectory, Servers[_serverIndex]);
+                ApplyPhysicalForCurrent();
                 OnPropertyChanged(nameof(Url));
             }
         }
@@ -121,7 +168,7 @@ public sealed class WebPublishViewModel : ViewModelBase
 
     public WebPublishRequest BuildRequest() => new()
     {
-        Server = Servers[_serverIndex],
+        Server = _servers[_serverIndex].Kind,
         VirtualDirectory = VirtualDirectory,
         PhysicalDirectory = PhysicalDirectory,
         ApacheConfPath = ApacheConfPath,
@@ -131,6 +178,104 @@ public sealed class WebPublishViewModel : ViewModelBase
     public Task<bool> PublishAsync() => RunAsync(publish: true);
 
     public Task<bool> DeleteAsync() => RunAsync(publish: false);
+
+    /// <summary>Показывает, выбран ли именно обнаруженный инстанс Apache (для внутренних тестов).</summary>
+    internal ApacheInstance? SelectedApacheInstance => _selectedInstance;
+
+    /// <summary>Индекс пункта в ServerOptions для конкретного инстанса (-1 — не найден).</summary>
+    internal int ServerIndexFor(ApacheInstance instance)
+    {
+        for (var i = 0; i < _servers.Count; i++)
+        {
+            if (ReferenceEquals(_servers[i].Instance, instance))
+                return i;
+        }
+        return -1;
+    }
+
+    private string DisplayServerOption(ServerOption option)
+    {
+        if (option.Kind == WebServerKind.Iis)
+            return LocalizationManager.T("WebPublish.Server.Iis");
+
+        var version = option.Kind == WebServerKind.Apache22 ? "2.2" : "2.4";
+        if (option.Instance is { } instance && !string.IsNullOrWhiteSpace(instance.Name))
+            return string.Format(LocalizationManager.T("WebPublish.ApacheInstanceOption"), version, instance.Name);
+        return string.Format(LocalizationManager.T("WebPublish.ApacheDefaultOption"), version);
+    }
+
+    private void ApplyCurrentServerDefaults(bool initial)
+    {
+        if (_servers.Count == 0)
+            return;
+
+        var option = _servers[_serverIndex];
+        _selectedInstance = option.Instance;
+
+        if (option.Instance is { } instance)
+        {
+            BuildConfTargets(instance);
+            // Каталог публикации — htdocs инстанса; имя виртуального каталога добавляется позже.
+            RebuildPhysicalForCurrent();
+        }
+        else
+        {
+            _confTargetPaths.Clear();
+            _confTargets.Clear();
+            _confTargetIndex = -1;
+            _apacheConfPath = WebPublishService.SuggestApacheConf();
+            RebuildPhysicalForCurrent();
+        }
+
+        OnPropertyChanged(nameof(ConfTargets));
+        OnPropertyChanged(nameof(ConfTargetIndex));
+        OnPropertyChanged(nameof(HasConfTargets));
+        OnPropertyChanged(nameof(IsInstanceSelected));
+        OnPropertyChanged(nameof(IsApache));
+        OnPropertyChanged(nameof(PhysicalDirectory));
+        OnPropertyChanged(nameof(ApacheConfPath));
+
+        _ = initial;
+    }
+
+    private void BuildConfTargets(ApacheInstance instance)
+    {
+        _confTargetPaths.Clear();
+        _confTargets.Clear();
+
+        if (!string.IsNullOrWhiteSpace(instance.ConfPath))
+        {
+            _confTargetPaths.Add(instance.ConfPath);
+            _confTargets.Add(string.Format(
+                LocalizationManager.T("WebPublish.ConfTargetMain"),
+                Path.GetFileName(instance.ConfPath)));
+        }
+        foreach (var include in instance.IncludeFiles ?? Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(include))
+                continue;
+            _confTargetPaths.Add(include);
+            _confTargets.Add(string.Format(
+                LocalizationManager.T("WebPublish.ConfTargetInclude"),
+                Path.GetFileName(include)));
+        }
+
+        _confTargetIndex = _confTargetPaths.Count > 0 ? 0 : -1;
+        _apacheConfPath = _confTargetPaths.Count > 0 ? _confTargetPaths[0] : string.Empty;
+    }
+
+    private void ApplyPhysicalForCurrent() => RebuildPhysicalForCurrent();
+
+    private void RebuildPhysicalForCurrent()
+    {
+        if (_servers.Count == 0)
+            return;
+        var option = _servers[_serverIndex];
+        if (option.Instance is { } instance && !string.IsNullOrWhiteSpace(instance.Htdocs))
+            PhysicalDirectory = Path.Combine(instance.Htdocs, VirtualDirectory);
+        else
+            PhysicalDirectory = WebPublishService.SuggestPhysicalDirectory(VirtualDirectory, option.Kind);
+    }
 
     private async Task<bool> RunAsync(bool publish)
     {

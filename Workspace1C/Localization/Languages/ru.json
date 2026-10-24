@@ -3765,6 +3765,11 @@
     "WebPublish.DirRequired": "Укажите каталог публикации.",
     "WebPublish.ConfRequired": "Укажите файл конфигурации Apache.",
     "WebPublish.ConnRequired": "Укажите строку соединения.",
+    "WebPublish.ApacheInstanceOption": "Apache {0} — {1}",
+    "WebPublish.ApacheDefaultOption": "Apache {0}",
+    "WebPublish.ConfTarget": "Файл конфигурации webinst:",
+    "WebPublish.ConfTargetMain": "Основной конфиг ({0})",
+    "WebPublish.ConfTargetInclude": "Включаемый файл: {0}",
 
     "Alerts.MenuItem": "Мониторинг и оповещения…",
     "Alerts.Title": "Мониторинг и оповещения",

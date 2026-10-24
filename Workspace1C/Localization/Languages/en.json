@@ -3766,6 +3766,11 @@
     "WebPublish.DirRequired": "Specify the publication folder.",
     "WebPublish.ConfRequired": "Specify the Apache config file.",
     "WebPublish.ConnRequired": "Specify the connection string.",
+    "WebPublish.ApacheInstanceOption": "Apache {0} — {1}",
+    "WebPublish.ApacheDefaultOption": "Apache {0}",
+    "WebPublish.ConfTarget": "webinst config file:",
+    "WebPublish.ConfTargetMain": "Main config ({0})",
+    "WebPublish.ConfTargetInclude": "Include file: {0}",
 
     "Alerts.MenuItem": "Monitoring and alerts…",
     "Alerts.Title": "Monitoring and alerts",

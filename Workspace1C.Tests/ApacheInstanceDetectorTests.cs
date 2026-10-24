@@ -1,0 +1,120 @@
+using Workspace1C.Models;
+using Workspace1C.Services;
+using Xunit;
+
+namespace Workspace1C.Tests;
+
+/// <summary>
+/// Issue #63 (часть B): обнаружение инстансов Apache. Чистые функции разбора
+/// командной строки службы (Windows) и вывода apache2ctl -V/-S (Linux)
+/// тестируются без реальных служб/процессов.
+/// </summary>
+public sealed class ApacheInstanceDetectorTests
+{
+    [Fact]
+    public void ApacheInstanceDetector_Windows_ParsesServiceImagePath_DAndF_Switches()
+    {
+        var instance = ApacheInstanceDetector.ParseWindowsServiceImagePath(
+            "Apache2.4", "Apache HTTP Server", "Apache/2.4.62",
+            "\"C:\\Apache24\\bin\\httpd.exe\" -d \"C:\\Apache24\" -f \"C:\\Apache24\\conf\\httpd.conf\"");
+
+        Assert.NotNull(instance);
+        Assert.Equal("Apache2.4", instance!.Id);
+        Assert.Equal(@"C:\Apache24", instance.ServerRoot);
+        Assert.Equal(@"C:\Apache24\conf\httpd.conf", instance.ConfPath);
+        Assert.Equal(@"C:\Apache24\htdocs", instance.Htdocs);
+        Assert.Equal(WebServerKind.Apache24, instance.Kind);
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_Windows_WithoutDOrF_UsesExeDirAndDefaultConf()
+    {
+        // Нет ключей -d/-f: ServerRoot выводится из каталога бинарника, conf — по умолчанию.
+        var instance = ApacheInstanceDetector.ParseWindowsServiceImagePath(
+            "httpd", "Apache", "Apache 2.2",
+            "\"C:\\Apache22\\bin\\httpd.exe\" -k runservice");
+
+        Assert.NotNull(instance);
+        Assert.Equal(@"C:\Apache22", instance!.ServerRoot);
+        Assert.Equal(@"C:\Apache22\conf\httpd.conf", instance.ConfPath);
+        Assert.Equal(WebServerKind.Apache22, instance.Kind);
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_Windows_NoApacheSwitches_ReturnsNull()
+    {
+        var instance = ApacheInstanceDetector.ParseWindowsServiceImagePath(
+            "some-service", "Some Service", "Not Apache", null);
+        Assert.Null(instance);
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_Linux_ParsesApacheCtl_V_ServerRootAndConfig()
+    {
+        const string apacheCtl = @"Server version: Apache/2.4.62 (Ubuntu)
+Server built:   2024-08-07T13:24:45
+Server's Module Magic Number: 20120211:129
+Server loaded:  APR 1.5.2, APR-UTIL 1.5.4
+Compiled using: APR 1.5.2, APR-UTIL 1.5.4
+ -D HTTPD_ROOT=""/etc/apache2""
+ -D SERVER_CONFIG_FILE=""conf/httpd.conf""
+";
+        const string apacheCtlS = @"VirtualHost configuration:
+wildcard NameVirtualHosts and _default_ servers:
+*:80                   is a NameVirtualHost
+         default server localhost (/etc/apache2/sites-enabled/000-default.conf:1)
+Main DocumentRoot: ""/var/www/html""
+";
+
+        var instance = ApacheInstanceDetector.ParseApacheCtl(
+            apacheCtl, apacheCtlS, "/etc/apache2/apache2.conf", "/var/www");
+
+        Assert.NotNull(instance);
+        // Относительный SERVER_CONFIG_FILE резолвится против HTTPD_ROOT.
+        Assert.Equal("/etc/apache2/conf/httpd.conf", instance!.ConfPath);
+        Assert.Equal("/etc/apache2", instance.ServerRoot);
+        Assert.Equal("/var/www/html", instance.Htdocs);
+        Assert.Equal(WebServerKind.Apache24, instance.Kind);
+        Assert.Contains("Apache/2.4.62", instance.Name);
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_Linux_ParsesAbsoluteServerConfigFileAndFallsBackHtdocs()
+    {
+        const string apacheCtl = @"Server version: Apache/2.4.6 (CentOS)
+ -D HTTPD_ROOT=""/etc/httpd""
+ -D SERVER_CONFIG_FILE=""/etc/httpd/conf/httpd.conf""
+";
+        var instance = ApacheInstanceDetector.ParseApacheCtl(
+            apacheCtl, null, "/etc/httpd/conf/httpd.conf", "/var/www");
+
+        Assert.NotNull(instance);
+        Assert.Equal("/etc/httpd/conf/httpd.conf", instance!.ConfPath);
+        Assert.Equal("/etc/httpd", instance.ServerRoot);
+        // Нет вывода -S: подставляется каталог htdocs по умолчанию.
+        Assert.Equal("/var/www", instance.Htdocs);
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_LooksLikeApache_MatchesHttpdAndApacheCaseInsensitive()
+    {
+        Assert.True(ApacheInstanceDetector.LooksLikeApache("Apache HTTP Server"));
+        Assert.True(ApacheInstanceDetector.LooksLikeApache("httpd"));
+        Assert.True(ApacheInstanceDetector.LooksLikeApache("Apache/2.4.62 (Ubuntu)"));
+        Assert.False(ApacheInstanceDetector.LooksLikeApache("nginx"));
+        Assert.False(ApacheInstanceDetector.LooksLikeApache(null));
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_PopulateIncludes_SplitsFilesAndWildcardDirs()
+    {
+        var instance = new ApacheInstance { ConfPath = @"C:\apache\httpd.conf" };
+        ApacheInstanceDetector.PopulateIncludes(instance,
+            "Include extra/httpd-vhosts.conf\nIncludeOptional \"extra/sites/*.conf\"\n",
+            @"C:\apache\conf");
+
+        Assert.Single(instance.IncludeFiles);
+        Assert.Equal(@"C:\apache\conf\extra\httpd-vhosts.conf", instance.IncludeFiles[0]);
+        Assert.Contains(@"C:\apache\conf\extra\sites\*.conf", instance.IncludeDirs);
+    }
+}
