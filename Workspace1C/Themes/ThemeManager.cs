@@ -857,6 +857,10 @@ namespace Workspace1C.Themes
             // выбранная вкладка левой панели настроек теряют читаемость в тёмной теме.
             SetContrastBrush(dict, scheme, dark, "AccentTextBrush", "AccentColor");
             SetContrastBrush(dict, scheme, dark, "TreeSelectedTextBrush", "TreeSelectedColor");
+            // Текст на плашке избранного (issue #61): контраст по WCAG к фактическому
+            // FavoriteColor, чтобы номера Alt+N и подписи бейджей были читаемыми
+            // и в тёмной теме, и в пользовательских схемах с тёмным «янтарём».
+            SetContrastBrush(dict, scheme, dark, "FavoriteTextBrush", "FavoriteColor");
         }
 
         /// <summary>Выставляет кисть, контрастную заданному цвету палитры (WCAG 4.5:1).</summary>

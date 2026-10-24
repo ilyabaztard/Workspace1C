@@ -18,6 +18,7 @@
     <Color x:Key="TextOnAccentColor">#FFFFFF</Color>
     <Color x:Key="ButtonTextColor">#000000</Color>
     <Color x:Key="FavoriteColor">#F59E0B</Color>
+    <Color x:Key="FavoriteTextColor">#1C1917</Color>
     <Color x:Key="ItemHoverColor">#FFF3CD</Color>
     <Color x:Key="ItemSelectedColor">#FFE69C</Color>
     <Color x:Key="AvatarBackgroundColor">#FFF3CD</Color>
@@ -47,6 +48,7 @@
     <SolidColorBrush x:Key="TextOnAccentBrush" Color="{DynamicResource TextOnAccentColor}"/>
     <SolidColorBrush x:Key="ButtonTextBrush" Color="{DynamicResource ButtonTextColor}"/>
     <SolidColorBrush x:Key="FavoriteBrush" Color="{DynamicResource FavoriteColor}"/>
+    <SolidColorBrush x:Key="FavoriteTextBrush" Color="{DynamicResource FavoriteTextColor}"/>
     <SolidColorBrush x:Key="ItemHoverBrush" Color="{DynamicResource ItemHoverColor}"/>
     <SolidColorBrush x:Key="ItemSelectedBrush" Color="{DynamicResource ItemSelectedColor}"/>
     <SolidColorBrush x:Key="AvatarBackgroundBrush" Color="{DynamicResource AvatarBackgroundColor}"/>

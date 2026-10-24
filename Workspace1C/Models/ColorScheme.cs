@@ -346,6 +346,9 @@ public class ColorScheme
         ["TextOnAccentColor"] = "#FFFFFF",
         ["ButtonTextColor"] = "#000000",
         ["FavoriteColor"] = "#F59E0B",
+        // Текст на плашке избранного: тёмный (плашка всегда яркая). Реальный контраст
+        // к палитре схемы добирает ThemeManager (SetContrastBrush FavoriteTextBrush).
+        ["FavoriteTextColor"] = "#1C1917",
         ["FolderColor"] = "#2D6CDF",
         ["FavoriteFolderColor"] = "#8B5CF6",
         ["ItemHoverColor"] = "#FFF3CD",
@@ -381,6 +384,7 @@ public class ColorScheme
         ["TextOnAccentColor"] = "#FFFFFF",
         ["ButtonTextColor"] = "#000000",
         ["FavoriteColor"] = "#FBBF24",
+        ["FavoriteTextColor"] = "#1C1917",
         ["FolderColor"] = "#3B82F6",
         ["FavoriteFolderColor"] = "#8B5CF6",
         ["ItemHoverColor"] = "#334155",
@@ -439,6 +443,7 @@ public class ColorScheme
                 ["TextOnAccentColor"] = "#000000",
                 ["ButtonTextColor"] = "#000000",
                 ["FavoriteColor"] = C(0.60, 0.90),
+                ["FavoriteTextColor"] = "#1C1917",
                 ["FolderColor"] = C(0.60, 0.80),
                 ["FavoriteFolderColor"] = C(0.60, 0.60),
                 ["ItemHoverColor"] = C(0.25, 0.40),
@@ -474,6 +479,7 @@ public class ColorScheme
             ["TextOnAccentColor"] = "#FFFFFF",
             ["ButtonTextColor"] = "#000000",
             ["FavoriteColor"] = C(0.50, 0.90),
+            ["FavoriteTextColor"] = "#1C1917",
             ["FolderColor"] = C(0.50, 0.80),
             ["FavoriteFolderColor"] = C(0.55, 0.60),
             ["ItemHoverColor"] = C(0.94, 0.50),

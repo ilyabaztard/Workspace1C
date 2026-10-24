@@ -1729,7 +1729,9 @@
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Margin="4,2">
                                             <Border Background="{DynamicResource FavoriteBrush}" CornerRadius="4" Padding="6,2" Margin="0,0,10,0">
-                                                <TextBlock Text="{Binding Number, StringFormat=Alt+{0}}" FontWeight="Bold" FontSize="12" Foreground="#1C1917"/>
+                                                <!-- Issue #61: номер Alt+N на плашке избранного — кисть FavoriteTextBrush
+                                                     (контраст к FavoriteColor), не фиксированная константа. -->
+                                                <TextBlock Text="{Binding Number, StringFormat=Alt+{0}}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource FavoriteTextBrush}"/>
                                             </Border>
                                             <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
                                                        Foreground="{DynamicResource TextPrimaryBrush}"/>

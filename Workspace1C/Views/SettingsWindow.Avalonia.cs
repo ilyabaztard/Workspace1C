@@ -3202,11 +3202,12 @@ namespace Workspace1C
                 {
                     FontWeight = FontWeight.Bold,
                     FontSize = 12,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    // Цвет из разметки: на жёлтой плашке текст всегда тёмный,
-                    // иначе в тёмной теме он сливается (SettingsWindow.xaml:1061).
-                    Foreground = new SolidColorBrush(Color.Parse("#1C1917"))
+                    VerticalAlignment = VerticalAlignment.Center
                 };
+                // Issue #61: тёмный текст на жёлтой плашке — кисть FavoriteTextBrush
+                // (контраст к FavoriteColor по WCAG; раньше фиксированная константа #1C1917,
+                // нечитаемая при тёмных пользовательских схемах).
+                ThemeBrushes.Bind(badgeText, TextBlock.ForegroundProperty, "FavoriteTextBrush");
                 badgeText.Bind(TextBlock.TextProperty, new Avalonia.Data.Binding(nameof(FavoriteSlotItem.Caption)));
                 var badge = new Border
                 {

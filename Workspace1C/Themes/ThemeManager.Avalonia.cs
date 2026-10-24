@@ -530,6 +530,11 @@ namespace Workspace1C.Themes
             SetContrastBrush(app, scheme, dark, "AccentTextBrush", "AccentColor");
             SetContrastBrush(app, scheme, dark, "TreeSelectedTextBrush", "TreeSelectedColor");
 
+            // Текст на плашке избранного (issue #61): контраст по WCAG к фактическому
+            // FavoriteColor — номера Alt+N и подписи бейджей читаемы в обеих темах
+            // и в пользовательских схемах с тёмным янтарём.
+            SetContrastBrush(app, scheme, dark, "FavoriteTextBrush", "FavoriteColor");
+
             ApplyFluentAccent(app, scheme, dark);
         }
 

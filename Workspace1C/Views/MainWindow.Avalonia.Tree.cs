@@ -568,12 +568,14 @@ namespace Workspace1C
             {
                 FontSize = UiMetrics.ScaledRowFont(10),
                 FontWeight = FontWeight.Bold,
-                // Цвет подписи в разметке задан числом и одинаков в обеих темах.
-                Foreground = new SolidColorBrush(Color.Parse("#1C1917")),
+                // Issue #61: тёмный текст на плашке избранного — кисть FavoriteTextBrush
+                // (контраст к FavoriteColor по WCAG; раньше фиксированная константа #1C1917,
+                // нечитаемая при тёмных пользовательских схемах).
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 IsHitTestVisible = false
             };
+            ThemeBrushes.Bind(text, TextBlock.ForegroundProperty, "FavoriteTextBrush");
 
             // Отступы и минимум плашки ужаты против разметки: там колонка звезды
             // шириной 28 и содержимое кнопки выходит за её край, а WPF ничего
@@ -895,6 +897,9 @@ namespace Workspace1C
             // заданы явно и одинаковы в обеих темах, поэтому берутся числом.
             var badges = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
 
+            // Issue #61: текст бейджа «Избранное» — кисть FavoriteTextBrush, а не
+            // FavoriteBrush: плашка #FEF3C7 постоянная, а FavoriteBrush в тёмной теме
+            // жёлтый (#FBBF24) — «жёлтое на жёлтом» было нечитаемо.
             var favoriteBadge = Badge("#FEF3C7");
             favoriteBadge.Child = BadgeContent("IconStar", "#F59E0B", textBinding:
                 new MultiBinding
@@ -905,7 +910,7 @@ namespace Workspace1C
                         new Binding { Source = LocalizationManager.T("Main.Favorites") },
                         new Binding("SelectedInfobase.FavoriteHotkeyDisplay")
                     }
-                }, themeBrushKey: "FavoriteBrush");
+                }, themeBrushKey: "FavoriteTextBrush");
             favoriteBadge.Bind(Control.IsVisibleProperty, new Binding("SelectedInfobase.IsFavorite"));
             badges.Children.Add(favoriteBadge);
 

@@ -1796,9 +1796,13 @@
                                                                 </Style.Triggers>
                                                             </Style>
                                                         </Border.Style>
+                                                        <!-- Issue #61: тёмный текст на плашке избранного всегда через кисть
+                                                             FavoriteTextBrush (контраст к FavoriteColor по WCAG). Раньше здесь
+                                                             была фиксированная константа #1C1917, нечитаемая при тёмных
+                                                             пользовательских схемах. -->
                                                         <TextBlock Text="{Binding FavoriteHotkeyDisplay}"
                                                                    FontSize="{Binding DataContext.RowHotkeyFontSize, RelativeSource={RelativeSource AncestorType=Window}}" FontWeight="Bold"
-                                                                   Foreground="#1C1917"
+                                                                   Foreground="{DynamicResource FavoriteTextBrush}"
                                                                    HorizontalAlignment="Center"
                                                                    VerticalAlignment="Center"/>
                                                     </Border>
@@ -2448,7 +2452,10 @@
                                         Visibility="{Binding SelectedInfobase.IsFavorite, Converter={StaticResource BoolToVis}}">
                                     <StackPanel Orientation="Horizontal">
                                         <materialDesign:PackIcon Kind="Star" Width="12" Height="12" Foreground="#F59E0B" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                        <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource FavoriteBrush}">
+                                        <!-- Issue #61: подпись «Избранное» на постоянной светло-кремовой плашке #FEF3C7.
+                                             Раньше текст был кистью FavoriteBrush (в тёмной теме жёлтый #FBBF24) —
+                                             «жёлтое на жёлтом», нечитаемо. Теперь тёмный текст FavoriteTextBrush. -->
+                                        <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource FavoriteTextBrush}">
                                             <TextBlock.Text>
                                                 <MultiBinding StringFormat="{}{0} {1}">
                                                     <Binding Source="{x:Static loc:LocalizationManager.Instance}" Path="Source"

@@ -22,15 +22,21 @@ namespace Workspace1C
     {
         public static TextBlock Text(string text, double fontSize = 13, bool bold = false, bool secondary = false)
         {
-            return new TextBlock
+            // Issue #61: подписи и тексты окон, собранных в коде, привязываются к кисти
+            // темы явно (аналог WpfUi.Text). Раньше текст полагался на глобальный стиль
+            // TextBlock и оставался ЧЁРНЫМ, если стиль не доходил до программного дерева, —
+            // «чёрное на тёмном» в тёмной теме (окно публикации, TechLog, DBMS, Телеграм-бот).
+            var block = new TextBlock
             {
                 Text = text,
                 FontSize = fontSize,
                 FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal,
                 VerticalAlignment = VerticalAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
-                Opacity = secondary ? 0.7 : 1.0
+                TextWrapping = TextWrapping.Wrap
             };
+            ThemeBrushes.Bind(block, TextBlock.ForegroundProperty,
+                secondary ? "TextSecondaryBrush" : "TextPrimaryBrush");
+            return block;
         }
 
         public static TextBlock Label(string key, double fontSize = 12) =>
@@ -159,6 +165,8 @@ namespace Workspace1C
             };
             if (foreground is not null)
                 cell.Foreground = foreground;
+            else
+                ThemeBrushes.Bind(cell, TextBlock.ForegroundProperty, "TextPrimaryBrush");
             Grid.SetColumn(cell, column);
             return cell;
         }
@@ -174,10 +182,11 @@ namespace Workspace1C
                     Text = LocalizationManager.T(keys[i]),
                     FontSize = 11,
                     FontWeight = FontWeight.SemiBold,
-                    Opacity = 0.6,
                     Margin = new Thickness(6, 0),
                     TextTrimming = TextTrimming.CharacterEllipsis
                 };
+                // Issue #61: шапки таблиц, как и подписи, привязываются к кисти темы.
+                ThemeBrushes.Bind(cell, TextBlock.ForegroundProperty, "TextSecondaryBrush");
                 Grid.SetColumn(cell, i);
                 grid.Children.Add(cell);
             }
