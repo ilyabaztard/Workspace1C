@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Workspace1C.Localization;
@@ -700,44 +698,13 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
-    public async Task LoadSourceBases_AutoFillsDbName_FromFirstBase()
+    public async Task MigrateAsync_UsesSourceDbNameOrInfobaseName_WhenDbNameMissingInSource()
     {
-        // После «Получить базы» поле «Имя БД» автозаполняется из первой базы источника
-        // (шаблон Dbms/DbServer, issue #41).
-        var client = new FakeRacClient(singleCluster: true);
-        var vm = new ClusterMigrationViewModel(
-            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
-        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
-        await AwaitSourceClusters(vm);
-
-        await AwaitSourceRows(vm);
-
-        Assert.Equal("база1", vm.DbName);
-    }
-
-    [Fact]
-    public async Task LoadSourceBases_DoesNotOverwriteDbName_WhenUserEditedIt()
-    {
-        // Пользователь вручную ввёл «Имя БД» (флаг _dbDetailsTouched) — автозаполнение из
-        // первой базы источника не перезаписывает его значение.
-        var client = new FakeRacClient(singleCluster: true);
-        var vm = new ClusterMigrationViewModel(
-            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
-        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
-        await AwaitSourceClusters(vm);
-
-        vm.DbName = "newdb";
-
-        await AwaitSourceRows(vm);
-
-        Assert.Equal("newdb", vm.DbName);
-    }
-
-    [Fact]
-    public async Task MigrateAsync_PassesVmDbName_IntoCreateRequest()
-    {
-        // У баз-источника rac не вернул db-name (sourceDbName: "") — в rac «infobase create»
-        // уходит значение поля «Имя БД» формы (fallback-семантика фикса 1.0.0.70).
+        // issue #41 (фикс 1.0.0.71): поле «Имя БД» удалено с формы миграции, а имя БД в СУБД
+        // переносится автоматически внутри ClusterMigrationService.BuildCreateRequest. У базы
+        // rac не вернул db-name (sourceDbName: "") — в rac «infobase create» уходит имя ИБ
+        // (сервер 1С по умолчанию создаёт БД в СУБД с именем ИБ). VM не хранит DbName — перенос
+        // работает без поля.
         var client = new FakeRacClient(singleCluster: true, sourceDbName: "");
         var vm = new ClusterMigrationViewModel(
             client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
@@ -747,25 +714,22 @@ public sealed class ClusterMigrationViewModelTests
         vm.SelectedTargetServer = vm.AvailableTargetServers[1];
         await AwaitTargetClusters(vm);
         await vm.GetTargetStatusesAsync();
-
-        vm.DbName = "dbX";
 
         await vm.MigrateAsync();
 
         Assert.True(vm.MigrationCompleted);
         Assert.NotEmpty(client.Created);
-        Assert.All(client.Created, c => Assert.Equal("dbX", c.Request.DbName));
+        Assert.Equal(new[] { "База1", "База2" },
+            client.Created.Select(c => c.Request.DbName).ToArray());
     }
 
     [Fact]
-    public async Task MigrateAsync_ShowsClearError_AndDoesNotCallRac_WhenDbNameEmpty()
+    public async Task MigrateAsync_NoDbNameField_RequestHasNonEmptyDbName()
     {
-        // Обе базы без db-name и поле «Имя БД» пусто — понятное сообщение с именем базы вместо
-        // ArgumentException «Не указано имя базы данных.» из RacClient; rac не вызывается.
-        // В тестовой среде LocalizationManager не инициализирован и T() возвращает ключ
-        // (конвенция проекта: сравнение через саму T(), как в остальных тестах); перевод
-        // ключа с подстановкой имени базы проверяем напрямую по словарю ru.json ниже.
-        var client = new FakeRacClient(singleCluster: true, sourceDbName: "");
+        // Регресс фикса 1.0.0.71: запрос создания никогда не получает пустой DbName — у базы
+        // с корректным db-name переносится собственное имя («база1»/«база2»), у базы без
+        // db-name — имя ИБ (fallback). Никакое значение с формы не участвует.
+        var client = new FakeRacClient(singleCluster: true);
         var vm = new ClusterMigrationViewModel(
             client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
         vm.SelectedSourceServer = vm.AvailableSourceServers[0];
@@ -777,26 +741,11 @@ public sealed class ClusterMigrationViewModelTests
 
         await vm.MigrateAsync();
 
-        Assert.False(vm.MigrationCompleted);
-        Assert.Empty(client.Created);
-        // VM сформатировал сообщение по нашему ключу, подставив имя первой базы (в тестовой
-        // среде T()=ключ — равенство проверяем симметрично через саму T()).
-        Assert.Equal(
-            string.Format(LocalizationManager.T("ClusterMigration.Error.DbNameEmptyFormat"), "База1"),
-            vm.ErrorMessage);
-        // Сырое сообщение rac (ArgumentException «Не указано имя базы данных.») до пользователя
-        // не доходит.
-        Assert.DoesNotContain("Не указано имя базы данных.", vm.ErrorMessage);
-
-        // Перевод ключа есть в ru.json и после подстановки имени базы даёт видимый текст
-        // (защита от «голого» ключа локализации вместо текста у пользователя).
-        var ruStrings = LoadLanguageStrings("ru.json");
-        Assert.True(
-            ruStrings.ContainsKey("ClusterMigration.Error.DbNameEmptyFormat"),
-            "Ключ ClusterMigration.Error.DbNameEmptyFormat отсутствует в ru.json.");
-        var translated = string.Format(ruStrings["ClusterMigration.Error.DbNameEmptyFormat"], "База1");
-        Assert.Contains("База1", translated);
-        Assert.DoesNotContain("ClusterMigration.", translated, StringComparison.Ordinal);
+        Assert.True(vm.MigrationCompleted);
+        Assert.NotEmpty(client.Created);
+        Assert.All(client.Created, c => Assert.False(string.IsNullOrWhiteSpace(c.Request.DbName)));
+        Assert.Equal(new[] { "база1", "база2" },
+            client.Created.Select(c => c.Request.DbName).ToArray());
     }
 
     // ===================== Хелперы =====================
@@ -832,35 +781,6 @@ public sealed class ClusterMigrationViewModelTests
         Password = "secret"
     };
 
-    /// <summary>Корень репозитория из тестового каталога (как в Issue41WindowLayoutTests).</summary>
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null)
-        {
-            if (Directory.Exists(Path.Combine(dir.FullName, "Workspace1C", "Views")) &&
-                Directory.Exists(Path.Combine(dir.FullName, "Workspace1C.Tests")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Корень репозитория не найден из тестового каталога.");
-    }
-
-    /// <summary>Строки словаря (strings) из ru.json/en.json — проверка перевода ключа без
-    /// инициализации LocalizationManager (в тестовой среде T() возвращает ключ).
-    /// Не мутирует singleton — безопасно при параллельном запуске классов.</summary>
-    private static Dictionary<string, string> LoadLanguageStrings(string fileName)
-    {
-        var path = Path.Combine(FindRepoRoot(), "Workspace1C", "Localization", "Languages", fileName);
-        Assert.True(File.Exists(path), $"Файл словаря не найден: {path}");
-        var json = File.ReadAllText(path);
-        using var doc = JsonDocument.Parse(json);
-        var strings = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var property in doc.RootElement.GetProperty("strings").EnumerateObject())
-            strings[property.Name] = property.Value.GetString() ?? string.Empty;
-        return strings;
-    }
-
     // ===================== Fake =====================
 
     /// <summary>
@@ -880,7 +800,7 @@ public sealed class ClusterMigrationViewModelTests
         private readonly string[] _targetBaseNames;
         private readonly string _sourceDbms;
         // null — прежнее поведение (DbName="база1"/"база2"); "" — пустой db-name у обеих баз
-        // источника (кейс issue #41, фикс 1.0.0.70: rac не вернул db-name).
+        // источника (кейс issue #41, фикс 1.0.0.71: rac не вернул db-name — переносится имя ИБ).
         private readonly string? _sourceDbName;
 
         public FakeRacClient(bool singleCluster = true, bool failCreate = false, bool failDrop = false,

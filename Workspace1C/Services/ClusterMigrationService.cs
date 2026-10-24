@@ -46,6 +46,14 @@ public static class ClusterMigrationService
     /// <see cref="RacInfobaseInfo"/>: «rac не возвращает пароль»). База данных на сервере
     /// СУБД уже существует (старый кластер подключался к ней) — <see cref="RacInfobaseCreateRequest.CreateDb"/>
     /// = false, переносим ТОЛЬКО регистрацию базы в новом кластере.
+    /// Имя БД в СУБД переносится АВТОМАТИЧЕСКИ (issue #41, фикс 1.0.0.71; поле «Имя БД» на
+    /// форме миграции удалено): приоритет у <see cref="RacInfobaseSummary.DbName"/> источника,
+    /// а для баз, где rac не вернул db-name в «infobase summary list» (см.
+    /// <see cref="RacOutputParser.ToInfobaseSummaries"/> — отдельные версии rac не выводят
+    /// колонку/ключ db-name; комментарий 7OH «выяснить, почему rac не возвращает db-name»),
+    /// используется имя информационной базы <see cref="RacInfobaseSummary.Name"/>: при создании
+    /// ИБ сервер 1С по умолчанию создаёт БД в СУБД с именем, равным имени ИБ, поэтому это
+    /// корректный fallback без лишних запросов к rac.
     /// </summary>
     /// <param name="source">Запись базы источника («infobase summary list» старого кластера).</param>
     /// <param name="dbUser">Пользователь СУБД для подключения из нового кластера (диалог).</param>
@@ -59,19 +67,12 @@ public static class ClusterMigrationService
     /// Сервер СУБД с формы миграции (issue #41); приоритет над
     /// <see cref="RacInfobaseSummary.DbServer"/> источника. Пусто — значения источника.
     /// </param>
-    /// <param name="overrideDbName">
-    /// Имя БД в СУБД с формы миграции (issue #41, фикс 1.0.0.70). Fallback-семантика:
-    /// приоритет у значения источника (<see cref="RacInfobaseSummary.DbName"/>), значение формы
-    /// используется ТОЛЬКО для баз, где rac не вернул db-name (у источника — пустое имя).
-    /// Пусто — значение источника.
-    /// </param>
     public static RacInfobaseCreateRequest BuildCreateRequest(
         RacInfobaseSummary source,
         string dbUser,
         string dbPassword,
         string overrideDbms = "",
-        string overrideDbServer = "",
-        string overrideDbName = "")
+        string overrideDbServer = "")
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -81,7 +82,9 @@ public static class ClusterMigrationService
             Description = source.Descr ?? string.Empty,
             Dbms = FirstNonEmpty(overrideDbms, source.Dbms),
             DbServer = FirstNonEmpty(overrideDbServer, source.DbServer),
-            DbName = FirstNonEmpty(source.DbName, overrideDbName),
+            // Перенос имени БД автоматически: значение rac, а для баз без db-name в summary
+            // list — имя ИБ (сервер 1С создаёт БД в СУБД по умолчанию с именем ИБ).
+            DbName = FirstNonEmpty(source.DbName, source.Name ?? string.Empty),
             DbUser = dbUser ?? string.Empty,
             DbPassword = dbPassword ?? string.Empty,
             Locale = source.Locale ?? string.Empty,

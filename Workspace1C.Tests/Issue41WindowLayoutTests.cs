@@ -111,32 +111,57 @@ public sealed class Issue41WindowLayoutTests
     }
 
     [Fact]
-    public void ClusterMigrationWindow_Wpf_HasDbNameField_AboveCredentialsBelowDbmsRow()
+    public void ClusterMigrationWindow_Wpf_NoDbNameField_SummaryAndBulkButtonsAboveOptions()
     {
-        // issue #41 (фикс 1.0.0.70): поле «Имя БД» — между строкой «Тип СУБД/Сервер СУБД»
-        // и учётными данными СУБД, с привязкой Text к DbName (UpdateSourceTrigger).
+        // issue #41 (фикс 1.0.0.71, комментарий 7OH): поле «Имя БД» удалено с формы; сводка
+        // выделения и кнопки «Выделить все»/«Снять все» стоят сразу под списком (BasesGrid),
+        // НАД галочками-опциями GroupByClusterCheck/KeepInSourceCheck.
         var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.xaml"));
 
-        var dbServerPos = xaml.IndexOf("ClusterMigration.DbServer", StringComparison.Ordinal);
-        var dbNamePos = xaml.IndexOf("ClusterMigration.DbName", StringComparison.Ordinal);
-        var dbUserPos = xaml.IndexOf("ClusterMigration.DbUser", StringComparison.Ordinal);
-        Assert.True(dbNamePos >= 0, "Поле «Имя БД» не найдено в разметке.");
-        Assert.True(dbNamePos > dbServerPos, "Строка «Имя БД» должна быть НИЖЕ строки «Тип СУБД/Сервер СУБД».");
-        Assert.True(dbUserPos > dbNamePos, "Строка «Имя БД» должна быть ВЫШЕ полей пользователя/пароля.");
+        Assert.DoesNotContain("ClusterMigration.DbName", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DbNameBox", xaml, StringComparison.Ordinal);
 
-        Assert.Contains("x:Name=\"DbNameBox\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding DbName, UpdateSourceTrigger=PropertyChanged}\"", xaml, StringComparison.Ordinal);
+        var gridPos = xaml.IndexOf("BasesGrid", StringComparison.Ordinal);
+        var summaryPos = xaml.IndexOf("SelectionSummaryText", StringComparison.Ordinal);
+        var optionsPos = xaml.IndexOf("GroupByClusterCheck", StringComparison.Ordinal);
+        Assert.True(summaryPos >= 0, "Сводка выделения не найдена в разметке.");
+        Assert.True(optionsPos >= 0, "Галочки-опции не найдены в разметке.");
+        Assert.True(gridPos < summaryPos, "Сводка выделения должна быть ПОД списком баз.");
+        Assert.True(summaryPos < optionsPos, "Сводка выделения должна быть ВЫШЕ галочек-опций.");
     }
 
     [Fact]
-    public void ClusterMigrationWindow_Avalonia_HasDbNameBinding()
+    public void ClusterMigrationWindow_Avalonia_NoDbNameField_BulkHostUnderList()
     {
-        // issue #41 (фикс 1.0.0.70): поле «Имя БД» в axaml и DbNameBox в коде Avalonia.
+        // issue #41 (фикс 1.0.0.71): поле «Имя БД» удалено из axaml и кода Avalonia; BulkHost
+        // (сводка + «Выделить все»/«Снять все») стоит строкой сразу под ListBox, над опциями.
         var axaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.axaml"));
         var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.Avalonia.cs"));
 
-        Assert.Contains("ClusterMigration.DbName", axaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"DbNameBox\"", axaml, StringComparison.Ordinal);
-        Assert.Contains("DbNameBox", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClusterMigration.DbName", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DbNameBox", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DbNameBox", code, StringComparison.Ordinal);
+
+        var listPos = axaml.IndexOf("BasesList", StringComparison.Ordinal);
+        var bulkPos = axaml.IndexOf("BulkHost", StringComparison.Ordinal);
+        var optionsPos = axaml.IndexOf("GroupByClusterCheck", StringComparison.Ordinal);
+        Assert.True(listPos >= 0 && bulkPos >= 0 && optionsPos >= 0, "Список/BulkHost/опции не найдены в разметке.");
+        Assert.True(listPos < bulkPos, "BulkHost должен быть строкой ПОД списком баз.");
+        Assert.True(bulkPos < optionsPos, "BulkHost должен быть ВЫШЕ галочек-опций.");
+    }
+
+    [Fact]
+    public void ClusterMigrationWindow_Localization_DbNameKeysRemoved()
+    {
+        // Ключи «Имя БД» и «DbNameEmptyFormat» удалены из обоих словарей (фикс 1.0.0.71) —
+        // стража от «мёртвых» строк ru/en (LocalizationCoverageServicesTests сверяет ru/en
+        // между собой, здесь — отсутствие удалённых ключей).
+        var ru = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "ru.json"));
+        var en = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "en.json"));
+
+        Assert.DoesNotContain("ClusterMigration.DbName", ru, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClusterMigration.DbName", en, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClusterMigration.Error.DbNameEmptyFormat", ru, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClusterMigration.Error.DbNameEmptyFormat", en, StringComparison.Ordinal);
     }
 }

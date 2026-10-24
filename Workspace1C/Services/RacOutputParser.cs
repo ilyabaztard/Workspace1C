@@ -760,6 +760,13 @@ public static class RacOutputParser
     /// снимаются обрамляющие двойные кавычки — по образцу блочного формата ниже (issue #3,
     /// часть 1): rac может заключать «dbms» и другие значения в кавычки, иначе
     /// клиент-серверная СУБД не распознаётся белым списком диалога удаления.
+    /// Отдельные версии rac НЕ выводят db-name (табличный формат короче 6 колонок либо в
+    /// блочном отсутствуют ключи db-name/dbName — комментарий 7OH «rac не возвращает
+    /// db-name», issue #41): у таких баз <see cref="RacInfobaseSummary.DbName"/> остаётся
+    /// пустым. Это поведение учтено в <see cref="ClusterMigrationService.BuildCreateRequest"/>:
+    /// имя БД в СУБД переносится из имени ИБ <see cref="RacInfobaseSummary.Name"/> (при
+    /// создании базы сервер 1С по умолчанию именует БД в СУБД так же, как ИБ) — без лишних
+    /// запросов к rac; поле «Имя БД» на форме миграции удалено (фикс 1.0.0.71).
     /// </summary>
     public static IReadOnlyList<RacInfobaseSummary> ToInfobaseSummaries(string output)
     {

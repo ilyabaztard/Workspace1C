@@ -45,7 +45,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Двухпанельная раскладка: «Источник» и «Приёмник» (issue #41). -->
@@ -241,87 +240,10 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- Опции: «Создавать группу по имени кластера» + «Не удалять в старом кластере» в одной строке. -->
+        <!-- Сводка выделения «Выделено: N из M · будет перенесено: N» + кнопки
+             «Выделить все»/«Снять все» (issue #41, комментарий 7OH): сразу под списком,
+             НАД галочками-опциями. -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
-            <CheckBox x:Name="GroupByClusterCheck" VerticalAlignment="Center"
-                      Content="{loc:Loc ClusterMigration.GroupByCluster}"
-                      IsChecked="{Binding UseClusterGrouping}"/>
-            <CheckBox x:Name="KeepInSourceCheck" VerticalAlignment="Center" Margin="18,0,0,0"
-                      Content="{loc:Loc ClusterMigration.KeepInSource}"
-                      IsChecked="{Binding KeepInSource}"/>
-        </StackPanel>
-
-        <!-- Тип СУБД + Сервер СУБД (issue #41, комментарий 7OH): rac «infobase create»
-             требует непустые значения "dbms" и "db-server"; для приёмника на другом
-             сервере СУБД значения источника не подходят. Строка выше учётных данных СУБД. -->
-        <Grid Grid.Row="3" Margin="0,8,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{loc:Loc ClusterMigration.Dbms}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <ComboBox x:Name="DbmsBox" Grid.Column="1" Style="{StaticResource ModernComboBox}"
-                      ItemsSource="{Binding DbmsOptions}"
-                      SelectedItem="{Binding Dbms, Mode=TwoWay}"
-                      VerticalContentAlignment="Center" Padding="6,2"/>
-            <TextBlock Grid.Column="2" Text="{loc:Loc ClusterMigration.DbServer}" VerticalAlignment="Center"
-                       Margin="14,0,8,0"/>
-            <TextBox x:Name="DbServerBox" Grid.Column="3" Style="{StaticResource ModernTextBox}"
-                     Text="{Binding DbServer, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
-        </Grid>
-
-        <!-- Имя БД (issue #41, фикс 1.0.0.70): rac может не вернуть db-name у базы-источника —
-             значение поля подставляется для таких баз (fallback), остальные переносятся со своими
-             именами. Строка ниже «Тип СУБД/Сервер СУБД» и выше логина/пароля. -->
-        <Grid Grid.Row="4" Margin="0,8,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{loc:Loc ClusterMigration.DbName}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox x:Name="DbNameBox" Grid.Column="1" Style="{StaticResource ModernTextBox}"
-                     Text="{Binding DbName, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
-        </Grid>
-
-        <!-- Учётные данные СУБД в одну линию. -->
-        <Grid Grid.Row="5" Margin="0,8,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{loc:Loc ClusterMigration.DbUser}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox x:Name="DbUserBox" Grid.Column="1" Style="{StaticResource ModernTextBox}"
-                     Text="{Binding DbUser, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
-            <TextBlock Grid.Column="2" Text="{loc:Loc ClusterMigration.DbPassword}" VerticalAlignment="Center"
-                       Margin="14,0,8,0"/>
-            <PasswordBox x:Name="DbPasswordBox" Grid.Column="3" Padding="6,4"
-                         PasswordChanged="OnDbPasswordChanged"/>
-        </Grid>
-
-        <!-- Прогресс «N из M: база» + сообщение об ошибке. -->
-        <StackPanel Grid.Row="6" Margin="0,10,0,0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="ProgressText" FontSize="12" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <ProgressBar Grid.Column="1" x:Name="BusyProgress" Width="120" Height="4"
-                             IsIndeterminate="True" Visibility="Collapsed" Foreground="#06B6D4"
-                             VerticalAlignment="Center"/>
-            </Grid>
-            <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#DC2626" TextWrapping="Wrap"
-                       Margin="0,6,0,0" Text="{Binding ErrorMessage}"/>
-        </StackPanel>
-
-        <!-- Сводка выделения + действия: выделить все / снять все, «Мигрировать», «Отмена». -->
-        <StackPanel Grid.Row="7" Orientation="Horizontal" Margin="0,10,0,0">
-            <!-- «Выделено: N из M · будет перенесено: N» (issue #41, комментарий 7OH). -->
             <TextBlock Text="{Binding SelectionSummaryText}" FontSize="12" Opacity="0.8"
                        VerticalAlignment="Center" Margin="0,0,14,0" TextWrapping="Wrap"
                        MaxWidth="380"/>
@@ -341,22 +263,89 @@
                     <TextBlock Text="{loc:Loc Selection.None}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button x:Name="MigrateButton" Style="{StaticResource ModernButton}"
-                    Background="#16A34A" Foreground="White" Padding="16,5" Margin="18,0,8,0"
-                    Click="OnMigrate_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="➜" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="White"/>
-                    <TextBlock Text="{loc:Loc ClusterMigration.MigrateButton}" VerticalAlignment="Center" Foreground="White"/>
-                </StackPanel>
-            </Button>
-            <Button x:Name="CancelButton" Style="{StaticResource ModernButton}" IsCancel="True"
-                    Background="{DynamicResource ItemHoverBrush}" Padding="14,5" Margin="18,0,0,0"
-                    Click="OnCancel_Click">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="✖" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
+        </StackPanel>
+
+        <!-- Опции: «Создавать группу по имени кластера» + «Не удалять в старом кластере» в одной строке. -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
+            <CheckBox x:Name="GroupByClusterCheck" VerticalAlignment="Center"
+                      Content="{loc:Loc ClusterMigration.GroupByCluster}"
+                      IsChecked="{Binding UseClusterGrouping}"/>
+            <CheckBox x:Name="KeepInSourceCheck" VerticalAlignment="Center" Margin="18,0,0,0"
+                      Content="{loc:Loc ClusterMigration.KeepInSource}"
+                      IsChecked="{Binding KeepInSource}"/>
+        </StackPanel>
+
+        <!-- Тип СУБД + Сервер СУБД (issue #41, комментарий 7OH): rac «infobase create»
+             требует непустые значения "dbms" и "db-server"; для приёмника на другом
+             сервере СУБД значения источника не подходят. Строка выше учётных данных СУБД. -->
+        <Grid Grid.Row="4" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{loc:Loc ClusterMigration.Dbms}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="DbmsBox" Grid.Column="1" Style="{StaticResource ModernComboBox}"
+                      ItemsSource="{Binding DbmsOptions}"
+                      SelectedItem="{Binding Dbms, Mode=TwoWay}"
+                      VerticalContentAlignment="Center" Padding="6,2"/>
+            <TextBlock Grid.Column="2" Text="{loc:Loc ClusterMigration.DbServer}" VerticalAlignment="Center"
+                       Margin="14,0,8,0"/>
+            <TextBox x:Name="DbServerBox" Grid.Column="3" Style="{StaticResource ModernTextBox}"
+                     Text="{Binding DbServer, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
+        </Grid>
+
+        <!-- Учётные данные СУБД в одну линию. -->
+        <Grid Grid.Row="5" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{loc:Loc ClusterMigration.DbUser}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox x:Name="DbUserBox" Grid.Column="1" Style="{StaticResource ModernTextBox}"
+                     Text="{Binding DbUser, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
+            <TextBlock Grid.Column="2" Text="{loc:Loc ClusterMigration.DbPassword}" VerticalAlignment="Center"
+                       Margin="14,0,8,0"/>
+            <PasswordBox x:Name="DbPasswordBox" Grid.Column="3" Padding="6,4"
+                         PasswordChanged="OnDbPasswordChanged"/>
+        </Grid>
+
+        <!-- Прогресс «N из M: база» + сообщение об ошибке, затем «Мигрировать»/«Отмена». -->
+        <StackPanel Grid.Row="6" Margin="0,10,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="ProgressText" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <ProgressBar Grid.Column="1" x:Name="BusyProgress" Width="120" Height="4"
+                             IsIndeterminate="True" Visibility="Collapsed" Foreground="#06B6D4"
+                             VerticalAlignment="Center"/>
+            </Grid>
+            <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#DC2626" TextWrapping="Wrap"
+                       Margin="0,6,0,0" Text="{Binding ErrorMessage}"/>
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <Button x:Name="MigrateButton" Style="{StaticResource ModernButton}"
+                        Background="#16A34A" Foreground="White" Padding="16,5" Margin="0,0,8,0"
+                        Click="OnMigrate_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="➜" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="White"/>
+                        <TextBlock Text="{loc:Loc ClusterMigration.MigrateButton}" VerticalAlignment="Center" Foreground="White"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="CancelButton" Style="{StaticResource ModernButton}" IsCancel="True"
+                        Background="{DynamicResource ItemHoverBrush}" Padding="14,5" Margin="18,0,0,0"
+                        Click="OnCancel_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="✖" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </StackPanel>
     </Grid>
 </Window>

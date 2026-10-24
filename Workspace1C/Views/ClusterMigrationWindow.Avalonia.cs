@@ -235,12 +235,12 @@ namespace Workspace1C
             keepCheck.Bind(CheckBox.IsCheckedProperty, new Binding("KeepInSource", BindingMode.TwoWay));
 
             // ---- Тип СУБД + Сервер СУБД (issue #41, комментарий 7OH). ----
+            // Поле «Имя БД» удалено (фикс 1.0.0.71): имя БД в СУБД переносится автоматически
+            // из источника (BuildCreateRequest: DbName из rac, иначе — имя ИБ).
             var dbmsBox = this.FindControl<ComboBox>("DbmsBox")!;
             dbmsBox.Bind(ComboBox.SelectedItemProperty, new Binding("Dbms", BindingMode.TwoWay));
             var dbServerBox = this.FindControl<TextBox>("DbServerBox")!;
             dbServerBox.Bind(TextBox.TextProperty, new Binding("DbServer", BindingMode.TwoWay));
-            var dbNameBox = this.FindControl<TextBox>("DbNameBox")!;
-            dbNameBox.Bind(TextBox.TextProperty, new Binding("DbName", BindingMode.TwoWay));
 
             // ---- Учётные данные СУБД. ----
             var dbUserBox = this.FindControl<TextBox>("DbUserBox")!;

@@ -103,10 +103,12 @@ public sealed class ClusterMigrationServiceTests
     }
 
     [Fact]
-    public void BuildCreateRequest_FallsBackToOverrideDbName_WhenSourceDbNameEmpty()
+    public void BuildCreateRequest_WhenSourceDbNameEmpty_UsesInfobaseName()
     {
-        // issue #41 (фикс 1.0.0.70): rac не вернул db-name у базы-источника (7OH) — в запрос
-        // уходит значение поля «Имя БД» формы миграции вместо пустого имени.
+        // issue #41 (фикс 1.0.0.71): rac не вернул db-name у базы-источника (комментарий 7OH;
+        // отдельные версии rac не выводят db-name в «infobase summary list») — имя БД в СУБД
+        // переносится из имени ИБ (при создании ИБ сервер 1С по умолчанию именует БД так же).
+        // Поле «Имя БД» на форме миграции удалено — значения с формы больше нет.
         var source = new RacInfobaseSummary
         {
             Name = "Бухгалтерия",
@@ -115,55 +117,40 @@ public sealed class ClusterMigrationServiceTests
             DbName = ""
         };
 
-        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "", "db1");
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "");
 
-        Assert.Equal("db1", request.DbName);
+        Assert.Equal("Бухгалтерия", request.DbName);
     }
 
     [Fact]
-    public void BuildCreateRequest_SourceDbNameWins_WhenOverrideProvided()
+    public void BuildCreateRequest_WhenSourceHasDbName_UsesSourceValue()
     {
-        // Fallback-семантика: у базы с корректным db-name значение формы («Имя БД» — одна на
-        // форму, из первой базы) НЕ перезаписывает собственное имя — при переносе нескольких
-        // баз остальные переносятся со своими именами.
+        // У базы есть собственный db-name в записи rac — он переносится без изменений
+        // (приоритет над fallback-именем ИБ).
         var source = new RacInfobaseSummary
         {
             Name = "Бухгалтерия",
             DbName = "buho"
         };
 
-        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "", "newdb");
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "");
 
         Assert.Equal("buho", request.DbName);
     }
 
     [Fact]
-    public void BuildCreateRequest_SourceDbNameWins_WhenOverrideEmpty()
+    public void BuildCreateRequest_WhenBothEmpty_DbNameStaysEmpty()
     {
-        // Регрессия прежнего поведения без override-параметра: пустой «Имя БД» — имя источника.
+        // Крайний случай: rac не вернул db-name И имя ИБ пусто — DbName остаётся пустой
+        // строкой, и rac вернёт общую ошибку создания (кластер с пустым именем не бывает;
+        // раньше этот кейс закрывала ошибка ClusterMigration.Error.DbNameEmptyFormat).
         var source = new RacInfobaseSummary
         {
-            Name = "Бухгалтерия",
-            DbName = "buho"
-        };
-
-        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "");
-
-        Assert.Equal("buho", request.DbName);
-    }
-
-    [Fact]
-    public void BuildCreateRequest_KeepsEmptyDbName_WhenBothEmpty()
-    {
-        // Оба пусты — DbName остаётся пустой строкой: валидация ViewModel («Имя БД» не указано)
-        // обязана сработать ДО вызова rac, чтобы сырой ArgumentException не дошёл до пользователя.
-        var source = new RacInfobaseSummary
-        {
-            Name = "Бухгалтерия",
+            Name = "",
             DbName = ""
         };
 
-        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "", "");
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "");
 
         Assert.Equal(string.Empty, request.DbName);
     }
