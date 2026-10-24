@@ -368,7 +368,7 @@
          У флажка обязательных частей нет, поэтому его шаблон повторяет авторский
          целиком. -->
     <ControlTheme x:Key="ModernTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
         <Setter Property="BorderThickness" Value="1.5"/>
@@ -382,15 +382,15 @@
         <Setter Property="MinHeight" Value="36"/>
 
         <Style Selector="^ /template/ Border#PART_BorderElement">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
         </Style>
         <Style Selector="^:pointerover /template/ Border#PART_BorderElement">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
         </Style>
         <Style Selector="^:focus /template/ Border#PART_BorderElement">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
@@ -411,7 +411,7 @@
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
         <Style Selector="^:disabled /template/ Border#PART_BorderElement">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
         </Style>
     </ControlTheme>
@@ -469,7 +469,7 @@
          а у редактируемых списков клик по PART_EditableTextBox ставит курсор для ввода.
          Это тот же вывод, что записан в CHANGELOG для 0.3.5.32-0.3.5.34. -->
     <ControlTheme x:Key="ModernComboBox" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
         <Setter Property="BorderThickness" Value="1.5"/>
@@ -484,15 +484,15 @@
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
 
         <Style Selector="^ /template/ Border#Background">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
         </Style>
         <Style Selector="^:pointerover /template/ Border#Background">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
         </Style>
         <Style Selector="^:pressed /template/ Border#Background">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
         </Style>
         <!-- У редактируемого списка фокус живёт во вложенном поле ввода,
@@ -510,7 +510,7 @@
             <Setter Property="Opacity" Value="0.5"/>
         </Style>
         <Style Selector="^:disabled /template/ Border#Background">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
         </Style>
     </ControlTheme>

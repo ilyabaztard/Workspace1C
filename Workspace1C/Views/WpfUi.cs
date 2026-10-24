@@ -93,6 +93,11 @@ namespace Workspace1C
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(4, 2, 4, 2)
             };
+            // Фон и контур — кисти темы (issue #63): поля в карточках не должны
+            // сливаться с фоном карточки (раньше выглядели «только для чтения»).
+            box.SetResourceReference(Control.BackgroundProperty, "InputBackgroundBrush");
+            box.SetResourceReference(Control.BorderBrushProperty, "BorderBrushColor");
+            box.SetResourceReference(Control.ForegroundProperty, "TextPrimaryBrush");
             box.SetBinding(TextBox.TextProperty, new Binding(path)
             {
                 Mode = BindingMode.TwoWay,
@@ -163,6 +168,10 @@ namespace Workspace1C
                 Margin = new Thickness(4, 0, 12, 0),
                 VerticalContentAlignment = VerticalAlignment.Center
             };
+            // Кисти темы для читаемости в карточках (issue #63).
+            combo.SetResourceReference(Control.BackgroundProperty, "InputBackgroundBrush");
+            combo.SetResourceReference(Control.BorderBrushProperty, "BorderBrushColor");
+            combo.SetResourceReference(Control.ForegroundProperty, "TextPrimaryBrush");
             combo.SetBinding(System.Windows.Controls.Primitives.Selector.SelectedIndexProperty, new Binding(indexPath)
             {
                 Mode = BindingMode.TwoWay

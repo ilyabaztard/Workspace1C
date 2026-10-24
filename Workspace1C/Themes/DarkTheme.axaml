@@ -10,6 +10,7 @@
     <Color x:Key="SidebarSelectedColor">#FFB300</Color>
     <Color x:Key="ContentBackgroundColor">#0F172A</Color>
     <Color x:Key="CardBackgroundColor">#1E293B</Color>
+    <Color x:Key="InputBackgroundColor">#273548</Color>
     <Color x:Key="BorderColor">#334155</Color>
     <Color x:Key="TextPrimaryColor">#F1F5F9</Color>
     <Color x:Key="TextSecondaryColor">#CBD5E1</Color>
@@ -38,6 +39,7 @@
     <SolidColorBrush x:Key="SidebarSelectedBrush" Color="{DynamicResource SidebarSelectedColor}"/>
     <SolidColorBrush x:Key="ContentBackgroundBrush" Color="{DynamicResource ContentBackgroundColor}"/>
     <SolidColorBrush x:Key="CardBackgroundBrush" Color="{DynamicResource CardBackgroundColor}"/>
+    <SolidColorBrush x:Key="InputBackgroundBrush" Color="{DynamicResource InputBackgroundColor}"/>
     <SolidColorBrush x:Key="BorderBrushColor" Color="{DynamicResource BorderColor}"/>
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="{DynamicResource TextSecondaryColor}"/>
