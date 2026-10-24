@@ -77,6 +77,16 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Разрешить правку структуры меню трея (issue #62). По умолчанию выключено —
+    /// меню трея строится по стандартной компоновке (обратная совместимость).
+    /// </summary>
+    public bool TrayMenuEditingEnabled
+    {
+        get => _settings.TrayMenuEditingEnabled;
+        set => _settings.TrayMenuEditingEnabled = value;
+    }
+
+    /// <summary>
     /// Разрешить правку структуры контекстного меню базы (issue #56). По умолчанию
     /// выключено — контекстное меню строится по стандартной компоновке (обратная
     /// совместимость).

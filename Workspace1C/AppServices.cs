@@ -116,6 +116,10 @@ public static class AppServices
         // utilities_menu_layout.json рядом с настройками, по образцу CustomActionsStore.
         // Чистый сервис — без UI-зависимостей.
         services.AddSingleton<IUtilitiesMenuLayoutStore, UtilitiesMenuLayoutStore>();
+        // Компоновка меню трея (issue #62): пользовательская структура меню трея —
+        // tray_menu_layout.json рядом с настройками, по образцу UtilitiesMenuLayoutStore.
+        // Чистый сервис — без UI-зависимостей.
+        services.AddSingleton<ITrayMenuLayoutStore, TrayMenuLayoutStore>();
         // Компоновка контекстного меню базы (issue #56): пользовательская структура
         // контекстного меню — context_menu_layout.json рядом с настройками, по образцу
         // UtilitiesMenuLayoutStore. Чистый сервис — без UI-зависимостей.

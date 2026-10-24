@@ -237,6 +237,22 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Разрешить правку структуры меню трея (issue #62). По умолчанию выключено —
+    /// меню трея строится по стандартной компоновке (обратная совместимость).
+    /// </summary>
+    private bool _trayMenuEditingEnabled;
+
+    /// <summary>
+    /// Разрешить правку структуры меню трея (issue #62). По умолчанию выключено —
+    /// меню строится по стандартной компоновке (обратная совместимость).
+    /// </summary>
+    public bool TrayMenuEditingEnabled
+    {
+        get => _trayMenuEditingEnabled;
+        set => SetProperty(ref _trayMenuEditingEnabled, value);
+    }
+
+    /// <summary>
     /// Разрешить правку структуры контекстного меню базы (issue #56). По умолчанию
     /// выключено — контекстное меню строится по стандартной компоновке (обратная
     /// совместимость).
@@ -251,6 +267,17 @@ public partial class MainViewModel : ViewModelBase
     {
         get => _contextMenuEditingEnabled;
         set => SetProperty(ref _contextMenuEditingEnabled, value);
+    }
+
+    /// <summary>
+    /// Открывает редактор структуры меню трея (issue #62): окна редактора
+    /// (TrayMenuEditorWindow) и переписывание построения трея на резолвер выполняются
+    /// шагом 2; отсюда метод вызывается кнопкой «Настроить структуру…» в настройках.
+    /// </summary>
+    public void ShowTrayMenuEditor()
+    {
+        // Шаг 2 (#62): открытие TrayMenuEditorWindow с ITrayMenuLayoutStore
+        // (по образцу OnUtilitiesMenuEdit_Click в SettingsWindow.xaml.cs).
     }
 
     /// <summary>
@@ -475,6 +502,9 @@ public partial class MainViewModel : ViewModelBase
         // Правка структуры меню «Утилиты» (issue #374): по умолчанию выключена —
         // меню строится по стандартной компоновке (обратная совместимость).
         _utilitiesMenuEditingEnabled = settings.UtilitiesMenuEditingEnabled;
+        // Правка структуры меню трея (issue #62): по умолчанию выключена — меню
+        // трея строится по стандартной компоновке (обратная совместимость).
+        _trayMenuEditingEnabled = settings.TrayMenuEditingEnabled;
         // Правка структуры контекстного меню базы (issue #56): по умолчанию выключена —
         // меню строится по стандартной компоновке (обратная совместимость).
         _contextMenuEditingEnabled = settings.ContextMenuEditingEnabled;

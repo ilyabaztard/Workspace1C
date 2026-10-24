@@ -2116,6 +2116,17 @@
                             </StackPanel>
                         </GroupBox>
 
+                        <!-- Меню трея (issue #62) -->
+                        <GroupBox Header="{loc:Loc Settings.TrayMenu.GroupTitle}" Padding="8" Margin="0,14,0,0">
+                            <StackPanel>
+                                <CheckBox x:Name="TrayMenuEditingCheck" Content="{loc:Loc Settings.TrayMenu.EditingEnabled}"
+                                          ToolTip="{loc:Loc Settings.TrayMenu.EditingEnabledTooltip}"
+                                          ToolTipService.ShowDuration="20000"/>
+                                <!-- Кнопка «Настроить структуру…» (OnTrayMenuEdit_Click) и окно редактора
+                                     TrayMenuEditorWindow добавляются шагом 2 (issue #62) вместе с адаптерами трея. -->
+                            </StackPanel>
+                        </GroupBox>
+
                         <!-- Контекстное меню базы (issue #56) -->
                         <GroupBox Header="{loc:Loc Settings.ContextMenu.GroupTitle}" Padding="8" Margin="0,14,0,0">
                             <StackPanel>

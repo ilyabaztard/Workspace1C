@@ -40,6 +40,9 @@ namespace Workspace1C
         /// <summary>Чекбокс «Правка структуры меню „Утилиты“» (issue #374): читается в «Сохранить».</summary>
         private ToggleButton? _utilitiesMenuEditingCheck;
 
+        /// <summary>Чекбокс «Правка структуры меню трея» (issue #62): читается в «Сохранить».</summary>
+        private ToggleButton? _trayMenuEditingCheck;
+
         /// <summary>Чекбокс «Правка структуры контекстного меню» (issue #56): читается в «Сохранить».</summary>
         private ToggleButton? _contextMenuEditingCheck;
 
@@ -3468,6 +3471,8 @@ namespace Workspace1C
                 _viewModel.ConfirmCustomActions = confirmCustomActionsCheck.IsChecked == true;
                 // Правка структуры меню «Утилиты» (issue #374).
                 _viewModel.UtilitiesMenuEditingEnabled = _utilitiesMenuEditingCheck?.IsChecked == true;
+                // Правка структуры меню трея (issue #62).
+                _viewModel.TrayMenuEditingEnabled = _trayMenuEditingCheck?.IsChecked == true;
                 // Правка структуры контекстного меню базы (issue #56).
                 _viewModel.ContextMenuEditingEnabled = _contextMenuEditingCheck?.IsChecked == true;
                 // Общая авторизация для всех ИБ (issue #57): раздельная по режимам запуска —
@@ -4565,6 +4570,17 @@ namespace Workspace1C
             panel.Children.Add(contextEditButton);
 
             panel.Children.Add(Hint(LocalizationManager.T("Settings.ContextMenu.Hint"), bottom: 0));
+
+            // Меню трея (issue #62): правка структуры меню в трее. Кнопка
+            // «Настроить структуру…» и окно редактора TrayMenuEditorWindow
+            // добавляются шагом 2 (issue #62) вместе с адаптерами трея.
+            panel.Children.Add(GroupSectionHeader("Settings.TrayMenu.GroupTitle"));
+            _trayMenuEditingCheck = SettingsSwitch(
+                "Settings.TrayMenu.EditingEnabled", _viewModel.TrayMenuEditingEnabled,
+                "IconTrayFull", "#14B8A6", "Settings.TrayMenu.EditingEnabledTooltip");
+            _trayMenuEditingCheck.Margin = new Thickness(0, 0, 0, 6);
+            panel.Children.Add(_trayMenuEditingCheck);
+
             return panel;
         }
 

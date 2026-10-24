@@ -691,6 +691,8 @@ public partial class MainViewModel : ViewModelBase
         s.ConfirmCustomActions = _confirmCustomActions;
         // Правка структуры меню «Утилиты» (issue #374).
         s.UtilitiesMenuEditingEnabled = _utilitiesMenuEditingEnabled;
+        // Правка структуры меню трея (issue #62).
+        s.TrayMenuEditingEnabled = _trayMenuEditingEnabled;
         // Правка структуры контекстного меню базы (issue #56).
         s.ContextMenuEditingEnabled = _contextMenuEditingEnabled;
         // Общая авторизация для всех ИБ (issue #57): прежняя (legacy) и раздельные

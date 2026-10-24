@@ -121,6 +121,9 @@ namespace Workspace1C
             // Правка структуры меню «Утилиты» (issue #374).
             if (UtilitiesMenuEditingCheck != null)
                 UtilitiesMenuEditingCheck.IsChecked = viewModel.UtilitiesMenuEditingEnabled;
+            // Правка структуры меню трея (issue #62).
+            if (TrayMenuEditingCheck != null)
+                TrayMenuEditingCheck.IsChecked = viewModel.TrayMenuEditingEnabled;
             // Правка структуры контекстного меню базы (issue #56).
             if (ContextMenuEditingCheck != null)
                 ContextMenuEditingCheck.IsChecked = viewModel.ContextMenuEditingEnabled;
@@ -729,6 +732,8 @@ namespace Workspace1C
             _viewModel.ConfirmCustomActions = ConfirmCustomActionsCheck?.IsChecked ?? true;
             // Правка структуры меню «Утилиты» (issue #374).
             _viewModel.UtilitiesMenuEditingEnabled = UtilitiesMenuEditingCheck?.IsChecked ?? false;
+            // Правка структуры меню трея (issue #62).
+            _viewModel.TrayMenuEditingEnabled = TrayMenuEditingCheck?.IsChecked ?? false;
             // Правка структуры контекстного меню базы (issue #56).
             _viewModel.ContextMenuEditingEnabled = ContextMenuEditingCheck?.IsChecked ?? false;
             // Общая авторизация для всех ИБ (issue #57): раздельная по режимам запуска —
