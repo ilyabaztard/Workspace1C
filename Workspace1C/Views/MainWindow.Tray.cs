@@ -303,17 +303,12 @@ namespace Workspace1C
             }
 
             // Подменю «Службы» (issue #11, итерация 2 — группы служб; требования 7OH
-            // к issue #11 от 13:30 и 13:47): над «Синхронизацией с ibases», с
-            // разделителем ПОСЛЕ подменю (требование 7OH).
+            // к issue #11 от 13:30 и 13:47). Разделитель ПОСЛЕ подменю остаётся
+            // один: пункт «Синхронизировать базы» убран из трея (issue #62) —
+            // разделитель теперь отделяет «Службы» от «Настроек».
             menu.Items.Add(new Forms.ToolStripSeparator());
             menu.Items.Add(BuildServicesSubmenu());
             menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add(CreateTrayItem(LocalizationManager.T("Main.SyncWithIbases"), TrayIconKind.Sync, (_, _) =>
-            {
-                RestoreFromTray();
-                if (_viewModel.SynchronizeWithIbasesCommand.CanExecute(null))
-                    _viewModel.SynchronizeWithIbasesCommand.Execute(null);
-            }));
             menu.Items.Add(CreateTrayItem(LocalizationManager.T("Main.Settings"), TrayIconKind.Settings, (_, _) =>
             {
                 RestoreFromTray();

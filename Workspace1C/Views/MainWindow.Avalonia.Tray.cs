@@ -198,17 +198,14 @@ namespace Workspace1C
             menu.Add(new NativeMenuItemSeparator());
 
             // Подменю «Службы» (issue #11, итерация 2 — группы служб, релиз 1.0.0.12;
-            // требования 7OH к issue #11 от 13:30/13:47): над «Синхронизацией с ibases»,
-            // с разделителем ПОСЛЕ подменю (разделитель ниже — перед синхронизацией).
+            // требования 7OH к issue #11 от 13:30/13:47). Пункт «Синхронизировать базы»
+            // убран из трея (issue #62): разделитель ПОСЛЕ подменю остаётся один —
+            // он отделяет «Службы» от «Настроек».
             if (BuildServicesNativeItem() is { } servicesItem)
             {
                 menu.Add(servicesItem);
                 menu.Add(new NativeMenuItemSeparator());
             }
-
-            var sync = new NativeMenuItem(LocalizationManager.T("Main.SyncWithIbases"));
-            sync.Click += (_, _) => _vm?.SynchronizeWithIbasesCommand.Execute(null);
-            menu.Add(sync);
 
             var settings = new NativeMenuItem(LocalizationManager.T("Main.Settings"));
             settings.Click += (_, _) => _vm?.OpenSettingsCommand.Execute(null);
