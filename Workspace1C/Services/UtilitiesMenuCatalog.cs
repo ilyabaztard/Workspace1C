@@ -120,9 +120,6 @@ public enum UtilitiesMenuCommandKind
     /// <summary>Проверка обновлений приложения.</summary>
     CheckForUpdates,
 
-    /// <summary>Блокировка сеансов информационной базы (только Avalonia/Linux).</summary>
-    SessionLock,
-
     /// <summary>Журнал регистрации информационной базы (1.0.0.69).</summary>
     EventLog,
 
@@ -524,11 +521,6 @@ public static class UtilitiesMenuCatalog
             new("RemoveMissingFileBases", "Settings.Bases.RemoveMissing", GroupOperations,
                 "FolderRemove", "IconFolderRemove", "#EF4444", UtilitiesMenuCommandKind.RemoveMissingFileBases),
 
-            // ---- Только Avalonia/Linux ----
-            new("SessionLock", "SessionLock.Title", GroupOperations,
-                "ShieldLockOutline", "IconRights", "#EF4444", UtilitiesMenuCommandKind.SessionLock, "HotkeySessionLock",
-                linuxOnly: true),
-
             // ---- Низ меню ----
             new("CheckForUpdates", "Settings.About.CheckForUpdates", GroupTopLevel,
                 "Update", "IconUpdate", "#3B82F6", UtilitiesMenuCommandKind.CheckForUpdates)
@@ -618,12 +610,6 @@ public static class UtilitiesMenuLayouts
                 Separator(),
                 Item("ConnectionReplace"),
                 Item("UndoConnectionReplace"),
-                // Блокировка сеансов ИБ (функция №20, Ctrl+Alt+L) есть только в меню
-                // Avalonia/Linux: WPF-построитель отфильтрует пункт по LinuxOnly,
-                // а на Linux он останется (как в статическом меню до issue #374).
-                Separator(),
-                Item("SessionLock"),
-                Separator(),
                 Item("RemoveMissingFileBases")
             }),
             Separator(),

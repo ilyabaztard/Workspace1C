@@ -1882,7 +1882,6 @@ namespace Workspace1C
                 case "HotkeyServices": return _vm?.HotkeyServices;
                 case "HotkeyLockApp": return _vm?.HotkeyLockApp;
                 case "HotkeyRunBackup": return _vm?.HotkeyRunBackup;
-                case "HotkeySessionLock": return _vm?.HotkeySessionLock;
                 default: return null;
             }
         }
@@ -2007,8 +2006,6 @@ namespace Workspace1C
                             // Внутренние ошибки уже показаны в UpdateService; здесь только страхуемся.
                         }
                     }; break;
-                case UtilitiesMenuCommandKind.SessionLock:
-                    item.Command = _vm!.ShowSessionLockCommand; break;
             }
         }
 

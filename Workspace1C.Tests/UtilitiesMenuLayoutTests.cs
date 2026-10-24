@@ -77,7 +77,7 @@ public sealed class UtilitiesMenuLayoutTests
         AssertSeparator(layout.Root[13]);
         AssertGroup(layout.Root[14], UtilitiesMenuCatalog.GroupOperations);
         var opsChildren = layout.Root[14].Children;
-        Assert.Equal(33, opsChildren.Count);
+        Assert.Equal(30, opsChildren.Count);
         AssertItem(opsChildren[0], "ConfigDiff");
         AssertItem(opsChildren[1], "MetadataExplorer");
         // Новые функции 1.0.0.69–1.0.0.69 — сразу после «Обозревателя метаданных».
@@ -112,13 +112,10 @@ public sealed class UtilitiesMenuLayoutTests
         AssertSeparator(opsChildren[26]);
         AssertItem(opsChildren[27], "ConnectionReplace");
         AssertItem(opsChildren[28], "UndoConnectionReplace");
-        // Пункт «Блокировка сеансов ИБ» есть только в Avalonia/Linux: в стандартной
-        // компоновке он присутствует с разделителем (как в статическом меню Linux),
-        // а WPF-построитель отфильтрует его по LinuxOnly.
-        AssertSeparator(opsChildren[29]);
-        AssertItem(opsChildren[30], "SessionLock");
-        AssertSeparator(opsChildren[31]);
-        AssertItem(opsChildren[32], "RemoveMissingFileBases");
+        // «Удаление отсутствующих файловых баз» — сразу после «Отмены замены» (issue #66:
+        // пункт «Блокировка сеансов ИБ» из меню «Утилиты» удалён вместе с разделителями;
+        // функция блокировки осталась в контекстном меню базы и на хоткее Ctrl+Alt+L).
+        AssertItem(opsChildren[29], "RemoveMissingFileBases");
 
         // ---- «Проверить обновления» в конце, с разделителем ----
         AssertSeparator(layout.Root[15]);

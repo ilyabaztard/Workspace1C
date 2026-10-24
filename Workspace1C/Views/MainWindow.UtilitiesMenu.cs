@@ -223,7 +223,6 @@ public partial class MainWindow
             case "HotkeyServices": return _viewModel.HotkeyServices;
             case "HotkeyLockApp": return _viewModel.HotkeyLockApp;
             case "HotkeyRunBackup": return _viewModel.HotkeyRunBackup;
-            case "HotkeySessionLock": return _viewModel.HotkeySessionLock;
             default: return null;
         }
     }
@@ -310,8 +309,6 @@ public partial class MainWindow
                 item.Command = _viewModel.RemoveMissingFileBasesCommand; break;
             case UtilitiesMenuCommandKind.CheckForUpdates:
                 item.Click += (_, _) => OnCheckForUpdatesMenuClick(item, null); break;
-            case UtilitiesMenuCommandKind.SessionLock:
-                item.Command = _viewModel.ShowSessionLockCommand; break;
             case UtilitiesMenuCommandKind.EventLog:
                 item.Command = _viewModel.EventLogCommand; break;
             case UtilitiesMenuCommandKind.SharedLists:

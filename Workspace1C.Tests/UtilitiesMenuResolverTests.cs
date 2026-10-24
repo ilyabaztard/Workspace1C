@@ -109,7 +109,7 @@ public sealed class UtilitiesMenuResolverTests
         // Пункты внутри групп тоже собираются.
         Assert.Contains("UnlockPrivateBases", ids);
         Assert.Contains("ConfigDiff", ids);
-        Assert.Contains("SessionLock", ids);
+        Assert.Contains("RemoveMissingFileBases", ids);
         // Идентификаторы не дублируются: HashSet.
         Assert.True(ids.Count > 10);
     }
