@@ -29,6 +29,7 @@ namespace Workspace1C
             form.Children.Add(WpfUi.Wrap(WpfUi.BoundCheckBox("Bot.Enabled", nameof(TelegramBotViewModel.Enabled))));
             form.Children.Add(WpfUi.Wrap(WpfUi.Label("Bot.AllowedChats"),
                 WpfUi.BoundTextBox(nameof(TelegramBotViewModel.AllowedChatIds), 320)));
+            form.Children.Add(WpfUi.Label("Bot.AllowedChatsHint"));
             form.Children.Add(WpfUi.Wrap(WpfUi.BoundCheckBox("Bot.AllowRun", nameof(TelegramBotViewModel.AllowRunTasks))));
             WpfUi.Place(root, WpfUi.Card(form), 1);
 

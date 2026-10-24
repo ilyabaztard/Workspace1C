@@ -38,6 +38,7 @@ namespace Workspace1C
             form.Children.Add(AvaloniaUi.Wrap(AvaloniaUi.BoundCheckBox("Bot.Enabled", nameof(TelegramBotViewModel.Enabled))));
             form.Children.Add(AvaloniaUi.Wrap(AvaloniaUi.Label("Bot.AllowedChats"),
                 AvaloniaUi.BoundTextBox(nameof(TelegramBotViewModel.AllowedChatIds), 320)));
+            form.Children.Add(AvaloniaUi.Label("Bot.AllowedChatsHint"));
             form.Children.Add(AvaloniaUi.Wrap(AvaloniaUi.BoundCheckBox("Bot.AllowRun", nameof(TelegramBotViewModel.AllowRunTasks))));
             AvaloniaUi.Place(root, AvaloniaUi.Card(form), 1);
 

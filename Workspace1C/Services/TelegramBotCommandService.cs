@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -23,15 +25,20 @@ public sealed class TelegramBotSettings
     public bool AllowRunTasks { get; set; }
 }
 
-/// <summary>Входящая команда бота.</summary>
-public sealed record TelegramCommand(long UpdateId, string ChatId, string Text);
+/// <summary>
+/// Входящая команда бота. <c>MessageThreadId</c> (issue #64) — тема/подгруппа канала:
+/// сообщения из тем приходят с chat.id канала (<c>-100…</c>) и <c>message_thread_id</c>;
+/// обычные сообщения темы не имеют (null).
+/// </summary>
+public sealed record TelegramCommand(long UpdateId, string ChatId, string? MessageThreadId, string Text);
 
 /// <summary>
-/// Команды Telegram-бота (выпуск 1.0.0.69): двусторонняя связь с приложением —
-/// /status, /tasks, /run N, /alerts, /help. Бот уведомлений (токен и чат из «Уведомления
-/// в Telegram и по email») опрашивается long polling только при включённой настройке;
-/// команды принимаются только из разрешённых чатов. Разбор команд и формирование
-/// ответов — чистые функции (тесты).
+/// Команды Telegram-бота (выпуск 1.0.0.69; темы/подгруппы канала — выпуск 1.0.0.71, issue #64):
+/// двусторонняя связь с приложением — /status, /tasks, /run N, /alerts, /help. Бот
+/// уведомлений (токен и чат из «Уведомления в Telegram и по email») опрашивается long
+/// polling только при включённой настройке; команды принимаются только из разрешённых
+/// чатов (в т.ч. из тем/подгрупп канала). Разбор команд и формирование ответов — чистые
+/// функции (тесты).
 /// </summary>
 public sealed class TelegramBotCommandService
 {
@@ -90,19 +97,20 @@ public sealed class TelegramBotCommandService
                 }
 
                 var commands = await GetCommandsAsync(channel.TelegramBotToken.Trim(), ct).ConfigureAwait(false);
-                var allowed = AllowedChats(settings, channel.TelegramChatId);
                 foreach (var command in commands)
                 {
                     _offset = command.UpdateId + 1;
                     if (string.IsNullOrEmpty(command.ChatId) || string.IsNullOrWhiteSpace(command.Text))
                         continue;
-                    if (!allowed.Contains(command.ChatId))
+                    if (!IsAllowedChat(settings, channel.TelegramChatId, command.ChatId, command.MessageThreadId))
                     {
-                        _logger?.Warn($"Telegram: команда из неразрешённого чата {command.ChatId} проигнорирована");
+                        _logger?.Warn($"Telegram: команда из неразрешённого чата {command.ChatId}" +
+                            $" (тема {command.MessageThreadId ?? "—"}) проигнорирована");
                         continue;
                     }
                     var reply = await ExecuteAsync(command.Text, settings, ct).ConfigureAwait(false);
-                    await SendAsync(channel.TelegramBotToken.Trim(), command.ChatId, reply, ct).ConfigureAwait(false);
+                    await SendAsync(channel.TelegramBotToken.Trim(), command.ChatId, reply, command.MessageThreadId, ct)
+                        .ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -130,6 +138,45 @@ public sealed class TelegramBotCommandService
         return result;
     }
 
+    /// <summary>
+    /// Разрешён ли чат (issue #64): кандидаты — значения <see cref="TelegramBotSettings.AllowedChatIds"/>
+    /// (разделители «,», «;», пробел; Trim; удаление пустых), если список не пуст, иначе — чат
+    /// уведомлений <paramref name="notificationChatId"/>. Каждый кандидат разбирается через
+    /// <see cref="TelegramNotificationChannel.ParseChatTarget"/> (число, @channel, ссылка
+    /// <c>t.me/c/<id>[/<thread>]</c>) и сравнивается с фактическим чатом числовым
+    /// сравнением (<see cref="TelegramNotificationChannel.SameChatId"/>). Кандидат без темы
+    /// разрешает весь чат (основной чат и любые темы), кандидат с темой — только эту тему
+    /// (<paramref name="threadId"/> — из <see cref="TelegramCommand.MessageThreadId"/>).
+    /// </summary>
+    public static bool IsAllowedChat(TelegramBotSettings settings, string? notificationChatId, string chatId, string? threadId)
+    {
+        foreach (var candidate in ChatCandidates(settings, notificationChatId))
+        {
+            var (expectedChat, expectedThread) = TelegramNotificationChannel.ParseChatTarget(candidate);
+            if (!TelegramNotificationChannel.SameChatId(expectedChat, chatId))
+                continue;
+            if (expectedThread is null || string.Equals(expectedThread, threadId, StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Кандидаты на разрешённый чат: список из настроек или (при пустом списке) чат уведомлений.</summary>
+    private static IEnumerable<string> ChatCandidates(TelegramBotSettings settings, string? notificationChatId)
+    {
+        var list = (settings.AllowedChatIds ?? string.Empty)
+            .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(v => v.Trim()).ToList();
+        if (list.Count == 0)
+        {
+            if (!string.IsNullOrWhiteSpace(notificationChatId))
+                yield return notificationChatId.Trim();
+            yield break;
+        }
+        foreach (var candidate in list)
+            yield return candidate;
+    }
+
     private async Task<IReadOnlyList<TelegramCommand>> GetCommandsAsync(string token, CancellationToken ct)
     {
         var url = $"https://api.telegram.org/bot{token}/getUpdates?timeout=50&allowed_updates=%5B%22message%22%5D"
@@ -154,7 +201,10 @@ public sealed class TelegramBotCommandService
         return commands;
     }
 
-    /// <summary>Разбор ответа getUpdates: текстовые сообщения с chat_id.</summary>
+    /// <summary>
+    /// Разбор ответа getUpdates: текстовые сообщения с chat_id и (issue #64) message_thread_id
+    /// темы/подгруппы канала.
+    /// </summary>
     public static IReadOnlyList<TelegramCommand> ParseUpdates(string json)
     {
         var result = new List<TelegramCommand>();
@@ -170,14 +220,19 @@ public sealed class TelegramBotCommandService
                 var updateId = idElement.GetInt64();
                 if (!item.TryGetProperty("message", out var message))
                 {
-                    result.Add(new TelegramCommand(updateId, string.Empty, string.Empty));
+                    result.Add(new TelegramCommand(updateId, string.Empty, null, string.Empty));
                     continue;
                 }
                 var text = message.TryGetProperty("text", out var t) ? t.GetString() ?? string.Empty : string.Empty;
                 var chatId = message.TryGetProperty("chat", out var chat) && chat.TryGetProperty("id", out var cid)
                     ? cid.GetRawText()
                     : string.Empty;
-                result.Add(new TelegramCommand(updateId, chatId, text));
+                // Сообщение из темы приходит с chat_id канала и message_thread_id; без темы — null.
+                var threadId = message.TryGetProperty("message_thread_id", out var thread)
+                               && thread.ValueKind == JsonValueKind.Number
+                    ? thread.GetInt64().ToString(CultureInfo.InvariantCulture)
+                    : null;
+                result.Add(new TelegramCommand(updateId, chatId, threadId, text));
             }
         }
         catch (JsonException)
@@ -267,14 +322,18 @@ public sealed class TelegramBotCommandService
         }
     }
 
-    private async Task SendAsync(string token, string chatId, string text, CancellationToken ct)
+    private async Task SendAsync(string token, string chatId, string text, string? messageThreadId = null, CancellationToken ct = default)
     {
-        using var content = new FormUrlEncodedContent(new[]
+        var fields = new List<KeyValuePair<string, string>>
         {
-            new KeyValuePair<string, string>("chat_id", chatId),
-            new KeyValuePair<string, string>("text", text.Length > 4000 ? text.Substring(0, 4000) + "…" : text),
-            new KeyValuePair<string, string>("disable_web_page_preview", "true")
-        });
+            new("chat_id", chatId),
+            new("text", text.Length > 4000 ? text.Substring(0, 4000) + "…" : text),
+            new("disable_web_page_preview", "true")
+        };
+        // Ответ — в ту же тему/подгруппу, из которой пришла команда (issue #64).
+        if (!string.IsNullOrWhiteSpace(messageThreadId))
+            fields.Add(new("message_thread_id", messageThreadId.Trim()));
+        using var content = new FormUrlEncodedContent(fields);
         using var response = await Http.PostAsync($"https://api.telegram.org/bot{token}/sendMessage", content, ct)
             .ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)

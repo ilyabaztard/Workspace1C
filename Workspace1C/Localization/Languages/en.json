@@ -3831,6 +3831,7 @@
     "Bot.Intro": "The notification bot can accept commands: status summary, the list of scheduled tasks, running a task and a monitoring check. The bot token and chat are set in “Telegram and email notifications”. Commands are accepted only from allowed chats while the program is running.",
     "Bot.Enabled": "Accept bot commands",
     "Bot.AllowedChats": "Allowed chat_id (comma-separated):",
+    "Bot.AllowedChatsHint": "You can specify a chat ID or a link like t.me/c/1234567890/1234 — commands will be accepted from that topic.",
     "Bot.AllowRun": "Allow running scheduled tasks (/run)",
     "Bot.TokenOk": "The bot is configured, notification chat: {0}. If the allowed chat list is empty, commands are accepted only from this chat.",
     "Bot.TokenMissing": "The bot token is not set — specify it in “Telegram and email notifications”.",
