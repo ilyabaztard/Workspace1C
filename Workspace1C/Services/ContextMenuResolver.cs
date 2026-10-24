@@ -86,46 +86,43 @@ public static class ContextMenuResolver
     /// в каталоге есть пункты с признаком «новинка», отсутствующие в компоновке, они
     /// добавляются в группу <see cref="ContextMenuCatalog.GroupNewItems"/>. Группа
     /// создаётся в конце корня, если её нет в компоновке; если она уже есть — используется
-    /// её текущее местоположение (пользователь может менять только его).
+    /// её текущее местоположение (пользователь может менять только его). В существующую
+    /// группу добавляются только новинки, которых нет НИГДЕ в компоновке: пункт,
+    /// перенесённый пользователем в свою папку, не дублируется (issue #65).
     /// <para>
-    /// Видимость группы в рабочем меню определяется НАЛИЧИЕМ пунктов, а не галочкой
-    /// в редакторе структуры: при наличии неразмещённых новинок группа принудительно
-    /// видима (скрытие в редакторе не влияет на отображение), при их отсутствии —
-    /// скрывается, даже если в файле компоновки она помечена видимой.
+    /// Видимость группы в рабочем меню определяется НАЛИЧИЕМ пунктов в самой группе
+    /// (после добавления), а не галочкой в редакторе структуры и не размещением всех
+    /// новинок каталога где-либо: непустая группа показывается безусловно, скрывается
+    /// только группа без единого пункта (issue #65).
     /// </para>
     /// </summary>
     public static ContextMenuLayout? EnsureNewItemsGroup(ContextMenuLayout? layout)
     {
         if (layout is null)
             return null;
-        var newItems = CollectNewItems(layout);
-        if (newItems.Count == 0)
-        {
-            // Новых пунктов нет — группа «Новинки программы» в рабочем меню не показывается
-            // (issue #4): видимость определяется наличием пунктов, а не галочкой в редакторе.
-            var emptyGroup = FindGroup(layout.Root, ContextMenuCatalog.GroupNewItems);
-            if (emptyGroup is not null)
-                emptyGroup.Visible = false;
-            return layout;
-        }
 
         var existing = FindGroup(layout.Root, ContextMenuCatalog.GroupNewItems);
         if (existing is not null)
         {
-            // Группа уже есть (пользователь мог её переместить) — добавляем в неё
-            // отсутствующие пункты и принудительно включаем видимость.
-            existing.Visible = true;
-            var present = new HashSet<string>();
-            CollectItemIds(existing.Children, present);
-            foreach (var item in newItems)
-            {
-                if (!present.Contains(item.Id))
-                    existing.Children.Add(new ContextMenuNode { Kind = "item", ItemId = item.Id });
-            }
+            // Группа уже есть (пользователь мог её переместить). Добавляем в неё только
+            // неразмещённые НИГДЕ новинки каталога: пункт, перенесённый пользователем
+            // в свою папку, НЕ дублируется в «Новинках» (issue #65).
+            var toAdd = CollectNewItemsNotInGroup(layout);
+            foreach (var item in toAdd)
+                existing.Children.Add(new ContextMenuNode { Kind = "item", ItemId = item.Id });
+            // Видимость группы определяется наличием пунктов В САМОЙ ГРУППЕ (issue #65):
+            // даже если все новинки каталога уже размещены где-либо в компоновке, но
+            // в группе остались пункты — группа показывается; пустая группа скрывается.
+            existing.Visible = existing.Children.Count > 0;
             return layout;
         }
 
-        // Группы нет — создаём в конце корня с разделителем перед ней (как в меню).
+        // Группы нет — создаём в конце корня с разделителем перед ней, только если
+        // есть неразмещённые новинки (как в меню).
+        var newItems = CollectNewItems(layout);
+        if (newItems.Count == 0)
+            return layout;
+
         var group = new ContextMenuNode
         {
             Kind = "group",
@@ -137,6 +134,25 @@ public static class ContextMenuResolver
             group.Children.Add(new ContextMenuNode { Kind = "item", ItemId = item.Id });
         layout.Root.Add(group);
         return layout;
+    }
+
+    /// <summary>
+    /// Собирает «новинки программы» для добавления в существующую группу: пункты
+    /// каталога с <see cref="ContextMenuItem.IsNew"/>, отсутствующие ВО ВСЕЙ компоновке
+    /// (включая детей самой группы). Пункт, размещённый пользователем где-либо (в т.ч.
+    /// перенесённый из «Новинок» в свою папку), не возвращается и не дублируется.
+    /// </summary>
+    private static IReadOnlyList<ContextMenuItem> CollectNewItemsNotInGroup(ContextMenuLayout layout)
+    {
+        var present = new HashSet<string>();
+        CollectItemIds(layout.Root, present);
+        var result = new List<ContextMenuItem>();
+        foreach (var item in ContextMenuCatalog.All)
+        {
+            if (item.IsNew && !present.Contains(item.Id))
+                result.Add(item);
+        }
+        return result;
     }
 
     /// <summary>Ищет группу с указанным <c>GroupId</c> в дереве (рекурсивно, включая вложенные).</summary>

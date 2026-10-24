@@ -178,10 +178,11 @@ public sealed class ContextMenuResolverTests
     }
 
     [Fact]
-    public void EnsureNewItemsGroup_NoNewItems_HidesExistingGroup()
+    public void EnsureNewItemsGroup_GroupWithPlacedNewItem_StaysVisible()
     {
-        // Новых пунктов нет, но группа в файле есть (помечена видимой) — в рабочем
-        // меню она скрывается: видимость определяется наличием пунктов (issue #4).
+        // Issue #65: неразмещённых новинок больше нет (CreateDesktopShortcut уже
+        // размещён пользователем вручную), но в самой группе остались пункты —
+        // группа показывается, а не скрывается (старое поведение прятало её).
         var layout = new ContextMenuLayout
         {
             Root = new List<ContextMenuNode>
@@ -198,7 +199,58 @@ public sealed class ContextMenuResolverTests
 
         Assert.NotNull(result);
         var group = result.Root[0];
+        Assert.Equal(ContextMenuCatalog.GroupNewItems, group.GroupId);
+        Assert.True(group.Visible);
+        Assert.Equal(2, group.Children.Count);
+    }
+
+    [Fact]
+    public void EnsureNewItemsGroup_EmptyGroup_BecomesHidden()
+    {
+        // Стандартная компоновка содержит все пункты каталога, включая новинку
+        // CreateDesktopShortcut, поэтому добавлять в группу нечего: пустая группа
+        // «Новинки» скрывается (видимость определяется наличием пунктов, issue #65).
+        var layout = ContextMenuLayouts.Default();
+        layout.Root.Add(ContextMenuLayouts.Group(ContextMenuCatalog.GroupNewItems, new List<ContextMenuNode>()));
+
+        var result = ContextMenuResolver.EnsureNewItemsGroup(layout);
+
+        Assert.NotNull(result);
+        var group = result.Root[^1];
+        Assert.Equal(ContextMenuCatalog.GroupNewItems, group.GroupId);
         Assert.False(group.Visible);
+        Assert.Empty(group.Children);
+    }
+
+    [Fact]
+    public void EnsureNewItemsGroup_MovedNewItem_NotAddedBackToGroup()
+    {
+        // Новинка, перенесённая пользователем в свою папку, не дублируется
+        // в «Новинках» (issue #65).
+        var folder = ContextMenuLayouts.Group(null, new List<ContextMenuNode>
+        {
+            ContextMenuLayouts.Item("CreateDesktopShortcut")
+        });
+        folder.CustomTitle = "Папка";
+        var layout = new ContextMenuLayout
+        {
+            Root = new List<ContextMenuNode>
+            {
+                folder,
+                ContextMenuLayouts.Group(ContextMenuCatalog.GroupNewItems, new List<ContextMenuNode>
+                {
+                    ContextMenuLayouts.Item("LaunchEnterprise")
+                })
+            }
+        };
+
+        var result = ContextMenuResolver.EnsureNewItemsGroup(layout);
+
+        Assert.NotNull(result);
+        var group = result.Root[1];
+        Assert.True(group.Visible);
+        Assert.DoesNotContain(group.Children, c => string.Equals(c.ItemId, "CreateDesktopShortcut", StringComparison.Ordinal));
+        Assert.Contains(folder.Children, c => string.Equals(c.ItemId, "CreateDesktopShortcut", StringComparison.Ordinal));
     }
 
     // ---- Essential-пункты (issue #56) ----
