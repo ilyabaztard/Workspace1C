@@ -241,21 +241,92 @@ namespace Workspace1C
         }
 
         /// <summary>
-        /// Собирает меню трея: открыть, недавние базы (Предприятие / Конфигуратор), сервис, выход.
+        /// Собирает меню трея по эффективной компоновке (issue #62): фиксированный пункт
+        /// «Открыть программу», затем блоки компоновки (Избранные/Недавние/Службы/группы)
+        /// со стилем «Блок меню» (заголовок + содержимое) или «Подменю», в конце —
+        /// разделитель, «Настройки», разделитель, «Выход». Структуру строит чистый
+        /// <see cref="TrayMenuBuilder"/>, адаптер добавляет динамическое содержимое
+        /// блоков (базы, службы).
         /// </summary>
         private void RebuildTrayMenu(Forms.ContextMenuStrip menu)
         {
             menu.Items.Clear();
 
-            menu.Items.Add(CreateTrayItem(LocalizationManager.T("Main.TrayOpen"), TrayIconKind.Open, (_, _) => RestoreFromTray()));
+            var store = AppServices.TryGetService<ITrayMenuLayoutStore>();
+            var settings = new AppSettings();
+            settings.TrayMenuEditingEnabled = _viewModel?.TrayMenuEditingEnabled ?? false;
+            var layout = TrayMenuResolver.Resolve(settings, store);
+            var items = new TrayMenuBuilder().Build(layout);
 
-            // Избранные базы (закладки Alt+1…9): быстрый запуск без открытия окна.
-            var favorites = _viewModel.GetFavoriteInfobasesOrdered();
-            if (favorites.Count > 0)
+            foreach (var item in items)
+                AppendTrayItem(menu, item);
+        }
+
+        /// <summary>Пересборка меню трея сразу (например после закрытия окна настроек,
+        /// когда изменилась настройка «Правка структуры меню в трее» — issue #62).</summary>
+        public void RebuildTrayMenuNow()
+        {
+            if (_trayIcon?.ContextMenuStrip is { } menu)
+                RebuildTrayMenu(menu);
+        }
+
+        /// <summary>Адаптер пункта чистой модели <see cref="TrayMenuItem"/> к WinForms-меню.</summary>
+        private void AppendTrayItem(Forms.ContextMenuStrip menu, TrayMenuItem item)
+        {
+            switch (item.Kind)
             {
-                menu.Items.Add(new Forms.ToolStripSeparator());
-                menu.Items.Add(CreateTrayHeader(LocalizationManager.T("Main.FavoriteBases")));
+                case TrayItemKind.Open:
+                    menu.Items.Add(CreateTrayItem(item.Text, TrayIconKind.Open, (_, _) => RestoreFromTray()));
+                    break;
 
+                case TrayItemKind.Separator:
+                    menu.Items.Add(new Forms.ToolStripSeparator());
+                    break;
+
+                case TrayItemKind.Header:
+                    AppendTrayBlock(menu, item);
+                    break;
+
+                case TrayItemKind.Submenu:
+                    AppendTraySubmenu(menu, item);
+                    break;
+
+                case TrayItemKind.Settings:
+                    menu.Items.Add(CreateTrayItem(item.Text, TrayIconKind.Settings, (_, _) =>
+                    {
+                        RestoreFromTray();
+                        if (_viewModel.OpenSettingsCommand.CanExecute(null))
+                            _viewModel.OpenSettingsCommand.Execute(null);
+                    }));
+                    break;
+
+                case TrayItemKind.Exit:
+                    menu.Items.Add(CreateTrayItem(item.Text, TrayIconKind.Exit, (_, _) =>
+                    {
+                        _forceClose = true;
+                        Close();
+                    }));
+                    break;
+
+                default:
+                    menu.Items.Add(CreateTrayItem(item.Text, TrayIconKind.Group, null));
+                    break;
+            }
+        }
+
+        /// <summary>Блок в стиле «Блок меню»: текст-заголовок, под ним динамическое
+        /// содержимое (как сейчас — избранные/недавние; для служб — плоские пункты
+        /// меню служб; для пользовательских групп — дети компоновки).</summary>
+        private void AppendTrayBlock(Forms.ContextMenuStrip menu, TrayMenuItem item)
+        {
+            if (item.Block == TrayMenuBlockKind.Favorites)
+            {
+                // Избранные базы (закладки Alt+1…9): быстрый запуск без открытия окна.
+                var favorites = _viewModel.GetFavoriteInfobasesOrdered();
+                if (favorites.Count == 0)
+                    return;
+                AddTrayBlockStart(menu);
+                menu.Items.Add(CreateTrayHeader(item.Text));
                 foreach (var (ib, slot) in favorites)
                 {
                     var name = string.IsNullOrWhiteSpace(ib.Name) ? LocalizationManager.T("Main.NoName") : ib.Name;
@@ -268,59 +339,149 @@ namespace Workspace1C
                     AttachLaunchSubmenu(favoriteItem, menu, id);
                     menu.Items.Add(favoriteItem);
                 }
+                return;
             }
 
-            // Недавние базы (по дате последнего запуска)
-            var recent = _viewModel.GetRecentInfobases(7).ToList();
-            if (recent.Count > 0)
+            if (item.Block == TrayMenuBlockKind.Recent)
             {
-                menu.Items.Add(new Forms.ToolStripSeparator());
-                menu.Items.Add(CreateTrayHeader(LocalizationManager.T("Main.RecentBases")));
+                // Недавние базы (по дате последнего запуска) или выбранная база.
+                var recent = _viewModel.GetRecentInfobases(7).ToList();
+                if (recent.Count > 0)
+                {
+                    AddTrayBlockStart(menu);
+                    menu.Items.Add(CreateTrayHeader(item.Text));
+                    foreach (var ib in recent)
+                    {
+                        var name = string.IsNullOrWhiteSpace(ib.Name) ? LocalizationManager.T("Main.NoName") : ib.Name;
+                        if (name.Length > 48)
+                            name = name.Substring(0, 45) + "…";
 
-                foreach (var ib in recent)
+                        var id = ib.Id;
+                        var baseItem = CreateTrayItem(name, TrayIconKind.Database, (_, _) =>
+                            _viewModel.LaunchInfobaseById(id, isConfigurator: false));
+                        AttachLaunchSubmenu(baseItem, menu, id);
+                        menu.Items.Add(baseItem);
+                    }
+                }
+                else if (_viewModel.SelectedInfobase != null)
+                {
+                    AddTrayBlockStart(menu);
+                    menu.Items.Add(CreateTrayHeader(item.Text));
+                    var selName = _viewModel.SelectedInfobase.Name;
+                    if (string.IsNullOrWhiteSpace(selName)) selName = LocalizationManager.T("Main.SelectedBaseNoName");
+                    var selId = _viewModel.SelectedInfobase.Id;
+                    var selItem = CreateTrayItem(selName, TrayIconKind.Database, null);
+                    AttachLaunchSubmenu(selItem, menu, selId);
+                    menu.Items.Add(selItem);
+                }
+                return;
+            }
+
+            if (item.Block == TrayMenuBlockKind.Services)
+            {
+                // Блок «Службы» в стиле «Блок меню»: заголовок, под ним плоские пункты
+                // меню служб (Настроить…, службы/группы, Все сервисы) — issue #62.
+                AddTrayBlockStart(menu);
+                menu.Items.Add(CreateTrayHeader(item.Text));
+                foreach (var mi in BuildServicesMenuItems())
+                    menu.Items.Add(ToServiceTrayItem(mi));
+                return;
+            }
+
+            // Пользовательская группа: заголовок + дети компоновки (зарезервировано).
+            AddTrayBlockStart(menu);
+            menu.Items.Add(CreateTrayHeader(item.Text));
+            AppendChildItems(menu.Items, item);
+        }
+
+        /// <summary>Блок (или пользовательская группа) в стиле «Подменю»: пункт с вложенным меню.
+        /// Для Служб — текущий вид (BuildServicesSubmenu); для баз — подменю со списком.</summary>
+        private void AppendTraySubmenu(Forms.ContextMenuStrip menu, TrayMenuItem item)
+        {
+            if (item.Block == TrayMenuBlockKind.Favorites)
+            {
+                var favorites = _viewModel.GetFavoriteInfobasesOrdered();
+                if (favorites.Count == 0)
+                    return;
+                AddTrayBlockStart(menu);
+                var submenu = CreateTrayItem(item.Text, TrayIconKind.Favorite, null);
+                ApplyModernDropDownStyle(submenu.DropDown);
+                foreach (var (ib, slot) in favorites)
                 {
                     var name = string.IsNullOrWhiteSpace(ib.Name) ? LocalizationManager.T("Main.NoName") : ib.Name;
                     if (name.Length > 48)
                         name = name.Substring(0, 45) + "…";
-
                     var id = ib.Id;
-                    var baseItem = CreateTrayItem(name, TrayIconKind.Database, (_, _) =>
+                    var favoriteItem = CreateTrayItem($"{slot}. {name}", TrayIconKind.Favorite, (_, _) =>
                         _viewModel.LaunchInfobaseById(id, isConfigurator: false));
-                    AttachLaunchSubmenu(baseItem, menu, id);
-                    menu.Items.Add(baseItem);
+                    AttachLaunchSubmenu(favoriteItem, menu, id);
+                    submenu.DropDownItems.Add(favoriteItem);
                 }
-            }
-            else if (_viewModel.SelectedInfobase != null)
-            {
-                menu.Items.Add(new Forms.ToolStripSeparator());
-                menu.Items.Add(CreateTrayHeader(LocalizationManager.T("Main.SelectedBase")));
-                var selName = _viewModel.SelectedInfobase.Name;
-                if (string.IsNullOrWhiteSpace(selName)) selName = LocalizationManager.T("Main.SelectedBaseNoName");
-                var selId = _viewModel.SelectedInfobase.Id;
-                var selItem = CreateTrayItem(selName, TrayIconKind.Database, null);
-                AttachLaunchSubmenu(selItem, menu, selId);
-                menu.Items.Add(selItem);
+                menu.Items.Add(submenu);
+                return;
             }
 
-            // Подменю «Службы» (issue #11, итерация 2 — группы служб; требования 7OH
-            // к issue #11 от 13:30 и 13:47). Разделитель ПОСЛЕ подменю остаётся
-            // один: пункт «Синхронизировать базы» убран из трея (issue #62) —
-            // разделитель теперь отделяет «Службы» от «Настроек».
-            menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add(BuildServicesSubmenu());
-            menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add(CreateTrayItem(LocalizationManager.T("Main.Settings"), TrayIconKind.Settings, (_, _) =>
+            if (item.Block == TrayMenuBlockKind.Recent)
             {
-                RestoreFromTray();
-                if (_viewModel.OpenSettingsCommand.CanExecute(null))
-                    _viewModel.OpenSettingsCommand.Execute(null);
-            }));
-            menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add(CreateTrayItem(LocalizationManager.T("Main.Exit"), TrayIconKind.Exit, (_, _) =>
+                var recent = _viewModel.GetRecentInfobases(7).ToList();
+                if (recent.Count > 0)
+                {
+                    AddTrayBlockStart(menu);
+                    var submenu = CreateTrayItem(item.Text, TrayIconKind.Database, null);
+                    ApplyModernDropDownStyle(submenu.DropDown);
+                    foreach (var ib in recent)
+                    {
+                        var name = string.IsNullOrWhiteSpace(ib.Name) ? LocalizationManager.T("Main.NoName") : ib.Name;
+                        if (name.Length > 48)
+                            name = name.Substring(0, 45) + "…";
+                        var id = ib.Id;
+                        var baseItem = CreateTrayItem(name, TrayIconKind.Database, (_, _) =>
+                            _viewModel.LaunchInfobaseById(id, isConfigurator: false));
+                        AttachLaunchSubmenu(baseItem, menu, id);
+                        submenu.DropDownItems.Add(baseItem);
+                    }
+                    menu.Items.Add(submenu);
+                }
+                return;
+            }
+
+            if (item.Block == TrayMenuBlockKind.Services)
             {
-                _forceClose = true;
-                Close();
-            }));
+                // Стиль «Подменю» для Служб — текущий вид подменю (issue #62).
+                AddTrayBlockStart(menu);
+                menu.Items.Add(BuildServicesSubmenu(item.Text));
+                return;
+            }
+
+            // Пользовательская группа: подменю с детьми компоновки (зарезервировано).
+            AddTrayBlockStart(menu);
+            var groupSubmenu = CreateTrayItem(item.Text, TrayIconKind.Group, null);
+            ApplyModernDropDownStyle(groupSubmenu.DropDown);
+            AppendChildItems(groupSubmenu.DropDownItems, item);
+            menu.Items.Add(groupSubmenu);
+        }
+
+        /// <summary>Разделитель перед блоком, если меню ещё не пусто (первый фиксированный
+        /// пункт «Открыть программу» уже добавлен адаптером — issue #62).</summary>
+        private void AddTrayBlockStart(Forms.ContextMenuStrip menu)
+        {
+            if (menu.Items.Count > 0)
+                menu.Items.Add(new Forms.ToolStripSeparator());
+        }
+
+        /// <summary>Дети пользовательской группы в подменю/блоке (зарезервировано — сейчас
+        /// группы верхнего уровня; поддерживаем разделители и пункты компоновки).</summary>
+        private void AppendChildItems(Forms.ToolStripItemCollection owner, TrayMenuItem item)
+        {
+            foreach (var child in item.Children)
+            {
+                if (child.IsSeparator)
+                {
+                    owner.Add(new Forms.ToolStripSeparator());
+                    continue;
+                }
+                owner.Add(CreateTrayItem(child.Text, TrayIconKind.Group, null));
+            }
         }
 
         /// <summary>
@@ -794,10 +955,12 @@ namespace Workspace1C
             _ = cache.RefreshAsync(names);
         }
 
-        /// <summary>Подменю «Службы» для штатного меню трея (WinForms-адаптер модели ServiceTrayMenuBuilder).</summary>
-        private Forms.ToolStripMenuItem BuildServicesSubmenu()
+        /// <summary>Подменю «Службы» для штатного меню трея (WinForms-адаптер модели
+        /// ServiceTrayMenuBuilder). <paramref name="title"/> — заголовок подменю
+        /// из компоновки (по умолчанию — ключ «Tray.Services»).</summary>
+        private Forms.ToolStripMenuItem BuildServicesSubmenu(string? title = null)
         {
-            var submenu = CreateTrayItem(LocalizationManager.T("Tray.Services"), TrayIconKind.Service, null);
+            var submenu = CreateTrayItem(title ?? LocalizationManager.T("Tray.Services"), TrayIconKind.Service, null);
             ApplyModernDropDownStyle(submenu.DropDown);
             foreach (var item in BuildServicesMenuItems())
                 submenu.DropDownItems.Add(ToServiceTrayItem(item));

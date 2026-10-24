@@ -134,7 +134,9 @@ namespace Workspace1C
             FillTrayMenu(_trayMenu);
         }
 
-        /// <summary>Состав меню трея строкой: выбранная база и недавние.</summary>
+        /// <summary>Состав меню трея строкой: выбранная база, недавние и отпечаток
+        /// компоновки (TrayMenuBuilder.LayoutSignature) — при изменении структуры
+        /// или настройки «Правка структуры» RefreshTrayMenu пересоберёт меню.</summary>
         private string TrayMenuSignature()
         {
             if (_vm is null)
@@ -146,80 +148,218 @@ namespace Workspace1C
                 builder.Append('|').Append('F').Append(ib.Id).Append('~').Append(ib.Name);
             foreach (var ib in _vm.RecentInfobases)
                 builder.Append('|').Append(ib.Id).Append('~').Append(ib.Name);
+
+            var store = AppServices.TryGetService<ITrayMenuLayoutStore>();
+            var settings = new AppSettings();
+            settings.TrayMenuEditingEnabled = _vm.TrayMenuEditingEnabled;
+            var layout = TrayMenuResolver.Resolve(settings, store);
+            builder.Append("|L|").Append(TrayMenuBuilder.LayoutSignature(layout));
             return builder.ToString();
         }
 
-        /// <summary>Наполняет меню трея заново по текущему состоянию списка баз.</summary>
+        /// <summary>Пересборка меню трея сразу (например после закрытия окна настроек,
+        /// когда изменилась настройка «Правка структуры меню в трее» — issue #62).</summary>
+        public void RefreshTrayMenuAfterSettings()
+        {
+            QueueTrayMenuRefresh();
+            RefreshTrayMenu();
+        }
+
+        /// <summary>Наполняет меню трея по эффективной компоновке (issue #62): фиксированный
+        /// пункт «Открыть программу», блоки компоновки со стилем «Блок меню» (заголовок +
+        /// содержимое) или «Подменю», в конце — разделитель, «Настройки», «Выход».
+        /// Структуру строит чистый TrayMenuBuilder, адаптер добавляет динамическое
+        /// содержимое блоков (базы, службы).</summary>
         private void FillTrayMenu(NativeMenu menu)
         {
             menu.Items.Clear();
 
-            // Состав и порядок как в Windows-версии (MainWindow.Tray.cs:209):
-            // открыть, избранные базы (закладки), недавние базы (или выбранная,
-            // если недавних нет), синхронизация, настройки, выход. У каждой базы
-            // своё подменю «Предприятие / Конфигуратор»: раньше пункт запускал
-            // только Предприятие, а выбора не было.
-            var showItem = new NativeMenuItem(LocalizationManager.T("Main.TrayOpen"));
-            showItem.Click += (_, _) => ShowAndActivate();
-            menu.Add(showItem);
+            var store = AppServices.TryGetService<ITrayMenuLayoutStore>();
+            var settings = new AppSettings();
+            settings.TrayMenuEditingEnabled = _vm?.TrayMenuEditingEnabled ?? false;
+            var layout = TrayMenuResolver.Resolve(settings, store);
+            var items = new TrayMenuBuilder().Build(layout);
 
-            // Избранные базы (закладки Alt+1…9): быстрый запуск без открытия окна.
-            var favorites = _vm?.GetFavoriteInfobasesOrdered();
-            if (favorites is { Count: > 0 })
+            foreach (var item in items)
+                AppendTrayItem(menu, item);
+        }
+
+        /// <summary>Адаптер пункта чистой модели TrayMenuItem к нативному меню Avalonia.</summary>
+        private void AppendTrayItem(NativeMenu owner, TrayMenuItem item)
+        {
+            switch (item.Kind)
             {
-                menu.Add(new NativeMenuItemSeparator());
-                menu.Add(TrayHeader(LocalizationManager.T("Main.FavoriteBases")));
-                foreach (var (ib, slot) in favorites)
-                    menu.Add(TrayInfobaseItem(ib, $"{slot}. {TrayItemName(ib.Name, "Main.NoName")}"));
+                case TrayItemKind.Open:
+                {
+                    var showItem = new NativeMenuItem(item.Text);
+                    showItem.Click += (_, _) => ShowAndActivate();
+                    owner.Add(showItem);
+                    break;
+                }
+
+                case TrayItemKind.Separator:
+                    owner.Add(new NativeMenuItemSeparator());
+                    break;
+
+                case TrayItemKind.Header:
+                    AppendTrayBlock(owner, item);
+                    break;
+
+                case TrayItemKind.Submenu:
+                    AppendTraySubmenu(owner, item);
+                    break;
+
+                case TrayItemKind.Settings:
+                {
+                    var settings = new NativeMenuItem(item.Text);
+                    settings.Click += (_, _) => _vm?.OpenSettingsCommand.Execute(null);
+                    owner.Add(settings);
+                    break;
+                }
+
+                case TrayItemKind.Exit:
+                {
+                    // Выход: разрешаем реальное закрытие и завершаем приложение.
+                    var exitItem = new NativeMenuItem(item.Text);
+                    exitItem.Click += (_, _) =>
+                    {
+                        _allowCloseToTray = false;
+                        _vm?.ExitCommand.Execute(null);
+                    };
+                    owner.Add(exitItem);
+                    break;
+                }
+
+                default:
+                    owner.Add(new NativeMenuItem(item.Text));
+                    break;
+            }
+        }
+
+        /// <summary>Блок в стиле «Блок меню»: текст-заголовок, под ним динамическое
+        /// содержимое (избранные/недавние базы; для служб — плоские пункты меню служб;
+        /// для пользовательских групп — дети компоновки).</summary>
+        private void AppendTrayBlock(NativeMenu menu, TrayMenuItem item)
+        {
+            if (item.Block == TrayMenuBlockKind.Favorites)
+            {
+                // Избранные базы (закладки Alt+1…9): быстрый запуск без открытия окна.
+                var favorites = _vm?.GetFavoriteInfobasesOrdered();
+                if (favorites is { Count: > 0 })
+                {
+                    menu.Add(new NativeMenuItemSeparator());
+                    menu.Add(TrayHeader(item.Text));
+                    foreach (var (ib, slot) in favorites)
+                        menu.Add(TrayInfobaseItem(ib, $"{slot}. {TrayItemName(ib.Name, "Main.NoName")}"));
+                }
+                return;
             }
 
-            var recent = _vm?.RecentInfobases;
-            if (recent is { Count: > 0 })
+            if (item.Block == TrayMenuBlockKind.Recent)
             {
-                menu.Add(new NativeMenuItemSeparator());
-                menu.Add(TrayHeader(LocalizationManager.T("Main.RecentBases")));
-                foreach (var ib in recent)
-                    menu.Add(TrayInfobaseItem(ib, TrayItemName(ib.Name, "Main.NoName")));
-            }
-            else if (_vm?.SelectedInfobase is { } sel)
-            {
-                menu.Add(new NativeMenuItemSeparator());
-                menu.Add(TrayHeader(LocalizationManager.T("Main.SelectedBase")));
-                // У выбранной базы сам пункт ничего не запускает, только раскрывает
-                // подменю, и её имя не обрезается: так у автора
-                // (MainWindow.Tray.cs:240).
-                var selName = string.IsNullOrWhiteSpace(sel.Name)
-                    ? LocalizationManager.T("Main.SelectedBaseNoName")
-                    : sel.Name;
-                menu.Add(TrayInfobaseItem(sel, selName, launchOnClick: false));
+                var recent = _vm?.RecentInfobases;
+                if (recent is { Count: > 0 })
+                {
+                    menu.Add(new NativeMenuItemSeparator());
+                    menu.Add(TrayHeader(item.Text));
+                    foreach (var ib in recent)
+                        menu.Add(TrayInfobaseItem(ib, TrayItemName(ib.Name, "Main.NoName")));
+                }
+                else if (_vm?.SelectedInfobase is { } sel)
+                {
+                    menu.Add(new NativeMenuItemSeparator());
+                    menu.Add(TrayHeader(item.Text));
+                    // У выбранной базы сам пункт ничего не запускает, только раскрывает
+                    // подменю, и её имя не обрезается: как в Windows-версии.
+                    var selName = string.IsNullOrWhiteSpace(sel.Name)
+                        ? LocalizationManager.T("Main.SelectedBaseNoName")
+                        : sel.Name;
+                    menu.Add(TrayInfobaseItem(sel, selName, launchOnClick: false));
+                }
+                return;
             }
 
-            // Разделитель после блока баз/избранного.
+            if (item.Block == TrayMenuBlockKind.Services)
+            {
+                // Блок «Службы» в стиле «Блок меню»: заголовок, под ним плоские пункты
+                // меню служб (Настроить…, службы/группы, Все сервисы) — issue #62.
+                menu.Add(new NativeMenuItemSeparator());
+                menu.Add(TrayHeader(item.Text));
+                foreach (var mi in BuildServicesMenuItems())
+                    AppendNativeServiceItem(mi, menu);
+                return;
+            }
+
+            // Пользовательская группа: заголовок + дети компоновки (зарезервировано).
             menu.Add(new NativeMenuItemSeparator());
+            menu.Add(TrayHeader(item.Text));
+            AppendChildItems(menu, item);
+        }
 
-            // Подменю «Службы» (issue #11, итерация 2 — группы служб, релиз 1.0.0.12;
-            // требования 7OH к issue #11 от 13:30/13:47). Пункт «Синхронизировать базы»
-            // убран из трея (issue #62): разделитель ПОСЛЕ подменю остаётся один —
-            // он отделяет «Службы» от «Настроек».
-            if (BuildServicesNativeItem() is { } servicesItem)
+        /// <summary>Блок (или пользовательская группа) в стиле «Подменю»: пункт с вложенным
+        /// меню. Для Служб — текущий вид (BuildServicesNativeItem); для баз — подменю
+        /// со списком и подменю режимов запуска.</summary>
+        private void AppendTraySubmenu(NativeMenu menu, TrayMenuItem item)
+        {
+            if (item.Block == TrayMenuBlockKind.Favorites)
             {
-                menu.Add(servicesItem);
-                menu.Add(new NativeMenuItemSeparator());
+                var favorites = _vm?.GetFavoriteInfobasesOrdered();
+                if (favorites is { Count: > 0 })
+                {
+                    menu.Add(new NativeMenuItemSeparator());
+                    var submenu = new NativeMenu();
+                    foreach (var (ib, slot) in favorites)
+                        submenu.Add(TrayInfobaseItem(ib, $"{slot}. {TrayItemName(ib.Name, "Main.NoName")}"));
+                    menu.Add(new NativeMenuItem(item.Text) { Menu = submenu });
+                }
+                return;
             }
 
-            var settings = new NativeMenuItem(LocalizationManager.T("Main.Settings"));
-            settings.Click += (_, _) => _vm?.OpenSettingsCommand.Execute(null);
-            menu.Add(settings);
-            menu.Add(new NativeMenuItemSeparator());
-
-            // Выход: разрешаем реальное закрытие и завершаем приложение.
-            var exitItem = new NativeMenuItem(LocalizationManager.T("Main.Exit"));
-            exitItem.Click += (_, _) =>
+            if (item.Block == TrayMenuBlockKind.Recent)
             {
-                _allowCloseToTray = false;
-                _vm?.ExitCommand.Execute(null);
-            };
-            menu.Add(exitItem);
+                var recent = _vm?.RecentInfobases;
+                if (recent is { Count: > 0 })
+                {
+                    menu.Add(new NativeMenuItemSeparator());
+                    var submenu = new NativeMenu();
+                    foreach (var ib in recent)
+                        submenu.Add(TrayInfobaseItem(ib, TrayItemName(ib.Name, "Main.NoName")));
+                    menu.Add(new NativeMenuItem(item.Text) { Menu = submenu });
+                }
+                return;
+            }
+
+            if (item.Block == TrayMenuBlockKind.Services)
+            {
+                // Стиль «Подменю» для Служб — текущий вид подменю (issue #62).
+                if (BuildServicesNativeItem(item.Text) is { } servicesItem)
+                {
+                    menu.Add(new NativeMenuItemSeparator());
+                    menu.Add(servicesItem);
+                }
+                return;
+            }
+
+            // Пользовательская группа: подменю с детьми компоновки (зарезервировано).
+            menu.Add(new NativeMenuItemSeparator());
+            var groupMenu = new NativeMenu();
+            AppendChildItems(groupMenu, item);
+            menu.Add(new NativeMenuItem(item.Text) { Menu = groupMenu });
+        }
+
+        /// <summary>Дети пользовательской группы в подменю/блоке (зарезервировано — сейчас
+        /// группы верхнего уровня; поддерживаем разделители и пункты компоновки).</summary>
+        private void AppendChildItems(NativeMenu owner, TrayMenuItem item)
+        {
+            foreach (var child in item.Children)
+            {
+                if (child.IsSeparator)
+                {
+                    owner.Add(new NativeMenuItemSeparator());
+                    continue;
+                }
+                owner.Add(new NativeMenuItem(child.Text));
+            }
         }
 
         // =====================================================================
@@ -233,12 +373,14 @@ namespace Workspace1C
         /// <summary>
         /// Пункт «Службы» системного меню: «Настроить…», группы/службы списка и
         /// «Все сервисы» (адаптер модели <see cref="ServiceTrayMenuBuilder"/> к
-        /// нативному меню). Статусы служб опрашиваются при каждом пересборе меню
-        /// (блокирующие systemctl-вызовы); нативные меню трея не пересобираются
-        /// при показе (NeedsUpdate поднимает только macOS-бэкенд — см. комментарий
-        /// в BuildTrayMenu), поэтому актуальность обеспечивает RefreshTrayMenu.
+        /// нативному меню). <paramref name="title"/> — заголовок из компоновки
+        /// (по умолчанию — ключ «Tray.Services»). Статусы служб опрашиваются при
+        /// каждом пересборе меню (блокирующие systemctl-вызовы); нативные меню
+        /// трея не пересобираются при показе (NeedsUpdate поднимает только
+        /// macOS-бэкенд — см. комментарий в BuildTrayMenu), поэтому актуальность
+        /// обеспечивает RefreshTrayMenu.
         /// </summary>
-        private NativeMenuItem? BuildServicesNativeItem()
+        private NativeMenuItem? BuildServicesNativeItem(string? title = null)
         {
             try
             {
@@ -256,7 +398,7 @@ namespace Workspace1C
                     name => ServicesStatusCache()?.GetStatus(name).Status ?? ServiceStatus.Unknown,
                     ServicePlatform.Linux);
 
-                var item = new NativeMenuItem(LocalizationManager.T("Tray.Services"));
+                var item = new NativeMenuItem(title ?? LocalizationManager.T("Tray.Services"));
                 var menu = new NativeMenu();
                 foreach (var mi in items)
                     AppendNativeServiceItem(mi, menu);

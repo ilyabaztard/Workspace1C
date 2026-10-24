@@ -1172,7 +1172,13 @@ public partial class MainViewModel : ViewModelBase
         // После «ОК» окно настроек могло изменить «Дополнение заголовка программы»
         // (issue #28) — пересобираем заголовок главного окна.
         if (OwnerWindow() is Workspace1C.MainWindow main)
+        {
             main.RefreshWindowTitle();
+            // Правка структуры меню трея (issue #62): настройка TrayMenuEditingEnabled
+            // и файл компоновки могли измениться — меню трея пересобирается сразу
+            // (по отпечатку компоновки RefreshTrayMenu отсеет пустые пересборки).
+            main.RefreshTrayMenuAfterSettings();
+        }
     }
 
     /// <summary>

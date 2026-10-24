@@ -633,6 +633,10 @@
          платформенных зависимостей, используется обеими платформами — на Linux
          подключается явно (имя не совпадает с глобом *.Avalonia.cs). -->
     <Compile Include="ViewModels\UtilitiesMenuEditorViewModel.cs" />
+    <!-- ViewModel редактора структуры меню трея (issue #62): чистый .NET без
+         WPF-зависимостей, используется и Windows, и Linux; подключается явно
+         (имя не совпадает с глобом *.Avalonia.cs). -->
+    <Compile Include="ViewModels\TrayMenuEditorViewModel.cs" />
     <!-- ViewModel редактора структуры контекстного меню базы (issue #56): чистый .NET
          без платформенных зависимостей, используется обеими платформами — на Linux
          подключается явно (имя не совпадает с глобом *.Avalonia.cs). -->

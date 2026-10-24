@@ -270,17 +270,6 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Открывает редактор структуры меню трея (issue #62): окна редактора
-    /// (TrayMenuEditorWindow) и переписывание построения трея на резолвер выполняются
-    /// шагом 2; отсюда метод вызывается кнопкой «Настроить структуру…» в настройках.
-    /// </summary>
-    public void ShowTrayMenuEditor()
-    {
-        // Шаг 2 (#62): открытие TrayMenuEditorWindow с ITrayMenuLayoutStore
-        // (по образцу OnUtilitiesMenuEdit_Click в SettingsWindow.xaml.cs).
-    }
-
-    /// <summary>
     /// Общая авторизация для всех ИБ (issue #57): если у базы не задана собственная
     /// (для режима или базы), при запуске подставляются эти учётные данные.
     /// Значения по умолчанию (IsDefault) — авторизация не задана. Остаётся legacy:

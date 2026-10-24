@@ -282,6 +282,9 @@ public partial class MainViewModel : ViewModelBase
             // Правка структуры контекстного меню (issue #56) могла измениться в настройках
             // (ContextMenuEditingEnabled) — контекстное меню дерева пересобирается кодом.
             main.RebuildRowContextMenu();
+            // Правка структуры меню трея (issue #62): настройка TrayMenuEditingEnabled
+            // и файл компоновки могли измениться — пересобираем меню трея сразу.
+            main.RebuildTrayMenuNow();
         }
     }
 
