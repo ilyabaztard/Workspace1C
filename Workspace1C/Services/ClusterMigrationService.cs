@@ -59,12 +59,19 @@ public static class ClusterMigrationService
     /// Сервер СУБД с формы миграции (issue #41); приоритет над
     /// <see cref="RacInfobaseSummary.DbServer"/> источника. Пусто — значения источника.
     /// </param>
+    /// <param name="overrideDbName">
+    /// Имя БД в СУБД с формы миграции (issue #41, фикс 1.0.0.70). Fallback-семантика:
+    /// приоритет у значения источника (<see cref="RacInfobaseSummary.DbName"/>), значение формы
+    /// используется ТОЛЬКО для баз, где rac не вернул db-name (у источника — пустое имя).
+    /// Пусто — значение источника.
+    /// </param>
     public static RacInfobaseCreateRequest BuildCreateRequest(
         RacInfobaseSummary source,
         string dbUser,
         string dbPassword,
         string overrideDbms = "",
-        string overrideDbServer = "")
+        string overrideDbServer = "",
+        string overrideDbName = "")
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -74,7 +81,7 @@ public static class ClusterMigrationService
             Description = source.Descr ?? string.Empty,
             Dbms = FirstNonEmpty(overrideDbms, source.Dbms),
             DbServer = FirstNonEmpty(overrideDbServer, source.DbServer),
-            DbName = source.DbName ?? string.Empty,
+            DbName = FirstNonEmpty(source.DbName, overrideDbName),
             DbUser = dbUser ?? string.Empty,
             DbPassword = dbPassword ?? string.Empty,
             Locale = source.Locale ?? string.Empty,

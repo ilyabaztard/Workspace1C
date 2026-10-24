@@ -109,4 +109,34 @@ public sealed class Issue41WindowLayoutTests
         Assert.Contains("DbmsBox", code, StringComparison.Ordinal);
         Assert.Contains("DbServerBox", code, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ClusterMigrationWindow_Wpf_HasDbNameField_AboveCredentialsBelowDbmsRow()
+    {
+        // issue #41 (фикс 1.0.0.70): поле «Имя БД» — между строкой «Тип СУБД/Сервер СУБД»
+        // и учётными данными СУБД, с привязкой Text к DbName (UpdateSourceTrigger).
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.xaml"));
+
+        var dbServerPos = xaml.IndexOf("ClusterMigration.DbServer", StringComparison.Ordinal);
+        var dbNamePos = xaml.IndexOf("ClusterMigration.DbName", StringComparison.Ordinal);
+        var dbUserPos = xaml.IndexOf("ClusterMigration.DbUser", StringComparison.Ordinal);
+        Assert.True(dbNamePos >= 0, "Поле «Имя БД» не найдено в разметке.");
+        Assert.True(dbNamePos > dbServerPos, "Строка «Имя БД» должна быть НИЖЕ строки «Тип СУБД/Сервер СУБД».");
+        Assert.True(dbUserPos > dbNamePos, "Строка «Имя БД» должна быть ВЫШЕ полей пользователя/пароля.");
+
+        Assert.Contains("x:Name=\"DbNameBox\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding DbName, UpdateSourceTrigger=PropertyChanged}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClusterMigrationWindow_Avalonia_HasDbNameBinding()
+    {
+        // issue #41 (фикс 1.0.0.70): поле «Имя БД» в axaml и DbNameBox в коде Avalonia.
+        var axaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.axaml"));
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.Avalonia.cs"));
+
+        Assert.Contains("ClusterMigration.DbName", axaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"DbNameBox\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("DbNameBox", code, StringComparison.Ordinal);
+    }
 }

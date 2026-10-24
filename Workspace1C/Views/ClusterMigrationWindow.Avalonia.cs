@@ -239,6 +239,8 @@ namespace Workspace1C
             dbmsBox.Bind(ComboBox.SelectedItemProperty, new Binding("Dbms", BindingMode.TwoWay));
             var dbServerBox = this.FindControl<TextBox>("DbServerBox")!;
             dbServerBox.Bind(TextBox.TextProperty, new Binding("DbServer", BindingMode.TwoWay));
+            var dbNameBox = this.FindControl<TextBox>("DbNameBox")!;
+            dbNameBox.Bind(TextBox.TextProperty, new Binding("DbName", BindingMode.TwoWay));
 
             // ---- Учётные данные СУБД. ----
             var dbUserBox = this.FindControl<TextBox>("DbUserBox")!;

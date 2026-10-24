@@ -45,6 +45,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Двухпанельная раскладка: «Источник» и «Приёмник» (issue #41). -->
@@ -271,8 +272,21 @@
                      Text="{Binding DbServer, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
         </Grid>
 
-        <!-- Учётные данные СУБД в одну линию. -->
+        <!-- Имя БД (issue #41, фикс 1.0.0.70): rac может не вернуть db-name у базы-источника —
+             значение поля подставляется для таких баз (fallback), остальные переносятся со своими
+             именами. Строка ниже «Тип СУБД/Сервер СУБД» и выше логина/пароля. -->
         <Grid Grid.Row="4" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{loc:Loc ClusterMigration.DbName}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox x:Name="DbNameBox" Grid.Column="1" Style="{StaticResource ModernTextBox}"
+                     Text="{Binding DbName, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
+        </Grid>
+
+        <!-- Учётные данные СУБД в одну линию. -->
+        <Grid Grid.Row="5" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -289,7 +303,7 @@
         </Grid>
 
         <!-- Прогресс «N из M: база» + сообщение об ошибке. -->
-        <StackPanel Grid.Row="5" Margin="0,10,0,0">
+        <StackPanel Grid.Row="6" Margin="0,10,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -306,7 +320,7 @@
         </StackPanel>
 
         <!-- Сводка выделения + действия: выделить все / снять все, «Мигрировать», «Отмена». -->
-        <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,10,0,0">
+        <StackPanel Grid.Row="7" Orientation="Horizontal" Margin="0,10,0,0">
             <!-- «Выделено: N из M · будет перенесено: N» (issue #41, комментарий 7OH). -->
             <TextBlock Text="{Binding SelectionSummaryText}" FontSize="12" Opacity="0.8"
                        VerticalAlignment="Center" Margin="0,0,14,0" TextWrapping="Wrap"

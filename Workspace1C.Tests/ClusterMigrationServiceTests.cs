@@ -102,6 +102,72 @@ public sealed class ClusterMigrationServiceTests
         Assert.Equal("ora-01", request.DbServer);
     }
 
+    [Fact]
+    public void BuildCreateRequest_FallsBackToOverrideDbName_WhenSourceDbNameEmpty()
+    {
+        // issue #41 (фикс 1.0.0.70): rac не вернул db-name у базы-источника (7OH) — в запрос
+        // уходит значение поля «Имя БД» формы миграции вместо пустого имени.
+        var source = new RacInfobaseSummary
+        {
+            Name = "Бухгалтерия",
+            Dbms = "MSSQLServer",
+            DbServer = "sql-01",
+            DbName = ""
+        };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "", "db1");
+
+        Assert.Equal("db1", request.DbName);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_SourceDbNameWins_WhenOverrideProvided()
+    {
+        // Fallback-семантика: у базы с корректным db-name значение формы («Имя БД» — одна на
+        // форму, из первой базы) НЕ перезаписывает собственное имя — при переносе нескольких
+        // баз остальные переносятся со своими именами.
+        var source = new RacInfobaseSummary
+        {
+            Name = "Бухгалтерия",
+            DbName = "buho"
+        };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "", "newdb");
+
+        Assert.Equal("buho", request.DbName);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_SourceDbNameWins_WhenOverrideEmpty()
+    {
+        // Регрессия прежнего поведения без override-параметра: пустой «Имя БД» — имя источника.
+        var source = new RacInfobaseSummary
+        {
+            Name = "Бухгалтерия",
+            DbName = "buho"
+        };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "");
+
+        Assert.Equal("buho", request.DbName);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_KeepsEmptyDbName_WhenBothEmpty()
+    {
+        // Оба пусты — DbName остаётся пустой строкой: валидация ViewModel («Имя БД» не указано)
+        // обязана сработать ДО вызова rac, чтобы сырой ArgumentException не дошёл до пользователя.
+        var source = new RacInfobaseSummary
+        {
+            Name = "Бухгалтерия",
+            DbName = ""
+        };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "", "");
+
+        Assert.Equal(string.Empty, request.DbName);
+    }
+
     // ---------- ExcludeSourceServer ----------
 
     [Fact]

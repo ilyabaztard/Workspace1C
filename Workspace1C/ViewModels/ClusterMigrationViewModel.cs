@@ -58,10 +58,12 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     private int _busy;
     private string _dbUser = string.Empty;
     private string _dbPassword = string.Empty;
-    // «Тип СУБД»/«Сервер СУБД» для rac «infobase create» (issue #41): автозаполняются из
-    // первой базы источника, пока пользователь не изменил их вручную (_dbDetailsTouched).
+    // «Тип СУБД»/«Сервер СУБД»/«Имя БД» для rac «infobase create» (issue #41, фикс 1.0.0.70):
+    // автозаполняются из первой базы источника, пока пользователь не изменил их вручную
+    // (_dbDetailsTouched). У «Имя БД» fallback-семантика: форма — только для баз без db-name.
     private string _dbms = RacDbms.MssqlServer;
     private string _dbServer = string.Empty;
+    private string _dbName = string.Empty;
     private bool _dbDetailsTouched;
     private bool _keepInSource;
     private bool _useClusterGrouping = true;
@@ -375,6 +377,24 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         {
             _dbDetailsTouched = true;
             SetProperty(ref _dbServer, (value ?? string.Empty).Trim());
+        }
+    }
+
+    /// <summary>
+    /// Имя БД в СУБД для регистрации баз в кластере-приёмнике (rac «--db-name», issue #41,
+    /// фикс 1.0.0.70): rac «infobase create» требует непустое db-name, но rac может не вернуть
+    /// колонку у базы-источника. Поле на форме (TextBox выше учётных данных СУБД), автозаполняется
+    /// из первой базы источника, пока пользователь не изменил его вручную. Fallback-семантика:
+    /// применяется в BuildCreateRequest ТОЛЬКО для баз, где rac не вернул db-name (остальные
+    /// переносятся со своими именами).
+    /// </summary>
+    public string DbName
+    {
+        get => _dbName;
+        set
+        {
+            _dbDetailsTouched = true;
+            SetProperty(ref _dbName, (value ?? string.Empty).Trim());
         }
     }
 
@@ -737,6 +757,9 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                 var dbServer = firstSource.DbServer ?? string.Empty;
                 if (SetProperty(ref _dbServer, dbServer))
                     OnPropertyChanged(nameof(DbServer));
+                var dbName = firstSource.DbName ?? string.Empty;
+                if (SetProperty(ref _dbName, dbName))
+                    OnPropertyChanged(nameof(DbName));
             }
         }
 
@@ -1051,8 +1074,19 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
 
                 // 1) Добавляем базу с теми же данными в новый кластер (rac «infobase create»).
                 // Значения «Тип СУБД»/«Сервер СУБД» с формы (issue #41) приоритетнее данных
-                // источника: приёмник может быть на другом сервере СУБД.
-                var request = ClusterMigrationService.BuildCreateRequest(row.Source!, DbUser, DbPassword, Dbms, DbServer);
+                // источника: приёмник может быть на другом сервере СУБД. «Имя БД» (DbName) —
+                // fallback: значение формы используется только для баз, где rac не вернул db-name.
+                var request = ClusterMigrationService.BuildCreateRequest(row.Source!, DbUser, DbPassword, Dbms, DbServer, DbName);
+                // Понятная ошибка вместо сырого ArgumentException «Не указано имя базы данных.»
+                // из RacClient.InfobaseCreateArgs: rac требует непустой --db-name, а rac может
+                // не вернуть db-name у базы-источника (issue #41, фикс 1.0.0.70). Вызов rac
+                // для такой базы не производится.
+                if (string.IsNullOrWhiteSpace(request.DbName))
+                {
+                    ErrorMessage = string.Format(
+                        LocalizationManager.T("ClusterMigration.Error.DbNameEmptyFormat"), row.Name);
+                    return;
+                }
                 var created = await _rac.CreateInfobaseAsync(targetParams, targetClusterId, request).ConfigureAwait(false);
                 if (!created)
                 {
