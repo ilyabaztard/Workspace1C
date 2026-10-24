@@ -2121,9 +2121,18 @@
                             <StackPanel>
                                 <CheckBox x:Name="TrayMenuEditingCheck" Content="{loc:Loc Settings.TrayMenu.EditingEnabled}"
                                           ToolTip="{loc:Loc Settings.TrayMenu.EditingEnabledTooltip}"
-                                          ToolTipService.ShowDuration="20000"/>
-                                <!-- Кнопка «Настроить структуру…» (OnTrayMenuEdit_Click) и окно редактора
-                                     TrayMenuEditorWindow добавляются шагом 2 (issue #62) вместе с адаптерами трея. -->
+                                          ToolTipService.ShowDuration="20000" Margin="0,0,0,8"/>
+                                <Button x:Name="TrayMenuEditButton" Click="OnTrayMenuEdit_Click" Style="{StaticResource ModernButton}"
+                                        HorizontalAlignment="Left" Padding="12,7" Margin="0,0,0,4">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="TrayFull" Width="16" Height="16" Margin="0,0,6,0"
+                                            VerticalAlignment="Center"/>
+                                        <TextBlock Text="{loc:Loc Settings.TrayMenu.EditButton}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <TextBlock Text="{loc:Loc Settings.TrayMenu.Hint}"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                                           TextWrapping="Wrap" Margin="0,6,12,0"/>
                             </StackPanel>
                         </GroupBox>
 

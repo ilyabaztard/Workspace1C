@@ -4572,14 +4572,38 @@ namespace Workspace1C
             panel.Children.Add(Hint(LocalizationManager.T("Settings.ContextMenu.Hint"), bottom: 0));
 
             // Меню трея (issue #62): правка структуры меню в трее. Кнопка
-            // «Настроить структуру…» и окно редактора TrayMenuEditorWindow
-            // добавляются шагом 2 (issue #62) вместе с адаптерами трея.
+            // «Настроить структуру…» открывает редактор TrayMenuEditorWindow.
             panel.Children.Add(GroupSectionHeader("Settings.TrayMenu.GroupTitle"));
             _trayMenuEditingCheck = SettingsSwitch(
                 "Settings.TrayMenu.EditingEnabled", _viewModel.TrayMenuEditingEnabled,
                 "IconTrayFull", "#14B8A6", "Settings.TrayMenu.EditingEnabledTooltip");
             _trayMenuEditingCheck.Margin = new Thickness(0, 0, 0, 6);
             panel.Children.Add(_trayMenuEditingCheck);
+
+            var trayEditButton = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6,
+                    Children =
+                    {
+                        IconHelper.MakeIcon("IconTrayFull", 16, "TextPrimaryBrush"),
+                        new TextBlock
+                        {
+                            Text = LocalizationManager.T("Settings.TrayMenu.EditButton"),
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
+                    }
+                },
+                Padding = new Thickness(12, 7),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            trayEditButton.Styled(ControlThemes.ModernButton);
+            trayEditButton.Click += (_, _) => OpenTrayMenuEditor();
+            panel.Children.Add(trayEditButton);
+
+            panel.Children.Add(Hint(LocalizationManager.T("Settings.TrayMenu.Hint"), bottom: 0));
 
             return panel;
         }
@@ -4615,6 +4639,21 @@ namespace Workspace1C
             {
                 var store = AppServices.TryGetService<IContextMenuLayoutStore>();
                 var win = new ContextMenuEditorWindow(store);
+                win.ShowDialogSync(this);
+            }
+            catch
+            {
+                // Не критично: редактор не открылся — настройка останется прежней.
+            }
+        }
+
+        /// <summary>Открывает редактор структуры меню трея (issue #62).</summary>
+        private void OpenTrayMenuEditor()
+        {
+            try
+            {
+                var store = AppServices.TryGetService<ITrayMenuLayoutStore>();
+                var win = new TrayMenuEditorWindow(store);
                 win.ShowDialogSync(this);
             }
             catch

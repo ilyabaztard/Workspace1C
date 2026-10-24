@@ -463,6 +463,21 @@ namespace Workspace1C
             win.ShowDialog();
         }
 
+        /// <summary>
+        /// Открывает редактор структуры меню трея (issue #62): дерево блоков, порядок,
+        /// видимость, стиль («Блок меню»/«Подменю»), пользовательские группы, разделители,
+        /// сохранение/загрузка в файл tray_menu_layout.json.
+        /// </summary>
+        private void OnTrayMenuEdit_Click(object sender, RoutedEventArgs e)
+        {
+            var store = AppServices.TryGetService<ITrayMenuLayoutStore>();
+            var win = new TrayMenuEditorWindow(store)
+            {
+                Owner = this,
+            };
+            win.ShowDialog();
+        }
+
         private void OnSave_Click(object sender, RoutedEventArgs e)
         {
             // Валидация времени расписания синхронизации: обычный TimeSpan.TryParse
