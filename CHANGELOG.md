@@ -11,6 +11,139 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.71] — 2026-10-24
+
+### Добавлено
+
+- **Меню в трее: убрана «Синхронизация», добавлен редактор структуры меню трея
+  (issue #62, Windows и Linux)** — из трея убран пункт «Синхронизировать базы»
+  (WPF [`MainWindow.Tray.cs`](Workspace1C/Views/MainWindow.Tray.cs), Avalonia
+  [`MainWindow.Avalonia.Tray.cs`](Workspace1C/Views/MainWindow.Avalonia.Tray.cs));
+  структура меню трея стала настраиваемой: модель [`TrayMenuLayout.cs`](Workspace1C/Models/TrayMenuLayout.cs)
+  (блоки `favorites`/`recent`/`services`/`user`, стиль «Блок меню»/«Подменю», видимость,
+  порядок, пользовательские группы с иконками и разделители), хранилище
+  [`ITrayMenuLayoutStore.cs`](Workspace1C/Services/ITrayMenuLayoutStore.cs) +
+  [`TrayMenuLayoutStore.cs`](Workspace1C/Services/TrayMenuLayoutStore.cs) (файл
+  `tray_menu_layout.json`, атомарная запись, нормализация, сброс), резолвер
+  [`TrayMenuResolver.cs`](Workspace1C/Services/TrayMenuResolver.cs), стандартная компоновка
+  [`TrayMenuLayouts.cs`](Workspace1C/Services/TrayMenuLayouts.cs) и ViewModel редактора
+  [`TrayMenuEditorViewModel.cs`](Workspace1C/ViewModels/TrayMenuEditorViewModel.cs). В
+  настройках (вкладка «Правка меню») добавлена группа «Меню в трее» — галочка
+  `Settings.TrayMenu.EditingEnabled` и кнопка «Настроить структуру…»; окна редактора:
+  [`TrayMenuEditorWindow.xaml`](Workspace1C/Views/TrayMenuEditorWindow.xaml) (+[`.xaml.cs`](Workspace1C/Views/TrayMenuEditorWindow.xaml.cs))
+  и [`TrayMenuEditorWindow.Avalonia.cs`](Workspace1C/Views/TrayMenuEditorWindow.Avalonia.cs).
+  Меню трея строится по компоновке чистым построителем
+  [`TrayMenuBuilder.cs`](Workspace1C/Services/TrayMenuBuilder.cs): «Открыть программу» —
+  фиксированно первым, «разделитель → Настройки → разделитель → Выход» — последними; стиль
+  «Блок меню» превращается в заголовок с динамическим содержимым (избранные/недавние/
+  службы), «Подменю» — во вложенное меню. Локализация ru/en (`Settings.TrayMenu.*`,
+  `TrayMenu.*`). Покрыто тестами `TrayMenuBuilderTests`/`TrayMenuEditorWindowLayoutTests`/
+  `TrayMenuLayoutTests`/`TrayMenuResolverTests`/`TrayMenuLayoutStoreTests`/
+  `TrayMenuEditorViewModelTests`/`TrayMenuAppSettingsTests`.
+
+### Исправлено
+
+- **Меню «Утилиты»: убран пункт «Блокировка сеансов информационной базы»
+  (issue #66, Windows и Linux)** — пункт удалён из каталога и стандартной компоновки:
+  `UtilitiesMenuCommandKind.SessionLock`, запись `SessionLock` из `All` и блок
+  `Separator(); Item("SessionLock"); Separator();` убраны из
+  [`UtilitiesMenuCatalog.cs`](Workspace1C/Services/UtilitiesMenuCatalog.cs) (порядок
+  соседних пунктов `UndoConnectionReplace`/`RemoveMissingFileBases` сохранён). Сама
+  функция блокировки не затронута: остаётся в контекстном меню базы (ПКМ), на горячей
+  клавише Ctrl+Alt+L и в окне `SessionLockWindow`
+  ([`MainViewModel.SessionLock.cs`](Workspace1C/ViewModels/MainViewModel.SessionLock.cs),
+  [`MainWindow.ContextMenu.cs`](Workspace1C/Views/MainWindow.ContextMenu.cs)); из построителей
+  меню удалены только ветки пункта (WPF [`MainWindow.UtilitiesMenu.cs`](Workspace1C/Views/MainWindow.UtilitiesMenu.cs),
+  Avalonia [`MainWindow.Avalonia.Tree.cs`](Workspace1C/Views/MainWindow.Avalonia.Tree.cs)).
+  Старые пользовательские компоновки `utilities_menu_layout.json` с `ItemId "SessionLock"`
+  не роняют загрузку редактора: узлы с неизвестным каталогу идентификатором отбрасываются
+  при нормализации ([`UtilitiesMenuLayoutStore.NormalizeNode`](Workspace1C/Services/UtilitiesMenuLayoutStore.cs)).
+  Покрыто тестами `UtilitiesMenuCatalogIssue66Tests` и обновлёнными регресс-тестами
+  `UtilitiesMenuLayoutTests`/`UtilitiesMenuResolverTests`.
+
+- **Подменю «Новинки программы» не скрывается при размещении пунктов (issue #65,
+  Windows и Linux)** — видимость группы раньше считалась по «неразмещённым» новинкам
+  ([`UtilitiesMenuResolver.EnsureNewItemsGroup`](Workspace1C/Services/UtilitiesMenuResolver.cs)):
+  если пользователь переносил один пункт из группы в свою папку, все новинки оказывались
+  «присутствующими» в компоновке и группа пряталась, хотя в ней оставались пункты. Новый
+  алгоритм (тот же фикс в [`ContextMenuResolver.EnsureNewItemsGroup`](Workspace1C/Services/ContextMenuResolver.cs)):
+  в существующую группу добавляются только новинки, которых нет ни в группе, ни в остальной
+  компоновке (перенесённый пункт не дублируется); группа скрывается, только если в ней не
+  осталось ни одного пункта; при отсутствии группы и наличии неразмещённых новинок она
+  создаётся в конце корня с разделителем. Покрыто тестами
+  `UtilitiesMenuResolverTests`/`ContextMenuResolverTests`.
+
+- **Команды Telegram-бота из тем/подгрупп канала (issue #64, Windows и Linux)** —
+  команды из подгрупп и тем канала раньше отклонялись: разбор апдейтов
+  ([`TelegramBotCommandService.ParseUpdates`](Workspace1C/Services/TelegramBotCommandService.cs))
+  брал только `chat.id`, а разрешение чата сравнивало сырые строки (`AllowedChats` +
+  `contains`). Запись `TelegramCommand` расширена полем `MessageThreadId`, `ParseUpdates`
+  извлекает `message_thread_id`; добавлена чистая функция разрешения `IsAllowedChat`:
+  кандидаты — `AllowedChatIds` (разделители «,», «;», пробел) или, при пустом списке, чат
+  уведомлений; каждый нормализуется через `TelegramNotificationChannel.ParseChatTarget`
+  (в т.ч. `t.me/c/<id>[/<thread>]` → `-100…` + тема) и сравнивается числовым
+  `SameChatId`; настройка с темой разрешает только указанную тему, без темы — весь чат
+  (основной + любые темы). Ответ уходит в ту же тему (`message_thread_id` передаётся в
+  `sendMessage`). Добавлена подсказка `Bot.AllowedChatsHint` в окне «Команды
+  Telegram-бота» ([`TelegramBotWindow.cs`](Workspace1C/Views/TelegramBotWindow.cs),
+  [`TelegramBotWindow.Avalonia.cs`](Workspace1C/Views/TelegramBotWindow.Avalonia.cs)).
+  Покрыто тестами `TelegramBotCommandServiceTests`.
+
+- **Публикация на веб-сервере: инстансы Apache и читаемые поля (issue #63, Windows и
+  Linux)** — (A) поля ввода в карточках больше не сливаются с фоном: введена кисть
+  `InputBackgroundBrush` (светлая тема — `#E8EDF3` на фоне карточки `#FFFFFF`, тёмная —
+  `#273548` на `#1E293B`) в палитрах [`ColorScheme.cs`](Workspace1C/Models/ColorScheme.cs),
+  WPF-темах [`LightTheme.xaml`](Workspace1C/Themes/LightTheme.xaml)/
+  [`DarkTheme.xaml`](Workspace1C/Themes/DarkTheme.xaml) и Avalonia
+  [`LightTheme.axaml`](Workspace1C/Themes/LightTheme.axaml)/[`DarkTheme.axaml`](Workspace1C/Themes/DarkTheme.axaml)/
+  [`Controls.axaml`](Workspace1C/Themes/Controls.axaml); стили `ModernTextBox`/
+  `ModernComboBox`/`ModernPasswordBox` и поля из кода (`WpfUi.BoundTextBox`) используют её
+  вместо `CardBackgroundBrush`. (B) окно публикации обнаруживает установленные инстансы
+  Apache вместо фиксированного списка {IIS, Apache 2.4, 2.2}: модель
+  [`ApacheInstance.cs`](Workspace1C/Models/ApacheInstance.cs), парсер директив
+  `Include`/`IncludeOptional` ([`ApacheConfIncludeParser.cs`](Workspace1C/Services/ApacheConfIncludeParser.cs)),
+  детектор [`ApacheInstanceDetector.cs`](Workspace1C/Services/ApacheInstanceDetector.cs)
+  (Windows — службы httpd с разбором `ImagePath` (`-d`/`-f`); Linux — `apache2ctl -V`/
+  `httpd -V`, fallback `/etc/apache2/apache2.conf` и `/var/www`); выбор инстанса
+  подставляет `ApacheConfPath` и каталог публикации; вторым списком выбирается конфиг-файл
+  для webinst — основной или include-файл ([`WebPublishViewModel.cs`](Workspace1C/ViewModels/WebPublishViewModel.cs)).
+  Локализация новых подписей ru/en. Покрыто тестами `Issue63InputBackgroundBrushTests`/
+  `ApacheConfIncludeParserTests`/`ApacheInstanceDetectorTests`/`WebPublishViewModelTests`.
+
+- **Читаемые заголовки и подписи в тёмной теме (issue #61, Windows и Linux)** —
+  пройдены все формы; фиксированные «почти чёрные» цвета текста заменены на динамические
+  кисти темы: введена `FavoriteTextBrush`, контрастная к `FavoriteColor` (по WCAG,
+  [`ThemeManager.cs`](Workspace1C/Themes/ThemeManager.cs)/[`ThemeManager.Avalonia.cs`](Workspace1C/Themes/ThemeManager.Avalonia.cs),
+  палитры [`ColorScheme.cs`](Workspace1C/Models/ColorScheme.cs), темы обеих платформ);
+  бейдж «Избранное» правой панели и номера слотов Alt+N используют `FavoriteTextBrush`
+  ([`MainWindow.xaml`](Workspace1C/Views/MainWindow.xaml), [`SettingsWindow.xaml`](Workspace1C/Views/SettingsWindow.xaml),
+  [`MainWindow.Avalonia.Tree.cs`](Workspace1C/Views/MainWindow.Avalonia.Tree.cs),
+  [`SettingsWindow.Avalonia.cs`](Workspace1C/Views/SettingsWindow.Avalonia.cs)); тексты окон,
+  собираемых кодом, явно привязывают `TextPrimaryBrush`/`TextSecondaryBrush`
+  ([`AvaloniaUi.Avalonia.cs`](Workspace1C/Views/AvaloniaUi.Avalonia.cs)); в разметке
+  `Views/*.xaml`/`*.axaml` фиксированных почти чёрных `Foreground` (`#1C1917`, `Black`,
+  `#111827`, `#0F172A`, `#1E293B`) не осталось. Покрыто тестами-стражами
+  [`Issue61TitleColorsTests.cs`](Workspace1C.Tests/Issue61TitleColorsTests.cs).
+
+- **Миграция баз: авто-перенос имени БД, убрано поле «Имя БД» (issue #41, Windows и
+  Linux)** — поле «Имя БД», добавленное в 1.0.0.70, убрано с формы миграции
+  ([`ClusterMigrationWindow.xaml`](Workspace1C/Views/ClusterMigrationWindow.xaml),
+  [`ClusterMigrationWindow.axaml`](Workspace1C/Views/ClusterMigrationWindow.axaml)); из VM
+  удалены свойство `DbName`, автозаполнение из первой базы и значение поля из запроса
+  ([`ClusterMigrationViewModel.cs`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs)).
+  Имя БД переносится автоматически: [`ClusterMigrationService.BuildCreateRequest`](Workspace1C/Services/ClusterMigrationService.cs)
+  — приоритет у `DbName` источника из «infobase summary list»; если rac не вернул db-name
+  (отдельные версии rac не выводят колонку/ключ, см.
+  [`RacOutputParser.ToInfobaseSummaries`](Workspace1C/Services/RacOutputParser.cs)) —
+  используется имя информационной базы (сервер 1С при создании ИБ именует БД в СУБД по
+  имени ИБ); проверка/ошибка `DbNameEmptyFormat` удалена. Сводка «Выделено: N из M ·
+  будет перенесено: N» и кнопки «Выделить все»/«Снять все» перенесены в строку сразу под
+  списком баз, над галочками-опциями (Avalonia-хост `BulkHost`
+  ([`ClusterMigrationWindow.Avalonia.cs`](Workspace1C/Views/ClusterMigrationWindow.Avalonia.cs))).
+  Ключи локализации `ClusterMigration.DbName`/`ClusterMigration.Error.DbNameEmptyFormat`
+  удалены из ru/en. Покрыто тестами `ClusterMigrationServiceTests`/
+  `ClusterMigrationViewModelTests`/`Issue41WindowLayoutTests`.
+
 ## [1.0.0.70] — 2026-10-24
 
 ### Исправлено

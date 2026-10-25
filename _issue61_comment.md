@@ -17,3 +17,5 @@
 Тесты-стражи (7 фактов): [`Issue61TitleColorsTests.cs`](Workspace1C.Tests/Issue61TitleColorsTests.cs) — бейджи избранного используют `FavoriteTextBrush`, в разметке обеих платформ нет фиксированных тёмных `Foreground`, кисть объявлена в палитрах и темах, `AvaloniaUi` привязывает кисти темы. Сборка успешна для Windows (WPF) и Linux (Avalonia).
 
 Реализовано на обеих платформах.
+
+Релиз: https://github.com/sivatorov/Workspace1C/releases/tag/v1.0.0.71 (появится после публикации)
