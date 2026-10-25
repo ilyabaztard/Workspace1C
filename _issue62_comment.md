@@ -13,4 +13,4 @@
 
 Реализовано на обеих платформах (Windows/WPF и Linux/Avalonia).
 
-Релиз: https://github.com/sivatorov/Workspace1C/releases/tag/v1.0.0.71 (появится после публикации)
+Релиз: https://github.com/sivatorov/Workspace1C/releases/tag/v1.0.0.71
