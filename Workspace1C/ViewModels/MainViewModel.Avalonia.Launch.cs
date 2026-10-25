@@ -73,7 +73,10 @@ public partial class MainViewModel : ViewModelBase
         if (infobase is null)
             return;
 
-        var dialog = new Workspace1C.LaunchParametersWindow(infobase.LaunchParameters ?? string.Empty);
+        var dialog = new Workspace1C.LaunchParametersWindow(
+            infobase.LaunchParameters ?? string.Empty,
+            CustomLaunchParameters,
+            SetCustomLaunchParameters);
         if (!dialog.ShowDialogSync(OwnerWindow()))
             return;
 
