@@ -491,7 +491,12 @@ public class UtilitiesMenuEditorViewModel : ViewModelBase
         DeleteGroupCommand.RaiseCanExecuteChanged();
     }
 
-    private static IReadOnlyList<UtilitiesIconOption> BuildCatalogIcons()
+    /// <summary>
+    /// Единый каталог иконок пользовательских групп и пунктов меню (issue #62): строится
+    /// из <see cref="UtilitiesMenuCatalog.All"/> (ключ PackIcon + цвет). Используется
+    /// редакторами «Утилиты» и «Меню в трее» — один набор на оба редактора.
+    /// </summary>
+    internal static IReadOnlyList<UtilitiesIconOption> BuildCatalogIcons()
     {
         var result = new List<UtilitiesIconOption>();
         var seen = new HashSet<string>(StringComparer.Ordinal);

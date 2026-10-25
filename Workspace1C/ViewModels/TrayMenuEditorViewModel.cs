@@ -430,13 +430,9 @@ public class TrayMenuEditorViewModel : ViewModelBase
     /// ключ+цвет («простой набор цвета/ключа» по issue #62; механизм иконок
     /// <see cref="UtilitiesMenuEditorViewModel"/> переиспользуется).</summary>
     private static IReadOnlyList<UtilitiesIconOption> BuildCatalogIcons() =>
-    [
-        new UtilitiesIconOption("Star", "#F59E0B"),
-        new UtilitiesIconOption("Folder", "#3B82F6"),
-        new UtilitiesIconOption("FolderStar", "#8B5CF6"),
-        new UtilitiesIconOption("Database", "#10B981"),
-        new UtilitiesIconOption("Server", "#EF4444"),
-    ];
+        // issue #62 («Иконок конечно маловато, намного меньше, чем в правке структуры
+        // Утилиты»): единый каталог с редактором «Утилиты» (UtilitiesMenuCatalog.All).
+        UtilitiesMenuEditorViewModel.BuildCatalogIcons();
 }
 
 /// <summary>

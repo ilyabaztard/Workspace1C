@@ -65,6 +65,9 @@ public sealed class TrayMenuItem
     /// <summary>Ключ иконки блока (пользовательские группы); пусто — без иконки.</summary>
     public string IconKey { get; init; } = string.Empty;
 
+    /// <summary>Цвет иконки #RRGGBB (пользовательские группы); пусто — цвет по умолчанию.</summary>
+    public string IconColor { get; init; } = string.Empty;
+
     /// <summary>Дочерние пункты подменю (для <see cref="TrayItemKind.Submenu"/>).</summary>
     public IReadOnlyList<TrayMenuItem> Children { get; init; } = Array.Empty<TrayMenuItem>();
 
@@ -174,6 +177,7 @@ public sealed class TrayMenuBuilder
                 Text = text,
                 Block = node.BlockKind,
                 IconKey = node.IconKey ?? string.Empty,
+                IconColor = node.IconColor ?? string.Empty,
             });
             foreach (var child in node.Children)
                 AppendNode(list, child);
@@ -190,6 +194,7 @@ public sealed class TrayMenuBuilder
             Text = text,
             Block = node.BlockKind,
             IconKey = node.IconKey ?? string.Empty,
+            IconColor = node.IconColor ?? string.Empty,
             Children = children,
         });
     }

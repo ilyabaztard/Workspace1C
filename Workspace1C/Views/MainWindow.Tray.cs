@@ -309,7 +309,8 @@ namespace Workspace1C
                     break;
 
                 default:
-                    menu.Items.Add(CreateTrayItem(item.Text, TrayIconKind.Group, null));
+                    // issue #62: иконка пользовательской группы — выбранная из каталога.
+                    menu.Items.Add(CreateTrayItem(item.Text, TrayIconKind.Group, null, item.IconKey, item.IconColor));
                     break;
             }
         }
@@ -457,7 +458,8 @@ namespace Workspace1C
             // Пользовательская группа: подменю с детьми компоновки (в т.ч. перенесённые
             // блоки с динамическим содержимым — issue #62).
             AddTrayBlockStart(menu);
-            var groupSubmenu = CreateTrayItem(item.Text, TrayIconKind.Group, null);
+            // issue #62: иконка пользовательской группы — выбранная из каталога.
+            var groupSubmenu = CreateTrayItem(item.Text, TrayIconKind.Group, null, item.IconKey, item.IconColor);
             ApplyModernDropDownStyle(groupSubmenu.DropDown);
             AppendChildItems(groupSubmenu.DropDownItems, item, groupSubmenu.DropDown);
             menu.Items.Add(groupSubmenu);
@@ -500,7 +502,8 @@ namespace Workspace1C
                         AppendTraySubmenuContent(owner, toolStrip, child);
                         break;
                     default:
-                        owner.Add(CreateTrayItem(child.Text, TrayIconKind.Group, null));
+                        // issue #62: иконка вложенной группы — выбранная из каталога.
+                        owner.Add(CreateTrayItem(child.Text, TrayIconKind.Group, null, child.IconKey, child.IconColor));
                         break;
                 }
             }
@@ -633,7 +636,8 @@ namespace Workspace1C
             }
 
             // Пользовательская группа: подменю с детьми компоновки.
-            var groupSubmenu = CreateTrayItem(item.Text, TrayIconKind.Group, null);
+            // issue #62: иконка группы — выбранная из каталога (не «совсем другая»).
+            var groupSubmenu = CreateTrayItem(item.Text, TrayIconKind.Group, null, item.IconKey, item.IconColor);
             ApplyModernDropDownStyle(groupSubmenu.DropDown);
             AppendChildItems(groupSubmenu.DropDownItems, item, groupSubmenu.DropDown);
             owner.Add(groupSubmenu);
@@ -675,11 +679,17 @@ namespace Workspace1C
             };
         }
 
-        private static Forms.ToolStripMenuItem CreateTrayItem(string text, TrayIconKind kind, EventHandler? onClick)
+        private static Forms.ToolStripMenuItem CreateTrayItem(string text, TrayIconKind kind, EventHandler? onClick,
+            string? iconKey = null, string? iconColor = null)
         {
             var item = new Forms.ToolStripMenuItem(text)
             {
-                Image = GetTrayIcon(kind),
+                // issue #62 («Выбираем из того, что есть - сохраняем. Иконка совсем другая»):
+                // пользовательская группа трея получает ВЫБРАННУЮ иконку (ключ каталога +
+                // цвет), а не всегда стандартную иконку группы.
+                Image = !string.IsNullOrWhiteSpace(iconKey)
+                    ? DrawCustomTrayIcon(iconKey, iconColor, TrayMenuIconSize)
+                    : GetTrayIcon(kind),
                 ImageScaling = Forms.ToolStripItemImageScaling.None,
                 DisplayStyle = Forms.ToolStripItemDisplayStyle.ImageAndText,
                 ImageAlign = Drawing.ContentAlignment.MiddleLeft,
@@ -690,6 +700,59 @@ namespace Workspace1C
             if (onClick != null)
                 item.Click += onClick;
             return item;
+        }
+
+        /// <summary>
+        /// Иконка пользовательской группы трея по ключу каталога (WPF-геометрия активного
+        /// набора иконок через <see cref="Converters.IconKeyToGeometryResolver.ResolveGeometry"/>
+        /// + цвет #RRGGBB; issue #62). Неизвестный/пустой ключ — стандартная иконка группы.
+        /// </summary>
+        private static Drawing.Image DrawCustomTrayIcon(string iconKey, string? iconColorHex, int size)
+        {
+            var geometry = Workspace1C.Converters.IconKeyToGeometryConverter.ResolveGeometry(iconKey);
+            if (geometry is null || geometry.IsEmpty())
+                return GetTrayIcon(TrayIconKind.Group);
+
+            var brush = ParseSymbolBrush(iconColorHex);
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                var bounds = geometry.Bounds;
+                var scale = Math.Min(
+                    size / Math.Max(bounds.Width, 1d),
+                    size / Math.Max(bounds.Height, 1d));
+                if (scale > 0 && scale != 1d)
+                    dc.PushTransform(new ScaleTransform(scale, scale));
+                dc.DrawGeometry(brush, null, geometry);
+            }
+
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(visual);
+
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bmp));
+            using var ms = new MemoryStream();
+            encoder.Save(ms);
+            return new Drawing.Bitmap(ms);
+        }
+
+        /// <summary>Кисть цвета иконки из #RRGGBB (невалидный/пустой — серый, как у «Без группы»).</summary>
+        private static SolidColorBrush ParseSymbolBrush(string? colorHex)
+        {
+            if (string.IsNullOrWhiteSpace(colorHex))
+                return new SolidColorBrush(Colors.Gray);
+            try
+            {
+                var text = colorHex.Trim().TrimStart('#');
+                var r = Convert.ToInt32(text.Substring(0, 2), 16);
+                var g = Convert.ToInt32(text.Substring(2, 2), 16);
+                var b = Convert.ToInt32(text.Substring(4, 2), 16);
+                return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
+            }
+            catch
+            {
+                return new SolidColorBrush(Colors.Gray);
+            }
         }
 
         private static Forms.ToolStripLabel CreateTrayHeader(string text)
