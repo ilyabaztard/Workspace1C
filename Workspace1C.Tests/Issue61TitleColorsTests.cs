@@ -156,4 +156,27 @@ public sealed class Issue61TitleColorsTests
         Assert.Contains("TextSecondaryBrush", code, System.StringComparison.Ordinal);
         Assert.Contains("TextPrimaryBrush", code, System.StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ServerEditWindow_Avalonia_FieldCaptionsAndTitle_BindThemeBrushes()
+    {
+        // Issue #61 (комментарий 7OH от 2026-10-25): «Заходим в первое окно (Изменение
+        // сервера) и заголовки полей по-прежнему чёрные» — подписи полей и заголовок
+        // окна, собранного кодом, привязаны к кисти темы (TextPrimaryBrush).
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerEditWindow.Avalonia.cs"));
+        Assert.Contains("ThemeBrushes.Bind(caption, TextBlock.ForegroundProperty, \"TextPrimaryBrush\");",
+            code, System.StringComparison.Ordinal);
+        Assert.Contains("ThemeBrushes.Bind(title, TextBlock.ForegroundProperty, \"TextPrimaryBrush\");",
+            code, System.StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ServerEditWindow_Wpf_PasswordRevealField_UsesThemeTextBoxStyle()
+    {
+        // Поле показа пароля окна «Изменение сервера» — стиль ModernTextBox (читаемый
+        // текст/фон в обеих темах; issue #61 «текст в поле прочитать сложно»).
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerEditWindow.xaml"));
+        Assert.Contains("PasswordRevealTextBox", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource ModernTextBox}\"", xaml, StringComparison.Ordinal);
+    }
 }

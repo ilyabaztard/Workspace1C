@@ -88,6 +88,9 @@ namespace Workspace1C
                 FontSize = 15,
                 FontWeight = FontWeight.SemiBold
             };
+            // Китая темы: заголовок окна не должен оставаться чёрным в тёмной схеме
+            // (issue #61, замечание 7OH «заголовки полей по-прежнему чёрные»).
+            Themes.ThemeBrushes.Bind(title, TextBlock.ForegroundProperty, "TextPrimaryBrush");
             panel.Children.Add(title);
 
             panel.Children.Add(MakeFieldRow(T("ServerMonitor.Servers.Description"), _descriptionBox));
@@ -161,6 +164,9 @@ namespace Workspace1C
                 FontWeight = FontWeight.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            // Подписи полей в тёмной теме (issue #61): фиксированный «чёрный» текст
+            // нечитаем — привязываем кисть темы.
+            Themes.ThemeBrushes.Bind(caption, TextBlock.ForegroundProperty, "TextPrimaryBrush");
             Grid.SetColumn(caption, 0);
             grid.Children.Add(caption);
 
