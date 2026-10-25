@@ -388,10 +388,11 @@ namespace Workspace1C
                 return;
             }
 
-            // Пользовательская группа: заголовок + дети компоновки (зарезервировано).
+            // Пользовательская группа: заголовок + дети компоновки (в т.ч. перенесённые
+            // блоки с динамическим содержимым — issue #62).
             AddTrayBlockStart(menu);
             menu.Items.Add(CreateTrayHeader(item.Text));
-            AppendChildItems(menu.Items, item);
+            AppendChildItems(menu.Items, item, menu);
         }
 
         /// <summary>Блок (или пользовательская группа) в стиле «Подменю»: пункт с вложенным меню.
@@ -453,11 +454,12 @@ namespace Workspace1C
                 return;
             }
 
-            // Пользовательская группа: подменю с детьми компоновки (зарезервировано).
+            // Пользовательская группа: подменю с детьми компоновки (в т.ч. перенесённые
+            // блоки с динамическим содержимым — issue #62).
             AddTrayBlockStart(menu);
             var groupSubmenu = CreateTrayItem(item.Text, TrayIconKind.Group, null);
             ApplyModernDropDownStyle(groupSubmenu.DropDown);
-            AppendChildItems(groupSubmenu.DropDownItems, item);
+            AppendChildItems(groupSubmenu.DropDownItems, item, groupSubmenu.DropDown);
             menu.Items.Add(groupSubmenu);
         }
 
@@ -469,9 +471,17 @@ namespace Workspace1C
                 menu.Items.Add(new Forms.ToolStripSeparator());
         }
 
-        /// <summary>Дети пользовательской группы в подменю/блоке (зарезервировано — сейчас
-        /// группы верхнего уровня; поддерживаем разделители и пункты компоновки).</summary>
-        private void AppendChildItems(Forms.ToolStripItemCollection owner, TrayMenuItem item)
+        /// <summary>
+        /// Дети группы/подменю (issue #62): разделители добавляются как есть, а блоки
+        /// размещаются ВНУТРИ подменю с полным динамическим содержимым (избранные/
+        /// недавние/службы/вложенные группы) — иначе перенесённый в группу блок
+        /// превращался в «мёртвый» пункт без обработчиков и содержимого
+        /// («Блоки, добавленные в группу, перестают функционировать»).
+        /// </summary>
+        /// <param name="owner">Коллекция пунктов (корневое меню или подменю группы).</param>
+        /// <param name="item">Узел группы с детьми компоновки.</param>
+        /// <param name="toolStrip">Владеющая полоса для стилизации вложенных подменю запуска.</param>
+        private void AppendChildItems(Forms.ToolStripItemCollection owner, TrayMenuItem item, Forms.ToolStrip toolStrip)
         {
             foreach (var child in item.Children)
             {
@@ -480,14 +490,161 @@ namespace Workspace1C
                     owner.Add(new Forms.ToolStripSeparator());
                     continue;
                 }
-                owner.Add(CreateTrayItem(child.Text, TrayIconKind.Group, null));
+
+                switch (child.Kind)
+                {
+                    case TrayItemKind.Header:
+                        AppendTrayBlockContent(owner, toolStrip, child);
+                        break;
+                    case TrayItemKind.Submenu:
+                        AppendTraySubmenuContent(owner, toolStrip, child);
+                        break;
+                    default:
+                        owner.Add(CreateTrayItem(child.Text, TrayIconKind.Group, null));
+                        break;
+                }
             }
+        }
+
+        /// <summary>Содержимое блока «Блок меню» прямо в коллекцию owner (без разделителя-
+        /// начала блока — его добавляет корневой адаптер). Повторяет поведение
+        /// <see cref="AppendTrayBlock"/>, но для вложенных блоков внутри групп (issue #62):
+        /// перенесённые «Избранные/Недавние/Службы» продолжают показывать динамику и клики.</summary>
+        private void AppendTrayBlockContent(Forms.ToolStripItemCollection owner, Forms.ToolStrip toolStrip, TrayMenuItem item)
+        {
+            if (item.Block == TrayMenuBlockKind.Favorites)
+            {
+                var favorites = _viewModel.GetFavoriteInfobasesOrdered();
+                if (favorites.Count == 0)
+                    return;
+                owner.Add(CreateTrayHeader(item.Text));
+                foreach (var (ib, slot) in favorites)
+                {
+                    var name = string.IsNullOrWhiteSpace(ib.Name) ? LocalizationManager.T("Main.NoName") : ib.Name;
+                    if (name.Length > 48)
+                        name = name.Substring(0, 45) + "…";
+                    var id = ib.Id;
+                    var favoriteItem = CreateTrayItem($"{slot}. {name}", TrayIconKind.Favorite, (_, _) =>
+                        _viewModel.LaunchInfobaseById(id, isConfigurator: false));
+                    AttachLaunchSubmenu(favoriteItem, toolStrip, id);
+                    owner.Add(favoriteItem);
+                }
+                return;
+            }
+
+            if (item.Block == TrayMenuBlockKind.Recent)
+            {
+                var recent = _viewModel.GetRecentInfobases(7).ToList();
+                if (recent.Count > 0)
+                {
+                    owner.Add(CreateTrayHeader(item.Text));
+                    foreach (var ib in recent)
+                    {
+                        var name = string.IsNullOrWhiteSpace(ib.Name) ? LocalizationManager.T("Main.NoName") : ib.Name;
+                        if (name.Length > 48)
+                            name = name.Substring(0, 45) + "…";
+                        var id = ib.Id;
+                        var baseItem = CreateTrayItem(name, TrayIconKind.Database, (_, _) =>
+                            _viewModel.LaunchInfobaseById(id, isConfigurator: false));
+                        AttachLaunchSubmenu(baseItem, toolStrip, id);
+                        owner.Add(baseItem);
+                    }
+                }
+                else if (_viewModel.SelectedInfobase != null)
+                {
+                    owner.Add(CreateTrayHeader(item.Text));
+                    var selName = _viewModel.SelectedInfobase.Name;
+                    if (string.IsNullOrWhiteSpace(selName)) selName = LocalizationManager.T("Main.SelectedBaseNoName");
+                    var selId = _viewModel.SelectedInfobase.Id;
+                    var selItem = CreateTrayItem(selName, TrayIconKind.Database, null);
+                    AttachLaunchSubmenu(selItem, toolStrip, selId);
+                    owner.Add(selItem);
+                }
+                return;
+            }
+
+            if (item.Block == TrayMenuBlockKind.Services)
+            {
+                owner.Add(CreateTrayHeader(item.Text));
+                foreach (var mi in BuildServicesMenuItems())
+                    owner.Add(ToServiceTrayItem(mi));
+                return;
+            }
+
+            // Пользовательская группа внутри группы: заголовок + дети компоновки.
+            owner.Add(CreateTrayHeader(item.Text));
+            AppendChildItems(owner, item, toolStrip);
+        }
+
+        /// <summary>Содержимое блока «Подменю» прямо в коллекцию owner (без разделителя-
+        /// начала блока). Повторяет поведение <see cref="AppendTraySubmenu"/> для вложенных
+        /// подменю внутри групп (issue #62).</summary>
+        private void AppendTraySubmenuContent(Forms.ToolStripItemCollection owner, Forms.ToolStrip toolStrip, TrayMenuItem item)
+        {
+            if (item.Block == TrayMenuBlockKind.Favorites)
+            {
+                var favorites = _viewModel.GetFavoriteInfobasesOrdered();
+                if (favorites.Count == 0)
+                    return;
+                var submenu = CreateTrayItem(item.Text, TrayIconKind.Favorite, null);
+                ApplyModernDropDownStyle(submenu.DropDown);
+                foreach (var (ib, slot) in favorites)
+                {
+                    var name = string.IsNullOrWhiteSpace(ib.Name) ? LocalizationManager.T("Main.NoName") : ib.Name;
+                    if (name.Length > 48)
+                        name = name.Substring(0, 45) + "…";
+                    var id = ib.Id;
+                    var favoriteItem = CreateTrayItem($"{slot}. {name}", TrayIconKind.Favorite, (_, _) =>
+                        _viewModel.LaunchInfobaseById(id, isConfigurator: false));
+                    AttachLaunchSubmenu(favoriteItem, submenu.DropDown, id);
+                    submenu.DropDownItems.Add(favoriteItem);
+                }
+                owner.Add(submenu);
+                return;
+            }
+
+            if (item.Block == TrayMenuBlockKind.Recent)
+            {
+                var recent = _viewModel.GetRecentInfobases(7).ToList();
+                if (recent.Count > 0)
+                {
+                    var submenu = CreateTrayItem(item.Text, TrayIconKind.Database, null);
+                    ApplyModernDropDownStyle(submenu.DropDown);
+                    foreach (var ib in recent)
+                    {
+                        var name = string.IsNullOrWhiteSpace(ib.Name) ? LocalizationManager.T("Main.NoName") : ib.Name;
+                        if (name.Length > 48)
+                            name = name.Substring(0, 45) + "…";
+                        var id = ib.Id;
+                        var baseItem = CreateTrayItem(name, TrayIconKind.Database, (_, _) =>
+                            _viewModel.LaunchInfobaseById(id, isConfigurator: false));
+                        AttachLaunchSubmenu(baseItem, submenu.DropDown, id);
+                        submenu.DropDownItems.Add(baseItem);
+                    }
+                    owner.Add(submenu);
+                }
+                return;
+            }
+
+            if (item.Block == TrayMenuBlockKind.Services)
+            {
+                owner.Add(BuildServicesSubmenu(item.Text));
+                return;
+            }
+
+            // Пользовательская группа: подменю с детьми компоновки.
+            var groupSubmenu = CreateTrayItem(item.Text, TrayIconKind.Group, null);
+            ApplyModernDropDownStyle(groupSubmenu.DropDown);
+            AppendChildItems(groupSubmenu.DropDownItems, item, groupSubmenu.DropDown);
+            owner.Add(groupSubmenu);
         }
 
         /// <summary>
         /// Подменю «Предприятие / Конфигуратор» без зазора от родительского пункта.
+        /// Владелец — любая полоса (корневое меню или вложенное подменю группы, issue #62):
+        /// стили подменю запуска копируются из неё.
         /// </summary>
-        private void AttachLaunchSubmenu(Forms.ToolStripMenuItem parent, Forms.ContextMenuStrip ownerMenu, string infobaseId)
+        private void AttachLaunchSubmenu(Forms.ToolStripMenuItem parent, Forms.ToolStrip ownerMenu, string infobaseId)
         {
             parent.DropDownItems.Add(CreateTrayItem(LocalizationManager.T("Main.Enterprise"), TrayIconKind.Enterprise, (_, _) =>
                 _viewModel.LaunchInfobaseById(infobaseId, isConfigurator: false)));

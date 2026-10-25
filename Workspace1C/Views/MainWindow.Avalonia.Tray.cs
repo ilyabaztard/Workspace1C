@@ -347,18 +347,35 @@ namespace Workspace1C
             menu.Add(new NativeMenuItem(item.Text) { Menu = groupMenu });
         }
 
-        /// <summary>Дети пользовательской группы в подменю/блоке (зарезервировано — сейчас
-        /// группы верхнего уровня; поддерживаем разделители и пункты компоновки).</summary>
+        /// <summary>
+        /// Дети группы/подменю (issue #62): разделители добавляются как есть, а блоки
+        /// размещаются ВНУТРИ подменю с полным динамическим содержимым (избранные/
+        /// недавние/службы/вложенные группы) — иначе перенесённый в группу блок
+        /// превращался в «мёртвый» пункт без подменю/кликов
+        /// («Блоки, добавленные в группу, перестают функционировать»).
+        /// </summary>
         private void AppendChildItems(NativeMenu owner, TrayMenuItem item)
         {
             foreach (var child in item.Children)
             {
-                if (child.IsSeparator)
+                switch (child.Kind)
                 {
-                    owner.Add(new NativeMenuItemSeparator());
-                    continue;
+                    case TrayItemKind.Separator:
+                        owner.Add(new NativeMenuItemSeparator());
+                        break;
+                    case TrayItemKind.Header:
+                        // Блок в стиле «Блок меню» внутри группы: заголовок и динамическое
+                        // содержимое (избранные/недавние/службы) через штатный адаптер.
+                        AppendTrayBlock(owner, child);
+                        break;
+                    case TrayItemKind.Submenu:
+                        // Вложенное подменю групп/служб внутри группы — штатный адаптер.
+                        AppendTraySubmenu(owner, child);
+                        break;
+                    default:
+                        owner.Add(new NativeMenuItem(child.Text));
+                        break;
                 }
-                owner.Add(new NativeMenuItem(child.Text));
             }
         }
 
