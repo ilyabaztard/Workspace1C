@@ -5,5 +5,4 @@
 
 Локализация ru/en; добавлены юнит-тесты `ScriptTokenPickerViewModelTests` и дополнены `ScriptParameterResolverTests`/`ScriptScenarioEditViewModelTests`.
 
----
-_Черновик комментария. Ссылка на релиз добавляется после публикации._
+Релиз: https://github.com/sivatorov/Workspace1C/releases/tag/v1.0.0.72
