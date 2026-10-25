@@ -1143,6 +1143,151 @@ public sealed class ServerMonitorViewModelTests
         Assert.Empty(client.DropInfobaseCalls);
     }
 
+    // ===================== Повтор удаления с логином/паролем (issue #69) =====================
+
+    [Fact]
+    public async Task DropSelectedInfobase_FirstAttemptFails_RetryWithCredentials_Succeeds()
+    {
+        // Одно неудачное удаление (защищённая база) → диалог повтора → «Повторить попытку»
+        // с логином/паролем администратора ИБ → второй «infobase drop» с кредами → успех.
+        var client = new FakeRacClient { DropInfobaseFailuresLeft = 1 };
+        var dialogs = new RecordingDialogs();
+        var retryShown = new List<(string error, string? login)>();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login) =>
+            {
+                retryShown.Add((error, login));
+                return new DropRetryResult(true, "ИБ-админ", "секрет");
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+        // Первая попытка — без учётных данных администратора ИБ.
+        Assert.Null(client.DropInfobaseCallsWithCredentials[0].infobaseUser);
+        Assert.Null(client.DropInfobaseCallsWithCredentials[0].infobasePassword);
+        // Вторая (повторная) — с кредами из диалога.
+        Assert.Equal("ИБ-админ", client.DropInfobaseCallsWithCredentials[1].infobaseUser);
+        Assert.Equal("секрет", client.DropInfobaseCallsWithCredentials[1].infobasePassword);
+        // Диалог показан ровно один раз: после успеха повторного удаления он НЕ открывается.
+        Assert.Single(retryShown);
+        // finally → Refresh(): списки перечитаны, статус-строка переустановлена («загружено»).
+        Assert.NotEmpty(vm.StatusText);
+        Assert.Contains("ServerMonitor.Status.LoadedFormat", vm.StatusText);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_RetryCancel_DoesNotRetry()
+    {
+        // «Отмена» в диалоге повтора: второй вызов rac НЕ выполняется, статус — текст ошибки.
+        var client = new FakeRacClient { DropInfobaseFailuresLeft = 5 };
+        var dialogs = new RecordingDialogs();
+        var retryShown = 0;
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login) =>
+            {
+                retryShown++;
+                return DropRetryResult.Cancel;
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // «Отмена»: повторный вызов rac НЕ выполняется; диалог показан один раз.
+        Assert.Single(client.DropInfobaseCalls);
+        Assert.Equal(1, retryShown);
+        Assert.NotEmpty(vm.StatusText);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_RepeatedFailures_ShowsDialogAgain_WithSavedLogin()
+    {
+        // Повторная ошибка: диалог показывается снова, логин из прошлой попытки
+        // предзаполнен (передан колбэком), пароль вводится заново; после успеха —
+        // статус «удалена из кластера».
+        var client = new FakeRacClient { DropInfobaseFailuresLeft = 3 };
+        var dialogs = new RecordingDialogs();
+        var retryShown = new List<(string error, string? login)>();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login) =>
+            {
+                retryShown.Add((error, login));
+                return new DropRetryResult(true, "ИБ-админ", "новый-пароль");
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // 3 неудачи + 1 успешная попытка.
+        Assert.Equal(4, client.DropInfobaseCalls.Count);
+        Assert.Equal(3, retryShown.Count);
+        // Первый показ — без логина; второй и третий — с логином из ответа диалога.
+        Assert.Null(retryShown[0].login);
+        Assert.Equal("ИБ-админ", retryShown[1].login);
+        Assert.Equal("ИБ-админ", retryShown[2].login);
+        Assert.Equal("ИБ-админ", client.DropInfobaseCallsWithCredentials[1].infobaseUser);
+        Assert.Equal("новый-пароль", client.DropInfobaseCallsWithCredentials[1].infobasePassword);
+        // После успешной повторной попытки диалог больше не показывается.
+        Assert.NotEmpty(vm.StatusText);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_RetryDialog_IsShownOnUiThread()
+    {
+        // Диалог повтора — модальное окно: обязан открываться в UI-потоке (как
+        // ShowWarningOnUi, issue #3, 1.0.0.22), рабочий поток ждёт его результат.
+        var client = new FakeRacClient { DropInfobaseFailuresLeft = 1 };
+        var dialogs = new RecordingDialogs();
+        var shownOnUi = false;
+        void dispatch(Action action)
+        {
+            var previous = shownOnUi;
+            shownOnUi = true; // имитация UI-потока (WPF Dispatcher / Avalonia UIThread)
+            try { action(); }
+            finally { shownOnUi = previous; }
+        }
+        var vm = new ServerMonitorViewModel(client, dialogs, dispatch,
+            dropRetryDialog: (error, login) =>
+            {
+                Assert.True(shownOnUi, "диалог повтора должен открываться в UI-потоке");
+                return new DropRetryResult(true, "ИБ-админ", "пароль");
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+        Assert.Equal("ИБ-админ", client.DropInfobaseCallsWithCredentials[1].infobaseUser);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_WithoutRetryDialog_FallsBackToWarning()
+    {
+        // Без колбэка диалога (прежние тесты/сценарии): при неудаче — предупреждение
+        // с одной кнопкой OK и статус-строка, повторный вызов не выполняется.
+        var client = new FakeRacClient { DropInfobaseFailuresLeft = 1 };
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs);
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        Assert.Single(client.DropInfobaseCalls);
+        Assert.NotEmpty(dialogs.Warnings);
+        Assert.NotEmpty(vm.StatusText);
+    }
+
     [Fact]
     public void CanDropDatabaseOnServer_OnlyKnownClientServerTypes_True()
     {
@@ -1512,6 +1657,11 @@ public sealed class ServerMonitorViewModelTests
         /// <summary>Вызовы «infobase drop»: (clusterId, infobaseId, dropDatabase).</summary>
         public List<(System.Guid clusterId, System.Guid infobaseId, bool dropDatabase)> DropInfobaseCalls { get; } = new();
 
+        /// <summary>Вызовы «infobase drop» с учётными данными администратора ИБ (issue #69):
+        /// (clusterId, infobaseId, dropDatabase, infobaseUser, infobasePassword).</summary>
+        public List<(System.Guid clusterId, System.Guid infobaseId, bool dropDatabase, string? infobaseUser, string? infobasePassword)>
+            DropInfobaseCallsWithCredentials { get; } = new();
+
         public Task<IReadOnlyList<RacCluster>> GetClustersAsync(
             RacConnectionParams parameters, CancellationToken cancellationToken = default)
         {
@@ -1800,14 +1950,29 @@ public sealed class ServerMonitorViewModelTests
             return Task.FromResult(true);
         }
 
-        /// <summary>«infobase drop»: фиксирует вызов; «неудача» настраивается, как у остальных действий.</summary>
+        /// <summary>Сколько ближайших вызовов «infobase drop» завершаются неудачей (issue #69,
+        /// сценарий «удаление защищённой базы → повтор с логином/паролем»).</summary>
+        public int DropInfobaseFailuresLeft { get; set; }
+
+        /// <summary>«infobase drop»: фиксирует вызов (в т.ч. учётные данные администратора ИБ,
+        /// issue #69); «неудача» настраивается, как у остальных действий.</summary>
         public Task<bool> DropInfobaseAsync(
             RacConnectionParams parameters, Guid clusterId, Guid infobaseId,
-            bool dropDatabase = false, CancellationToken cancellationToken = default)
+            bool dropDatabase = false, string? infobaseUser = null,
+            string? infobasePassword = null, CancellationToken cancellationToken = default)
         {
             DropInfobaseCalls.Add((clusterId, infobaseId, dropDatabase));
+            DropInfobaseCallsWithCredentials.Add((clusterId, infobaseId, dropDatabase, infobaseUser, infobasePassword));
             if (_throwOnAction)
                 throw new RacClientException("нет прав администратора");
+            if (DropInfobaseFailuresLeft > 0)
+            {
+                // Описание пользователя #69: удаление защищённой базы без учётных данных
+                // администратора ИБ возвращает ошибку rac.
+                DropInfobaseFailuresLeft--;
+                LastActionError = "rac: требуется аутентификация администратора информационной базы";
+                return Task.FromResult(false);
+            }
             if (_actionFails)
             {
                 LastActionError = "rac: у пользователя нет прав на изменение списка баз";

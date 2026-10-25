@@ -50,6 +50,7 @@ public sealed class ServerMonitorWindowsLocalizationTests
     [InlineData("ServerMonitorWindow.xaml")]
     [InlineData("RacInfobasePropertiesWindow.xaml")]
     [InlineData("RacInfobaseDropWindow.xaml")]
+    [InlineData("RacInfobaseDropRetryWindow.xaml")]
     public void WindowXaml_EveryLocKey_ExistsInRuAndEnDictionaries(string fileName)
     {
         var xaml = ReadProjectFile("Workspace1C", "Views", fileName);

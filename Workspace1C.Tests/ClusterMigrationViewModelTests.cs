@@ -948,7 +948,8 @@ public sealed class ClusterMigrationViewModelTests
 
         public Task<bool> DropInfobaseAsync(
             RacConnectionParams parameters, Guid clusterId, Guid infobaseId,
-            bool dropDatabase = false, CancellationToken cancellationToken = default)
+            bool dropDatabase = false, string? infobaseUser = null,
+            string? infobasePassword = null, CancellationToken cancellationToken = default)
         {
             Dropped.Add((clusterId, infobaseId, dropDatabase));
             if (_failDrop)

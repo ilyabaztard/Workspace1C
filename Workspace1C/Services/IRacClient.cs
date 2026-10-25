@@ -169,15 +169,20 @@ public interface IRacClient
 
     /// <summary>
     /// Удаление информационной базы из кластера (команда «infobase drop --cluster=...
-    /// --infobase=... [--drop-database]», issue #3, вкладка «Базы»): подтверждение и
-    /// выбор варианта («просто удалить из кластера» / «удалить с удалением БД на сервере
-    /// СУБД») выполняет диалог удаления; сюда передаётся итог — флаг
-    /// <paramref name="dropDatabase"/>. Возвращает true при ExitCode 0; при неудаче —
+    /// --infobase=... [--infobase-user=U --infobase-pwd=P] [--drop-database]», issue #3,
+    /// вкладка «Базы»): подтверждение и выбор варианта («просто удалить из кластера» /
+    /// «удалить с удалением БД на сервере СУБД») выполняет диалог удаления; сюда
+    /// передаётся итог — флаг <paramref name="dropDatabase"/>. Учётные данные
+    /// администратора ИБ (<paramref name="infobaseUser"/>/<paramref name="infobasePassword"/>)
+    /// нужны, если база защищена (issue #69): при повторной попытке удаления они
+    /// передаются rac аргументами <c>--infobase-user</c>/<c>--infobase-pwd</c>; пароль
+    /// маскируется при журналировании. Возвращает true при ExitCode 0; при неудаче —
     /// false и текст ошибки (включая stderr rac) в <see cref="LastActionError"/>.
     /// </summary>
     Task<bool> DropInfobaseAsync(
         RacConnectionParams parameters, Guid clusterId, Guid infobaseId,
-        bool dropDatabase = false, CancellationToken cancellationToken = default);
+        bool dropDatabase = false, string? infobaseUser = null,
+        string? infobasePassword = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Полные свойства информационной базы (команда «infobase info», issue #3): нужны

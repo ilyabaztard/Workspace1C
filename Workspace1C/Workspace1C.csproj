@@ -286,6 +286,10 @@
          WPF code-behind исключается, Avalonia-версия (RacInfobaseDropWindow.Avalonia.cs)
          подключается глобом *Window.Avalonia.cs ниже. -->
     <Compile Remove="Views\RacInfobaseDropWindow.xaml.cs" />
+    <!-- Диалог повтора удаления информационной базы (issue #69): WPF code-behind
+         исключается, Avalonia-версия (RacInfobaseDropRetryWindow.Avalonia.cs)
+         подключается глобом *Window.Avalonia.cs ниже. -->
+    <Compile Remove="Views\RacInfobaseDropRetryWindow.xaml.cs" />
     <!-- Окно редактирования сервера справочника «Сервера управления» (issue #3):
          WPF code-behind исключается, Avalonia-версия (ServerEditWindow.Avalonia.cs)
          подключается глобом *Window.Avalonia.cs ниже. -->
@@ -518,6 +522,9 @@
          без платформенных зависимостей, используются обеими платформами — на Linux
          подключаются явно (имена не совпадают с глобом *.Avalonia.cs). -->
     <Compile Include="ViewModels\ServerMonitorViewModel.cs" />
+    <!-- Результат диалога повтора удаления базы из кластера (issue #69): чистый .NET,
+         обе платформы — на Linux подключается явно (имя не совпадает с глобом). -->
+    <Compile Include="ViewModels\DropRetryResult.cs" />
     <Compile Include="ViewModels\RacClusterRow.cs" />
     <Compile Include="ViewModels\RacProcessRow.cs" />
     <Compile Include="ViewModels\RacSessionRow.cs" />

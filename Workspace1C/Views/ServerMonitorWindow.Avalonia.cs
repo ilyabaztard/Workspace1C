@@ -99,11 +99,20 @@ namespace Workspace1C
             var dialogs = AppServices.GetRequiredService<IDialogService>();
             var serverListStore = AppServices.GetRequiredService<IServerListStore>();
 
+            // issue #69: диалог повтора удаления базы открывается из VM (после неудачного
+            // rac «infobase drop») — колбэк реализует окно, чтобы VM оставалась тестируемой.
             _vm = new ServerMonitorViewModel(
                 rac,
                 dialogs,
                 action => Dispatcher.UIThread.Post(action),
-                serverListStore);
+                serverListStore,
+                (errorText, login) =>
+                {
+                    var retry = new RacInfobaseDropRetryWindow(errorText, login);
+                    return retry.ShowSync(this)
+                        ? new ViewModels.DropRetryResult(retry.Retry, retry.User, retry.Password)
+                        : ViewModels.DropRetryResult.Cancel;
+                });
 
             DataContext = _vm;
             _vm.PropertyChanged += OnVmPropertyChanged;

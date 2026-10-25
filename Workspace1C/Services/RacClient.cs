@@ -705,19 +705,30 @@ public sealed class RacClient : IRacClient
 
     /// <summary>
     /// Аргументы команды «infobase drop» (issue #3, комментарий 7OH от 2026-10-17):
-    /// <c>infobase drop --cluster=<uuid> --infobase=<uuid> [--drop-database]</c>.
+    /// <c>infobase drop --cluster=<uuid> --infobase=<uuid> [--infobase-user=U
+    /// [--infobase-pwd=P]] [--drop-database]</c>. Учётные данные администратора ИБ
+    /// (issue #69) собираются по образцу <see cref="InfobaseInfoArgs"/> — rac требует
+    /// их при удалении защищённой базы; пароль маскируется при журналировании.
     /// <paramref name="dropDatabase"/> — удалить заодно базу данных на сервере СУБД
     /// (диалог удаления с выбором, как в консоли кластера). Internal — для юнит-тестов
     /// сборки аргументов без запуска rac.
     /// </summary>
-    internal static string[] InfobaseDropArgs(Guid clusterId, Guid infobaseId, bool dropDatabase)
+    internal static string[] InfobaseDropArgs(
+        Guid clusterId, Guid infobaseId, bool dropDatabase,
+        string? infobaseUser = null, string? infobasePassword = null)
     {
-        var args = new List<string>(5)
+        var args = new List<string>(7)
         {
             "infobase", "drop",
             $"--cluster={clusterId}",
             $"--infobase={infobaseId}"
         };
+        if (!string.IsNullOrEmpty(infobaseUser))
+        {
+            args.Add($"--infobase-user={infobaseUser}");
+            if (!string.IsNullOrEmpty(infobasePassword))
+                args.Add($"--infobase-pwd={infobasePassword}");
+        }
         if (dropDatabase)
             args.Add("--drop-database");
         return args.ToArray();
@@ -869,9 +880,10 @@ public sealed class RacClient : IRacClient
     /// <inheritdoc />
     public Task<bool> DropInfobaseAsync(
         RacConnectionParams parameters, Guid clusterId, Guid infobaseId,
-        bool dropDatabase = false, CancellationToken cancellationToken = default) =>
+        bool dropDatabase = false, string? infobaseUser = null,
+        string? infobasePassword = null, CancellationToken cancellationToken = default) =>
         RunActionAsync(parameters, cancellationToken,
-            InfobaseDropArgs(clusterId, infobaseId, dropDatabase));
+            InfobaseDropArgs(clusterId, infobaseId, dropDatabase, infobaseUser, infobasePassword));
 
     /// <inheritdoc />
     public string LastActionError { get; private set; } = string.Empty;

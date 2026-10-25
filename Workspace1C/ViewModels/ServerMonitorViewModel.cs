@@ -27,6 +27,15 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     private readonly IDialogService _dialogs;
     private readonly Action<Action>? _dispatchToUi;
     private readonly IServerListStore? _serverListStore;
+
+    /// <summary>
+    /// Показ диалога повтора удаления базы из кластера (issue #69): реализует окно
+    /// монитора (WPF/Avalonia), чтобы VM оставалась тестируемой. null — диалог
+    /// недоступен (тесты без колбэка): используется прежнее поведение —
+    /// предупреждение с одной кнопкой OK.
+    /// </summary>
+    private readonly Func<string, string?, DropRetryResult>? _dropRetryDialog;
+
     private Timer? _autoRefreshTimer;
     private int _busy;
 
@@ -77,16 +86,25 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// </param>
     /// <param name="serverListStore">Хранилище справочника «Сервера управления» (issue #3);
     /// null — справочник недоступен (тесты без хранилища).</param>
+    /// <param name="dropRetryDialog">
+    /// Показ диалога повтора удаления базы из кластера (issue #69): получает текст
+    /// ошибки и предзаполненный логин администратора ИБ, возвращает решение
+    /// пользователя. Реализует окно монитора — чтобы VM оставалась тестируемой;
+    /// null — диалог недоступен, при ошибке удаления показывается прежнее
+    /// предупреждение с одной кнопкой OK.
+    /// </param>
     public ServerMonitorViewModel(
         IRacClient rac,
         IDialogService dialogs,
         Action<Action>? dispatchToUi = null,
-        IServerListStore? serverListStore = null)
+        IServerListStore? serverListStore = null,
+        Func<string, string?, DropRetryResult>? dropRetryDialog = null)
     {
         _rac = rac ?? throw new ArgumentNullException(nameof(rac));
         _dialogs = dialogs ?? throw new ArgumentNullException(nameof(dialogs));
         _dispatchToUi = dispatchToUi;
         _serverListStore = serverListStore;
+        _dropRetryDialog = dropRetryDialog;
         LoadServers();
     }
 
@@ -675,8 +693,12 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// Удаление выбранной базы (issue #3): rac «infobase drop» → перечитывание списков.
     /// Вопрос и выбор варианта («просто удалить из кластера» / «удалить с удалением БД на
     /// сервере СУБД», комментарий 7OH от 2026-10-17) задаёт диалог удаления в окне —
-    /// сюда попадает уже выбранный флаг <paramref name="dropDatabase"/>. Ошибка —
-    /// предупреждение + статус-строка.
+    /// сюда попадает уже выбранный флаг <paramref name="dropDatabase"/>. При неудаче
+    /// (защищённая база, issue #69) показывается диалог повтора с полями «Логин»/
+    /// «Пароль» администратора ИБ: «Повторить попытку» выполняет ещё один
+    /// «infobase drop» с этими учётными данными (при повторной ошибке — снова тот же
+    /// диалог: логин сохраняется, пароль вводится заново), «Отмена» — выход.
+    /// Без колбэка диалога (тесты) — прежнее поведение: предупреждение + статус-строка.
     /// </summary>
     public async Task DropSelectedInfobaseAsync(bool dropDatabase = false)
     {
@@ -684,34 +706,98 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         if (row is null || !HasConnected || SelectedClusterId is not Guid clusterId)
             return;
 
+        // Учётные данные администратора ИБ для повторных попыток (issue #69):
+        // первый вызов — без кредов; дальше — из ответа диалога повтора.
+        string? infobaseUser = null;
+        string? infobasePassword = null;
         try
         {
-            var ok = await _rac.DropInfobaseAsync(
-                BuildParams(), clusterId, row.InfobaseId, dropDatabase).ConfigureAwait(false);
-            if (!ok)
+            while (true)
             {
-                var detail = BuildActionError(_rac.LastActionError);
-                ShowWarningOnUi(
-                    LocalizationManager.T("ServerMonitor.Infobase.DropFailed") + "\n" + detail,
-                    LocalizationManager.T("ServerMonitor.Infobase.DropTitle"));
-                StatusText = detail;
-                return;
-            }
+                var (ok, detail) = await TryDropInfobaseAsync(
+                    row, clusterId, dropDatabase, infobaseUser, infobasePassword).ConfigureAwait(false);
+                if (ok)
+                {
+                    StatusText = string.Format(
+                        LocalizationManager.T("ServerMonitor.Infobase.Status.DroppedFormat"), row.Name);
+                    return;
+                }
 
-            StatusText = string.Format(
-                LocalizationManager.T("ServerMonitor.Infobase.Status.DroppedFormat"), row.Name);
-        }
-        catch (Exception ex)
-        {
-            ShowWarningOnUi(
-                LocalizationManager.T("ServerMonitor.Infobase.DropFailed") + "\n" + BuildErrorMessage(ex),
-                LocalizationManager.T("ServerMonitor.Infobase.DropTitle"));
-            StatusText = BuildErrorMessage(ex);
+                var answer = AskDropRetryOnUi(detail, infobaseUser);
+                if (!answer.Retry)
+                {
+                    StatusText = detail;
+                    return;
+                }
+
+                infobaseUser = answer.User;
+                infobasePassword = answer.Password;
+            }
         }
         finally
         {
             Refresh();
         }
+    }
+
+    /// <summary>
+    /// Одна попытка «infobase drop» (исходная или повторная с учётными данными
+    /// администратора ИБ, issue #69): исключения rac превращаются в текст ошибки,
+    /// наружу не пробрасываются — цикл повтора решает, пробовать ли ещё.
+    /// </summary>
+    private async Task<(bool Ok, string Detail)> TryDropInfobaseAsync(
+        RacInfobaseRow row, Guid clusterId, bool dropDatabase, string? infobaseUser, string? infobasePassword)
+    {
+        try
+        {
+            var ok = await _rac.DropInfobaseAsync(
+                BuildParams(), clusterId, row.InfobaseId, dropDatabase,
+                infobaseUser, infobasePassword).ConfigureAwait(false);
+            return ok
+                ? (true, string.Empty)
+                : (false, BuildActionError(_rac.LastActionError));
+        }
+        catch (Exception ex)
+        {
+            return (false, BuildErrorMessage(ex));
+        }
+    }
+
+    /// <summary>
+    /// Показ диалога повтора удаления (issue #69) в UI-потоке. Если колбэк диалога
+    /// не назначен (тесты/окно без поддержки) — прежнее поведение: предупреждение
+    /// с одной кнопкой OK, повтор не выполняется. Модальное окно открывается через
+    /// dispatch-маршалер (как <see cref="ShowWarningOnUi"/>), рабочий поток ждёт
+    /// результат диалога.
+    /// </summary>
+    private DropRetryResult AskDropRetryOnUi(string detail, string? login)
+    {
+        // Заголовок диалога повтора: «Не удалось удалить информационную базу.» + детали rac.
+        var message = LocalizationManager.T("ServerMonitor.Infobase.DropFailed") + "\n" + detail;
+        if (_dropRetryDialog is null)
+        {
+            ShowWarningOnUi(message, LocalizationManager.T("ServerMonitor.Infobase.DropTitle"));
+            return DropRetryResult.Cancel;
+        }
+
+        if (_dispatchToUi is null)
+            return _dropRetryDialog(message, login);
+
+        DropRetryResult result = DropRetryResult.Cancel;
+        using var gate = new ManualResetEventSlim(false);
+        _dispatchToUi(() =>
+        {
+            try
+            {
+                result = _dropRetryDialog(message, login);
+            }
+            finally
+            {
+                gate.Set();
+            }
+        });
+        gate.Wait();
+        return result;
     }
 
     /// <summary>

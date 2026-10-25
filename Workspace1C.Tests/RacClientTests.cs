@@ -1213,6 +1213,53 @@ public sealed class RacClientTests
     }
 
     [Fact]
+    public void InfobaseDropArgs_WithCredentials_AddsInfobaseUserAndPassword()
+    {
+        // Issue #69: повторное удаление защищённой базы с учётными данными администратора
+        // ИБ — rac-команда получает «--infobase-user=...» и «--infobase-pwd=...»
+        // (по образцу InfobaseInfoArgs), флаг «--drop-database» не теряется.
+        var clusterId = Guid.NewGuid();
+        var infobaseId = Guid.NewGuid();
+
+        Assert.Equal(
+            new[]
+            {
+                "infobase", "drop", $"--cluster={clusterId}", $"--infobase={infobaseId}",
+                "--infobase-user=admin", "--infobase-pwd=secret", "--drop-database"
+            },
+            RacClient.InfobaseDropArgs(clusterId, infobaseId, dropDatabase: true, "admin", "secret"));
+    }
+
+    [Fact]
+    public void InfobaseDropArgs_WithoutCredentials_NoUserOrPasswordArguments()
+    {
+        // Регресс (issue #69): пустые учётные данные не добавляют к команде удаления
+        // аргументов администратора ИБ — первая попытка выполняется как раньше.
+        var clusterId = Guid.NewGuid();
+        var infobaseId = Guid.NewGuid();
+
+        Assert.Equal(
+            new[] { "infobase", "drop", $"--cluster={clusterId}", $"--infobase={infobaseId}" },
+            RacClient.InfobaseDropArgs(clusterId, infobaseId, dropDatabase: false, null, null));
+        Assert.Equal(
+            new[] { "infobase", "drop", $"--cluster={clusterId}", $"--infobase={infobaseId}", "--drop-database" },
+            RacClient.InfobaseDropArgs(clusterId, infobaseId, dropDatabase: true, string.Empty, string.Empty));
+    }
+
+    [Fact]
+    public void MaskRacPassword_HidesDropInfobasePassword()
+    {
+        // Issue #69: пароль администратора ИБ не должен попадать в журнал rac-команды
+        // «infobase drop» (маскируется, как пароли info/update).
+        var masked = SensitiveDataMasker.MaskRacPassword(
+            "infobase drop --cluster=1111 --infobase=2222 --infobase-user=adm --infobase-pwd=topsecret");
+
+        Assert.DoesNotContain("topsecret", masked);
+        Assert.Contains("--infobase-user=adm", masked);
+        Assert.Contains("--infobase-pwd=***", masked);
+    }
+
+    [Fact]
     public void MaskRacPassword_HidesDbAndInfobasePasswords()
     {
         var masked = SensitiveDataMasker.MaskRacPassword(
