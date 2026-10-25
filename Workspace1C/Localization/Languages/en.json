@@ -2470,6 +2470,7 @@
     "ClusterMigration.DbPassword": "DB password:",
     "ClusterMigration.Dbms": "DBMS type:",
     "ClusterMigration.DbServer": "DB server:",
+    "ClusterMigration.Locale": "Locale:",
     "ClusterMigration.KeepInSource": "Keep in the old cluster (copy without deletion)",
     "ClusterMigration.GroupByCluster": "Create a group by cluster name",
     "ClusterMigration.MigrateButton": "Migrate",

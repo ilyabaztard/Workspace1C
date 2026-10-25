@@ -58,11 +58,11 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     private int _busy;
     private string _dbUser = string.Empty;
     private string _dbPassword = string.Empty;
-    // «Тип СУБД»/«Сервер СУБД»/«Имя БД» для rac «infobase create» (issue #41, фикс 1.0.0.70):
-    // автозаполняются из первой базы источника, пока пользователь не изменил их вручную
-    // (_dbDetailsTouched). У «Имя БД» fallback-семантика: форма — только для баз без db-name.
+    // «Тип СУБД»/«Сервер СУБД»/«Локаль» для rac «infobase create» (issue #41): автозаполняются
+    // из первой базы источника, пока пользователь не изменил их вручную (_dbDetailsTouched).
     private string _dbms = RacDbms.MssqlServer;
     private string _dbServer = string.Empty;
+    private string _locale = RacLocales.Default;
     private bool _dbDetailsTouched;
     private bool _keepInSource;
     private bool _useClusterGrouping = true;
@@ -376,6 +376,30 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         {
             _dbDetailsTouched = true;
             SetProperty(ref _dbServer, (value ?? string.Empty).Trim());
+        }
+    }
+
+    /// <summary>
+    /// Варианты локали для выпадающего списка миграции (issue #41, комментарий 7OH:
+    /// «Поле с локалью на поле не замечено»): те же значения, что при добавлении базы
+    /// — <see cref="RacLocales.Values"/>.
+    /// </summary>
+    public IReadOnlyList<string> LocaleOptions { get; } = Models.RacLocales.Values;
+
+    /// <summary>
+    /// Локаль для регистрации баз в кластере-приёмнике (rac «--locale», issue #41): берётся
+    /// из источника автоматически (некоторые версии rac 8.3/8.5 не отдают locale в
+    /// «infobase summary list» — пустое значение ломало создание базы). Поле на форме
+    /// (ComboBox из <see cref="LocaleOptions"/>) после логина/пароля; автозаполняется из
+    /// первой базы источника, пока пользователь не изменил вручную.
+    /// </summary>
+    public string Locale
+    {
+        get => _locale;
+        set
+        {
+            _dbDetailsTouched = true;
+            SetProperty(ref _locale, Models.RacLocales.Normalize(value ?? string.Empty));
         }
     }
 
@@ -743,6 +767,12 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                 var dbServer = firstSource.DbServer ?? string.Empty;
                 if (SetProperty(ref _dbServer, dbServer))
                     OnPropertyChanged(nameof(DbServer));
+                // Локаль (issue #41, комментарий 7OH: «Поле с локалью на поле не замечено»):
+                // берём из источника автоматически; rac 8.3/частичные 8.5 могут не отдавать
+                // locale в summary list — тогда остаётся значение по умолчанию «ru».
+                var locale = Models.RacLocales.Normalize(firstSource.Locale);
+                if (SetProperty(ref _locale, locale))
+                    OnPropertyChanged(nameof(Locale));
             }
         }
 
@@ -1062,7 +1092,11 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                 // имя ИБ; issue #41, фикс 1.0.0.71), поэтому поле «Имя БД» на форме отсутствует,
                 // а DbName у запроса всегда непуст (исключение — база без имени вовсе; тогда
                 // rac вернёт общую ошибку создания, ключ ClusterMigration.Error.CreateFailedFormat).
-                var request = ClusterMigrationService.BuildCreateRequest(row.Source!, DbUser, DbPassword, Dbms, DbServer);
+                // Локаль с формы (issue #41): автозаполнена из первой базы источника; при
+                // необходимости пользователь меняет списком выбора, значение передаётся
+                // в запрос создания с приоритетом над данными источника.
+                var request = ClusterMigrationService.BuildCreateRequest(
+                    row.Source!, DbUser, DbPassword, Dbms, DbServer, Locale);
                 var created = await _rac.CreateInfobaseAsync(targetParams, targetClusterId, request).ConfigureAwait(false);
                 if (!created)
                 {

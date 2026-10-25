@@ -44,7 +44,9 @@ public sealed class ClusterMigrationServiceTests
         // переносится из источника автоматически, значение диалога не перетирает его.
         Assert.Equal("old-user", request.DbUser);
         Assert.Equal("pass", request.DbPassword);
-        Assert.Equal("ru_RU", request.Locale);
+        // Локаль нормализуется до двухбуквенного кода — его принимает rac в «--locale»
+        // (issue #41, фикс 1.0.0.73; RacLocales.Normalize «ru_RU» → «ru»).
+        Assert.Equal("ru", request.Locale);
         Assert.Equal(1, request.SecurityLevel);
     }
 
@@ -335,6 +337,40 @@ public sealed class ClusterMigrationServiceTests
     public void ResolveClusterHost_EmptyAddress_ReturnsEmpty()
     {
         Assert.Equal(string.Empty, ClusterMigrationService.ResolveClusterHost("   ", null));
+    }
+
+    // ---------- Локаль (issue #41, комментарий 7OH «Поле с локалью на поле не замечено») ----------
+
+    [Fact]
+    public void BuildCreateRequest_FormLocale_WinsOverSourceLocale_AndNormalizes()
+    {
+        // Форма (автозаполнена из первой базы источника) приоритетнее записи источника;
+        // rac принимает двухбуквенные коды — «ru_RU» приводится к «ru».
+        var source = new RacInfobaseSummary { Locale = "ru_RU" };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "MSSQLServer", "sql", "en");
+
+        Assert.Equal("en", request.Locale);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_SourceLocale_UsedWhenFormEmpty()
+    {
+        var source = new RacInfobaseSummary { Locale = "kk" };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "", "", "", "", "");
+
+        Assert.Equal("kk", request.Locale);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_NoLocale_NormalizesToDefaultRu()
+    {
+        // rac 8.3/частичные 8.5 вообще не отдают locale в summary list — пустое значение
+        // больше не уходит в rac: локаль по умолчанию «ru» (как при добавлении базы).
+        var request = ClusterMigrationService.BuildCreateRequest(new RacInfobaseSummary(), "", "", "", "", "");
+
+        Assert.Equal("ru", request.Locale);
     }
 
     // ---------- Хелперы ----------

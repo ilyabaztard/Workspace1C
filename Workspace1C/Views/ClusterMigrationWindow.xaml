@@ -296,13 +296,16 @@
                      Text="{Binding DbServer, UpdateSourceTrigger=PropertyChanged}" Padding="6,4"/>
         </Grid>
 
-        <!-- Учётные данные СУБД в одну линию. -->
+        <!-- Учётные данные СУБД и локаль в одну линию (локаль — после логина/пароля,
+             списоком выбора как при добавлении базы; issue #41, комментарий 7OH). -->
         <Grid Grid.Row="5" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock Text="{loc:Loc ClusterMigration.DbUser}" VerticalAlignment="Center" Margin="0,0,8,0"/>
             <TextBox x:Name="DbUserBox" Grid.Column="1" Style="{StaticResource ModernTextBox}"
@@ -311,6 +314,12 @@
                        Margin="14,0,8,0"/>
             <PasswordBox x:Name="DbPasswordBox" Grid.Column="3" Padding="6,4"
                          PasswordChanged="OnDbPasswordChanged"/>
+            <TextBlock Grid.Column="4" Text="{loc:Loc ClusterMigration.Locale}" VerticalAlignment="Center"
+                       Margin="14,0,8,0"/>
+            <ComboBox x:Name="LocaleBox" Grid.Column="5" Style="{StaticResource ModernComboBox}"
+                      ItemsSource="{Binding LocaleOptions}"
+                      SelectedItem="{Binding Locale, Mode=TwoWay}"
+                      MinWidth="110" VerticalContentAlignment="Center" Padding="6,2"/>
         </Grid>
 
         <!-- Прогресс «N из M: база» + сообщение об ошибке, затем «Мигрировать»/«Отмена». -->

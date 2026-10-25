@@ -652,6 +652,39 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
+    public async Task LoadSourceBases_AutoFillsLocale_FromFirstBase_Normalized()
+    {
+        // issue #41, комментарий 7OH («Поле с локалью на поле не замечено»): локаль
+        // автозаполняется из первой базы источника и нормализуется до двухбуквенного
+        // кода («ru_RU» → «ru» — как принимает rac в «--locale»).
+        var client = new FakeRacClient(singleCluster: true, sourceLocale: "ru_RU");
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+
+        await AwaitSourceRows(vm);
+
+        Assert.Equal("ru", vm.Locale);
+    }
+
+    [Fact]
+    public async Task LoadSourceBases_LocaleMissing_FallsBackToDefaultRu()
+    {
+        // rac 8.3/частичные 8.5 не отдают locale в summary list — остаётся «ru» по умолчанию
+        // (пустое значение больше не уходит в rac «infobase create» как прежде).
+        var client = new FakeRacClient(singleCluster: true);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+
+        await AwaitSourceRows(vm);
+
+        Assert.Equal("ru", vm.Locale);
+    }
+
+    [Fact]
     public async Task LoadSourceBases_DoesNotOverwriteDbmsDbServer_WhenUserEditedThem()
     {
         // Пользователь изменил «Тип СУБД»/«Сервер СУБД» вручную (приёмник — другой сервер
@@ -802,9 +835,13 @@ public sealed class ClusterMigrationViewModelTests
         // null — прежнее поведение (DbName="база1"/"база2"); "" — пустой db-name у обеих баз
         // источника (кейс issue #41, фикс 1.0.0.71: rac не вернул db-name — переносится имя ИБ).
         private readonly string? _sourceDbName;
+        // Локаль источника (issue #41): rac может вернуть «ru_RU» (нормализуется) или не
+        // вернуть ничего (пусто → «ru» по умолчанию, как при добавлении базы).
+        private readonly string? _sourceLocale;
 
         public FakeRacClient(bool singleCluster = true, bool failCreate = false, bool failDrop = false,
-            string[]? targetBaseNames = null, string? sourceDbms = null, string? sourceDbName = null)
+            string[]? targetBaseNames = null, string? sourceDbms = null, string? sourceDbName = null,
+            string? sourceLocale = null)
         {
             _singleCluster = singleCluster;
             _failCreate = failCreate;
@@ -812,6 +849,7 @@ public sealed class ClusterMigrationViewModelTests
             _targetBaseNames = targetBaseNames ?? Array.Empty<string>();
             _sourceDbms = sourceDbms ?? "MSSQLServer";
             _sourceDbName = sourceDbName;
+            _sourceLocale = sourceLocale;
         }
 
         public RacConnectionParams? LastParams { get; private set; }
@@ -855,8 +893,8 @@ public sealed class ClusterMigrationViewModelTests
             {
                 return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(new RacInfobaseSummary[]
                 {
-                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000001"), Name = "База1", Descr = "Описание", Dbms = _sourceDbms, DbServer = "sql-01", DbName = _sourceDbName ?? "база1" },
-                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000002"), Name = "База2", Descr = "Описание", Dbms = _sourceDbms, DbServer = "sql-01", DbName = _sourceDbName ?? "база2" }
+                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000001"), Name = "База1", Descr = "Описание", Dbms = _sourceDbms, DbServer = "sql-01", DbName = _sourceDbName ?? "база1", Locale = _sourceLocale ?? string.Empty },
+                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000002"), Name = "База2", Descr = "Описание", Dbms = _sourceDbms, DbServer = "sql-01", DbName = _sourceDbName ?? "база2", Locale = _sourceLocale ?? string.Empty }
                 });
             }
             return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(

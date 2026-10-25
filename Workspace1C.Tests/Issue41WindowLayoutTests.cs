@@ -164,4 +164,50 @@ public sealed class Issue41WindowLayoutTests
         Assert.DoesNotContain("ClusterMigration.Error.DbNameEmptyFormat", ru, StringComparison.Ordinal);
         Assert.DoesNotContain("ClusterMigration.Error.DbNameEmptyFormat", en, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ClusterMigrationWindow_Wpf_HasLocaleField_AfterCredentials()
+    {
+        // issue #41, комментарий 7OH («Поле с локалью на поле не замечено»): поле «Локаль»
+        // — ComboBox со списком RacLocales и TwoWay-привязкой Locale, после логина/пароля.
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.xaml"));
+
+        Assert.Contains("ClusterMigration.Locale", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding LocaleOptions}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem=\"{Binding Locale, Mode=TwoWay}\"", xaml, StringComparison.Ordinal);
+
+        var dbPasswordPos = xaml.IndexOf("DbPasswordBox", StringComparison.Ordinal);
+        var localePos = xaml.IndexOf("ClusterMigration.Locale", StringComparison.Ordinal);
+        Assert.True(dbPasswordPos >= 0 && localePos > dbPasswordPos,
+            "Поле «Локаль» должно идти ПОСЛЕ строки пользователя/пароля.");
+    }
+
+    [Fact]
+    public void ClusterMigrationWindow_Avalonia_HasLocaleField_AfterCredentials()
+    {
+        var axaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.axaml"));
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.Avalonia.cs"));
+
+        Assert.Contains("ClusterMigration.Locale", axaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding LocaleOptions}\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem=\"{Binding Locale, Mode=TwoWay}\"", axaml, StringComparison.Ordinal);
+        // Код связывает поле с VM (по образцу DbmsBox/DbServerBox).
+        Assert.Contains("LocaleBox", code, StringComparison.Ordinal);
+        Assert.Contains("new Binding(\"Locale\", BindingMode.TwoWay)", code, StringComparison.Ordinal);
+
+        var dbPasswordPos = axaml.IndexOf("DbPasswordBox", StringComparison.Ordinal);
+        var localePos = axaml.IndexOf("ClusterMigration.Locale", StringComparison.Ordinal);
+        Assert.True(dbPasswordPos >= 0 && localePos > dbPasswordPos,
+            "Поле «Локаль» должно идти ПОСЛЕ строки пользователя/пароля.");
+    }
+
+    [Fact]
+    public void ClusterMigrationWindow_Localization_HasLocaleKeyInBothLanguages()
+    {
+        var ru = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "ru.json"));
+        var en = ReadProjectFile(Path.Combine("Workspace1C", "Localization", "Languages", "en.json"));
+
+        Assert.Contains("\"ClusterMigration.Locale\"", ru, StringComparison.Ordinal);
+        Assert.Contains("\"ClusterMigration.Locale\"", en, StringComparison.Ordinal);
+    }
 }

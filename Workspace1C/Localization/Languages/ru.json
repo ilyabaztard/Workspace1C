@@ -2470,6 +2470,7 @@
     "ClusterMigration.DbPassword": "Пароль СУБД:",
     "ClusterMigration.Dbms": "Тип СУБД:",
     "ClusterMigration.DbServer": "Сервер СУБД:",
+    "ClusterMigration.Locale": "Локаль:",
     "ClusterMigration.KeepInSource": "Не удалять в старом кластере (копия без удаления)",
     "ClusterMigration.GroupByCluster": "Создавать группу по имени кластера",
     "ClusterMigration.MigrateButton": "Мигрировать",

@@ -91,7 +91,7 @@
         </Grid>
 
         <!-- Учётные данные СУБД в одну линию. -->
-        <Grid Grid.Row="5" ColumnDefinitions="Auto,*,Auto,*" Margin="0,8,0,0">
+        <Grid Grid.Row="5" ColumnDefinitions="Auto,*,Auto,*,Auto,Auto" Margin="0,8,0,0">
             <TextBlock Text="{loc:Loc ClusterMigration.DbUser}" VerticalAlignment="Center"
                        Margin="0,0,8,0"/>
             <TextBox x:Name="DbUserBox" Grid.Column="1" Padding="6,4"
@@ -101,6 +101,14 @@
                        VerticalAlignment="Center" Margin="14,0,8,0"/>
             <TextBox x:Name="DbPasswordBox" Grid.Column="3" Padding="6,4"
                       PasswordChar="•" VerticalContentAlignment="Center"/>
+            <!-- Локаль — после логина/пароля, списком выбора как при добавлении базы
+                 (issue #41, комментарий 7OH: «Поле с локалью на поле не замечено»). -->
+            <TextBlock Grid.Column="4" Text="{loc:Loc ClusterMigration.Locale}"
+                       VerticalAlignment="Center" Margin="14,0,8,0"/>
+            <ComboBox x:Name="LocaleBox" Grid.Column="5" Padding="6,2" MinWidth="110"
+                      VerticalContentAlignment="Center"
+                      ItemsSource="{Binding LocaleOptions}"
+                      SelectedItem="{Binding Locale, Mode=TwoWay}"/>
         </Grid>
 
         <!-- Прогресс «N из M: база» + сообщение об ошибке, затем «Мигрировать»/«Отмена». -->

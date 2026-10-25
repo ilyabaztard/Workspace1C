@@ -69,12 +69,18 @@ public static class ClusterMigrationService
     /// Сервер СУБД с формы миграции (issue #41); приоритет над
     /// <see cref="RacInfobaseSummary.DbServer"/> источника. Пусто — значения источника.
     /// </param>
+    /// <param name="overrideLocale">
+    /// Локаль с формы миграции (issue #41, комментарий 7OH «Поле с локалью на поле не
+    /// замечено»): приоритет над <see cref="RacInfobaseSummary.Locale"/> источника. rac
+    /// принимает двухбуквенные коды — значение нормализуется через <see cref="RacLocales.Normalize"/>.
+    /// </param>
     public static RacInfobaseCreateRequest BuildCreateRequest(
         RacInfobaseSummary source,
         string dbUser,
         string dbPassword,
         string overrideDbms = "",
-        string overrideDbServer = "")
+        string overrideDbServer = "",
+        string overrideLocale = "")
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -92,7 +98,9 @@ public static class ClusterMigrationService
             // у rac. Пароль rac не возвращает — всегда из диалога (issue #41, фикс 1.0.0.72).
             DbUser = FirstNonEmpty(source.DbUser, dbUser),
             DbPassword = dbPassword ?? string.Empty,
-            Locale = source.Locale ?? string.Empty,
+            // Локаль: форма (автозаполнена из источника) — приоритет; rac отдаёт ее в
+            // «infobase summary list» не всегда. Двухбуквенный код — как принимает rac.
+            Locale = Models.RacLocales.Normalize(FirstNonEmpty(overrideLocale, source.Locale ?? string.Empty)),
             SecurityLevel = source.SecurityLevel,
             // БД на сервере СУБД уже существует — только регистрируем базу в новом кластере.
             CreateDb = false,

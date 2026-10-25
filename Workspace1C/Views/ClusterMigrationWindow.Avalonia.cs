@@ -242,11 +242,13 @@ namespace Workspace1C
             var dbServerBox = this.FindControl<TextBox>("DbServerBox")!;
             dbServerBox.Bind(TextBox.TextProperty, new Binding("DbServer", BindingMode.TwoWay));
 
-            // ---- Учётные данные СУБД. ----
+            // ---- Учётные данные СУБД и локаль (issue #41, комментарий 7OH). ----
             var dbUserBox = this.FindControl<TextBox>("DbUserBox")!;
             dbUserBox.Bind(TextBox.TextProperty, new Binding("DbUser", BindingMode.TwoWay));
             _dbPasswordBox = this.FindControl<TextBox>("DbPasswordBox")!;
             _dbPasswordBox.TextChanged += (_, _) => _vm.DbPassword = _dbPasswordBox.Text ?? string.Empty;
+            var localeBox = this.FindControl<ComboBox>("LocaleBox")!;
+            localeBox.Bind(ComboBox.SelectedItemProperty, new Binding("Locale", BindingMode.TwoWay));
 
             // ---- Кнопки (паттерн BaseSelectionWindow: строятся в коде, хост — в панели). ----
             _sourceConnectButton = BuildActionButton(LocalizationManager.T("ClusterMigration.Connect"), "🔌",
