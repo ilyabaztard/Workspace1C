@@ -1,7 +1,7 @@
 #if LINUX
 using System;
 using System.Collections.Generic;
-using Avalonia.Controls.Primitives;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -19,27 +19,49 @@ namespace Workspace1C
     /// Диалог-конфигуратор параметров запуска платформы 1С. Состоит из поля ввода
     /// параметров и справочника ключей командной строки, из которого параметр
     /// подставляется в поле двойным кликом. Avalonia/Linux-версия WPF-окна
-    /// <see cref="LaunchParametersWindow"/>.
+    /// <see cref="LaunchParametersWindow"/>. Пользовательские параметры справочника
+    /// (issue #141) поддерживаются с 1.0.0.72 (#68): добавление, правка в отдельном
+    /// диалоге, порядок (вверх/вниз), поиск над списком.
     /// </summary>
     public class LaunchParametersWindow : ModalWindowBase
     {
+        private readonly IDialogService _dialogs = AppServices.GetRequiredService<IDialogService>();
         private readonly TextBox _txtCustom;
+        private readonly List<string> _customParams;
+        private readonly Action<IReadOnlyList<string>>? _onCustomParametersChanged;
+
+        private readonly TextBox _txtSearch;
+        private readonly ListBox _list;
+        private readonly Button _btnEdit;
+        private readonly Button _btnMoveUp;
+        private readonly Button _btnMoveDown;
+        private readonly Button _btnRemove;
+        private readonly TextBox _txtNewParam;
+        private readonly TextBox _txtNewComment;
 
         /// <summary>
         /// Создаёт диалог конфигуратора параметров запуска.
         /// </summary>
         /// <param name="currentParameters">Текущая строка параметров для предзаполнения.</param>
-        public LaunchParametersWindow(string currentParameters)
+        /// <param name="customParameters">Пользовательские параметры, дополняющие справочник (необязательно).</param>
+        /// <param name="onCustomParametersChanged">Обратный вызов сохранения изменённого списка пользовательских параметров (необязательно).</param>
+        public LaunchParametersWindow(
+            string currentParameters,
+            IReadOnlyList<string>? customParameters = null,
+            Action<IReadOnlyList<string>>? onCustomParametersChanged = null)
         {
             Title = LocalizationManager.T("LaunchParams.Title");
-            // Кегль окна из разметки: подписи без явного размера берут его по наследству.
             FontSize = 13;
             Width = 800;
             Height = 640;
             MinWidth = 720;
             MinHeight = 480;
 
-            // Высота и выравнивание из разметки (LaunchParametersWindow.xaml:28 и :48).
+            _onCustomParametersChanged = onCustomParametersChanged;
+            _customParams = (customParameters ?? Array.Empty<string>())
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .ToList();
+
             _txtCustom = new TextBox
             {
                 Text = currentParameters ?? string.Empty,
@@ -52,14 +74,65 @@ namespace Workspace1C
             _txtCustom.Styled(Themes.ControlThemes.ModernTextBox);
             ToolTip.SetTip(_txtCustom, LocalizationManager.T("LaunchParams.InputTooltip"));
 
+            // Поиск над справочником (issue #68).
+            _txtSearch = new TextBox
+            {
+                MinHeight = 30,
+                Padding = new Thickness(6, 2),
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            _txtSearch.Styled(Themes.ControlThemes.ModernTextBox);
+            ToolTip.SetTip(_txtSearch, LocalizationManager.T("LaunchParams.SearchPlaceholder"));
+            _txtSearch.TextChanged += (_, _) => RefreshList();
+
+            _list = new ListBox();
+            ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Disabled);
+            _list.SelectionChanged += (_, _) => UpdateCustomButtonsState();
+            _list.DoubleTapped += (_, e) =>
+            {
+                if (_list.SelectedItem is OneCLaunchParameterReference item)
+                {
+                    InsertCustomText(item.Key);
+                    e.Handled = true;
+                }
+            };
+
+            _btnEdit = BuildToolButton("LaunchParams.CustomEdit", "IconEdit", OnEditParam_Click);
+            _btnMoveUp = BuildToolButton("LaunchParams.MoveUp", "IconArrowUp", () => MoveSelectedCustomParameter(-1));
+            _btnMoveDown = BuildToolButton("LaunchParams.MoveDown", "IconArrowDown", () => MoveSelectedCustomParameter(1));
+            _btnRemove = BuildToolButton("Common.Delete", "IconDelete", RemoveSelectedCustomParameter);
+
+            _txtNewParam = new TextBox
+            {
+                MinHeight = 30,
+                Padding = new Thickness(6, 2),
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            _txtNewParam.Styled(Themes.ControlThemes.ModernTextBox);
+            ToolTip.SetTip(_txtNewParam, LocalizationManager.T("LaunchParams.CustomInputTooltip"));
+            _txtNewParam.KeyDown += (_, e) =>
+            {
+                if (e.Key == Key.Enter)
+                {
+                    AddCustomParameter();
+                    e.Handled = true;
+                }
+            };
+            _txtNewComment = new TextBox
+            {
+                MinHeight = 30,
+                Margin = new Thickness(8, 0, 0, 0),
+                Padding = new Thickness(6, 2),
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            _txtNewComment.Styled(Themes.ControlThemes.ModernTextBox);
+            ToolTip.SetTip(_txtNewComment, LocalizationManager.T("LaunchParams.CustomCommentTooltip"));
+
             Content = BuildRoot();
+            RefreshList();
         }
 
-        /// <summary>
-        /// Кружок справки тем же контролом, что и в остальных окнах
-        /// (Controls/HelpLink.Avalonia.cs): в разметке это controls:HelpLink,
-        /// с всплывающим окном по клику, а не только подсказкой.
-        /// </summary>
+        /// <summary>Кружок справки тем же контролом, что и в остальных окнах.</summary>
         private static Control BuildHelpLink(string helpKey) => new Controls.HelpLink
         {
             HelpText = LocalizationManager.T(helpKey),
@@ -69,18 +142,35 @@ namespace Workspace1C
         /// <summary>Итоговая строка параметров запуска.</summary>
         public string Result { get; private set; } = string.Empty;
 
+        /// <summary>Обновлённый список пользовательских параметров справочника (issue #141).</summary>
+        public IReadOnlyList<string> CustomParameters => _customParams;
+
+        private Control BuildToolButton(string labelKey, string iconKey, Action onClick)
+        {
+            var button = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
+                    Children = { IconHelper.MakeIcon(iconKey, 15), new TextBlock { Text = T(labelKey) } }
+                },
+                MinHeight = 32,
+                Padding = new Thickness(10, 4),
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            button.Styled(ControlThemes.SecondaryButton);
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
         private Control BuildRoot()
         {
             var grid = new Grid { Margin = new Thickness(16) };
-            // Три строки, как в разметке: рамка ввода, рамка справочника
-            // на всё оставшееся место и кнопки (LaunchParametersWindow.xaml:31-37).
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             grid.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
-            // Поле ввода лежит в рамке «Параметры» со справкой в заголовке,
-            // как в разметке (LaunchParametersWindow.xaml:40-51). Своих заголовка
-            // и подсказки у автора здесь нет.
             var inputBox = Controls.GroupBoxPanel.Build(
                 "Main.Parameters", _txtCustom,
                 margin: new Thickness(0, 0, 0, 12),
@@ -89,25 +179,12 @@ namespace Workspace1C
             Grid.SetRow(inputBox, 0);
             grid.Children.Add(inputBox);
 
-            var list = new ListBox();
-            // В WPF это ListView, до которого неявный стиль ListBox не доходит,
-            // и горизонтальная прокрутка на нём выключена явно
-            // (LaunchParametersWindow.xaml:62). Общий стиль порта ставит её Auto
-            // всем спискам, поэтому здесь она возвращается в Disabled: ширину
-            // и без того держит внешний ScrollViewer.
-            ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
-            list.ItemsSource = BuildReferenceCatalog();
-            list.ItemTemplate = new FuncDataTemplate<OneCLaunchParameterReference>((item, _) =>
+            _list.ItemTemplate = new FuncDataTemplate<OneCLaunchParameterReference>((item, _) =>
             {
-                // Переработка контейнеров виртуализацией строит шаблон с null:
-                // без этой проверки список из 52 строк роняет приложение
-                // при первой же прокрутке. Тот же дефект был в списке колонок
-                // окна настроек.
                 if (item is null)
                     return new Control();
 
                 var panel = new Grid { Margin = new Thickness(2, 3) };
-                // Ширина колонки параметра из разметки (LaunchParametersWindow.xaml:69).
                 panel.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(220)));
                 panel.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
 
@@ -133,23 +210,14 @@ namespace Workspace1C
                 panel.Children.Add(desc);
                 return panel;
             });
-            list.DoubleTapped += (_, e) =>
-            {
-                if (list.SelectedItem is OneCLaunchParameterReference item)
-                {
-                    InsertCustomText(item.Key);
-                    e.Handled = true;
-                }
-            };
 
             var listHost = new ScrollViewer
             {
-                Content = list,
+                Content = _list,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             };
-            // Подписи колонок над списком: в WPF это шапка GridView, у нас список,
-            // поэтому строка своя, но ширины те же, что у строк справочника.
+
             var columnsHeader = new Grid { Margin = new Thickness(2, 0, 2, 4) };
             columnsHeader.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(220)));
             columnsHeader.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
@@ -171,15 +239,21 @@ namespace Workspace1C
             Grid.SetColumn(descHead, 1);
             columnsHeader.Children.Add(paramHead);
             columnsHeader.Children.Add(descHead);
-            // Справочник в такой же рамке со справкой в заголовке
-            // (LaunchParametersWindow.xaml:54-74).
+
             var refContent = new Grid();
-            refContent.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-            refContent.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
-            Grid.SetRow(columnsHeader, 0);
+            refContent.RowDefinitions.Add(new RowDefinition(GridLength.Auto));   // поиск
+            refContent.RowDefinitions.Add(new RowDefinition(GridLength.Auto));   // шапка колонок
+            refContent.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star))); // список
+            refContent.RowDefinitions.Add(new RowDefinition(GridLength.Auto));   // нижняя панель
+            var bottomPanel = BuildBottomPanel();
+            Grid.SetRow(_txtSearch, 0);
+            refContent.Children.Add(_txtSearch);
+            Grid.SetRow(columnsHeader, 1);
             refContent.Children.Add(columnsHeader);
-            Grid.SetRow(listHost, 1);
+            Grid.SetRow(listHost, 2);
             refContent.Children.Add(listHost);
+            Grid.SetRow(bottomPanel, 3);
+            refContent.Children.Add(bottomPanel);
 
             var referenceBox = Controls.GroupBoxPanel.Build(
                 "LaunchParams.Reference", refContent,
@@ -189,8 +263,6 @@ namespace Workspace1C
             Grid.SetRow(referenceBox, 1);
             grid.Children.Add(referenceBox);
 
-            // Кнопки
-            // Оформление и порядок по разметке (LaunchParametersWindow.xaml:77).
             var buttons = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -209,6 +281,49 @@ namespace Workspace1C
             return grid;
         }
 
+        /// <summary>Нижняя панель: поля добавления + кнопки «Добавить/Изменить/Вверх/Вниз/Удалить».</summary>
+        private Control BuildBottomPanel()
+        {
+            var panel = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+            panel.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(2, GridUnitType.Star)));
+            panel.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(3, GridUnitType.Star)));
+            panel.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            panel.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            panel.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            panel.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            panel.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+            Grid.SetColumn(_txtNewParam, 0);
+            panel.Children.Add(_txtNewParam);
+            Grid.SetColumn(_txtNewComment, 1);
+            panel.Children.Add(_txtNewComment);
+
+            var addButton = BuildToolButton("LaunchParams.CustomAdd", "IconPlus", AddCustomParameter);
+            Grid.SetColumn(addButton, 2);
+            addButton.Margin = new Thickness(8, 0, 0, 0);
+            panel.Children.Add(addButton);
+
+            Grid.SetColumn(_btnEdit, 3);
+            _btnEdit.Margin = new Thickness(6, 0, 0, 0);
+            panel.Children.Add(_btnEdit);
+
+            Grid.SetColumn(_btnMoveUp, 4);
+            _btnMoveUp.Margin = new Thickness(6, 0, 0, 0);
+            panel.Children.Add(_btnMoveUp);
+
+            Grid.SetColumn(_btnMoveDown, 5);
+            _btnMoveDown.Margin = new Thickness(6, 0, 0, 0);
+            panel.Children.Add(_btnMoveDown);
+
+            Grid.SetColumn(_btnRemove, 6);
+            _btnRemove.Margin = new Thickness(6, 0, 0, 0);
+            panel.Children.Add(_btnRemove);
+
+            return panel;
+        }
+
+        private static string T(string key) => LocalizationManager.T(key);
+
         /// <summary>Добавляет текст в поле «Параметры», разделяя пробелом.</summary>
         private void InsertCustomText(string text)
         {
@@ -226,16 +341,134 @@ namespace Workspace1C
             Result = (_txtCustom.Text ?? string.Empty).Trim();
         }
 
-        /// <summary>
-        /// Строит каталог ключей командной строки 1С для справочника. Логику построения
-        /// делегирует общему сервису <see cref="OneCLaunchArgumentParser"/> (ПЗ-5);
-        /// пользовательских параметров на Linux в справочнике нет.
-        /// </summary>
-        private static IReadOnlyList<OneCLaunchParameterReference> BuildReferenceCatalog()
+        // ============ Пользовательские параметры (issue #141) ============
+
+        private void RefreshList()
         {
-            return OneCLaunchArgumentParser.BuildReferenceCatalog();
+            var catalog = OneCLaunchArgumentParser.BuildReferenceCatalog(_customParams);
+            _list.ItemsSource = OneCLaunchArgumentParser.FilterReferenceCatalog(catalog, _txtSearch.Text);
+            UpdateCustomButtonsState();
         }
 
+        private OneCLaunchParameterReference? SelectedCustomParameter =>
+            _list.SelectedItem as OneCLaunchParameterReference;
+
+        private void UpdateCustomButtonsState()
+        {
+            var selected = SelectedCustomParameter;
+            var isCustom = selected is { IsCustom: true };
+            var index = isCustom ? IndexOfCustom(selected!.Key) : -1;
+
+            _btnEdit.IsEnabled = isCustom;
+            _btnRemove.IsEnabled = isCustom;
+            _btnMoveUp.IsEnabled = isCustom && index > 0;
+            _btnMoveDown.IsEnabled = isCustom && index >= 0 && index < _customParams.Count - 1;
+        }
+
+        private int IndexOfCustom(string key)
+        {
+            for (var i = 0; i < _customParams.Count; i++)
+            {
+                var (candidate, _) = OneCLaunchArgumentParser.SplitCustomEntry(_customParams[i]);
+                if (string.Equals(candidate, key, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+            return -1;
+        }
+
+        private void AddCustomParameter()
+        {
+            var key = (_txtNewParam.Text ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(key))
+                return;
+            var comment = (_txtNewComment.Text ?? string.Empty).Trim();
+            var entry = string.IsNullOrWhiteSpace(comment) ? key : key + "\t" + comment;
+
+            if (_customParams.Any(p =>
+                string.Equals(OneCLaunchArgumentParser.SplitCustomEntry(p).Key, key,
+                    StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            _customParams.Add(entry);
+            _txtNewParam.Clear();
+            _txtNewComment.Clear();
+            PersistCustomParameters();
+            RefreshList();
+            _txtNewParam.Focus();
+        }
+
+        private void EditSelectedCustomParameter()
+        {
+            var selected = SelectedCustomParameter;
+            if (selected is not { IsCustom: true })
+                return;
+
+            var index = IndexOfCustom(selected.Key);
+            if (index < 0)
+                return;
+
+            var (oldKey, oldComment) = OneCLaunchArgumentParser.SplitCustomEntry(_customParams[index]);
+
+            var dialog = new LaunchParameterEditWindow(oldKey, oldComment);
+            if (!dialog.ShowDialogSync(this))
+                return;
+
+            var newKey = (dialog.Key ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(newKey))
+                return;
+            var newComment = (dialog.Comment ?? string.Empty).Trim();
+
+            for (var i = 0; i < _customParams.Count; i++)
+            {
+                if (i == index)
+                    continue;
+                var (candidate, _) = OneCLaunchArgumentParser.SplitCustomEntry(_customParams[i]);
+                if (string.Equals(candidate, newKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    _dialogs.ShowWarning(T("LaunchParams.CustomDuplicate"), T("LaunchParams.EditTitle"));
+                    return;
+                }
+            }
+
+            _customParams[index] = string.IsNullOrWhiteSpace(newComment) ? newKey : newKey + "\t" + newComment;
+            PersistCustomParameters();
+            RefreshList();
+        }
+
+        private void RemoveSelectedCustomParameter()
+        {
+            var selected = SelectedCustomParameter;
+            if (selected is not { IsCustom: true })
+                return;
+
+            _customParams.RemoveAll(p =>
+                string.Equals(OneCLaunchArgumentParser.SplitCustomEntry(p).Key, selected.Key,
+                    StringComparison.OrdinalIgnoreCase));
+            PersistCustomParameters();
+            RefreshList();
+        }
+
+        private void MoveSelectedCustomParameter(int delta)
+        {
+            var selected = SelectedCustomParameter;
+            if (selected is not { IsCustom: true })
+                return;
+
+            if (!OneCLaunchArgumentParser.MoveCustomParameter(_customParams, selected.Key, delta))
+                return;
+            PersistCustomParameters();
+            RefreshList();
+            _list.SelectedItem = (OneCLaunchArgumentParser.BuildReferenceCatalog(_customParams))
+                .FirstOrDefault(r => r is { IsCustom: true } &&
+                    string.Equals(r.Key, selected.Key, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void OnEditParam_Click() => EditSelectedCustomParameter();
+
+        private void PersistCustomParameters()
+        {
+            _onCustomParametersChanged?.Invoke(_customParams);
+        }
     }
 }
 #endif

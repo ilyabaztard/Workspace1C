@@ -217,6 +217,73 @@ public static class OneCLaunchArgumentParser
     }
 
     /// <summary>
+    /// Разбирает запись пользовательского параметра справочника (issue #141): формат
+    /// «ключ» либо «ключ<TAB>комментарий». Возвращает нормализованную пару
+    /// (ключ без табуляций, комментарий без табуляций; могут быть пустыми).
+    /// </summary>
+    public static (string Key, string Comment) SplitCustomEntry(string? entry)
+    {
+        var parts = (entry ?? string.Empty).Split('\t');
+        var key = parts.Length > 0 ? parts[0].Trim() : string.Empty;
+        var comment = parts.Length > 1 ? parts[1].Trim() : string.Empty;
+        return (key, comment);
+    }
+
+    /// <summary>
+    /// Фильтрует каталог параметров по подстроке (issue #68): совпадает ключ или
+    /// описание; регистр не учитывается. Пустой/пробельный запрос возвращает исходный
+    /// список без изменений. Чистая функция — используется для поиска над справочником
+    /// окна «Запустить с выбором параметров» (WPF и Avalonia).
+    /// </summary>
+    public static IReadOnlyList<OneCLaunchParameterReference> FilterReferenceCatalog(
+        IReadOnlyList<OneCLaunchParameterReference>? entries, string? query)
+    {
+        if (entries is null)
+            return Array.Empty<OneCLaunchParameterReference>();
+
+        var q = (query ?? string.Empty).Trim();
+        if (q.Length == 0)
+            return entries;
+
+        return entries
+            .Where(e => e is not null &&
+                (e.Key.Contains(q, StringComparison.OrdinalIgnoreCase)
+                 || (e.Description?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Сдвигает пользовательский параметр в списке справочника (issue #68) на
+    /// <paramref name="delta"/> позиций (1 — ниже, -1 — выше) и возвращает true,
+    /// если запись с ключом <paramref name="key"/> (без учёта регистра) найдена
+    /// и сдвиг выполнен. Края списка не пересекаются (сдвиг «по месту» не меняет
+    /// порядок). Встроенные ключи каталога не затрагиваются — работает только
+    /// со списком пользовательских записей.
+    /// </summary>
+    public static bool MoveCustomParameter(IList<string> customParameters, string key, int delta)
+    {
+        if (customParameters is null || string.IsNullOrWhiteSpace(key) || delta == 0)
+            return false;
+
+        var targetKey = key.Trim();
+        for (var i = 0; i < customParameters.Count; i++)
+        {
+            var (candidateKey, _) = SplitCustomEntry(customParameters[i]);
+            if (!string.Equals(candidateKey, targetKey, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var j = i + delta;
+            if (j < 0 || j >= customParameters.Count)
+                return false;
+
+            (customParameters[i], customParameters[j]) = (customParameters[j], customParameters[i]);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Компонует строку отображения варианта платформы для окна выбора: к чистой версии
     /// добавляет разрядность «(32)/(64)», если она явно задана и ещё не присутствует
     /// в строке. Соответствует прежней inline-логике окна настройки подключения.
