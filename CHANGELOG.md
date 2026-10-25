@@ -11,6 +11,72 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.74] — 2026-10-25
+
+### Добавлено
+
+- **Подстановки для сценариев: все поля структуры базы и быстрый редактор (issue #67,
+  Windows и Linux)** — диалог «Выбрать…» теперь показывает **полную структуру базы
+  1-в-1 с картой подстановок**, сгруппированную по секциям («Основные», «Подключение»,
+  «Произвольные поля», «Платформа», «Дата») с локализованными заголовками — список
+  доступных полей больше не отличается от файла настроек. Добавлены производные ключи:
+  `%тэги%`/`%tags%`, `%дополнительныеполя%`/`%extrafields%`, алиас `%группа%`
+  ([`ScriptTokenPickerViewModel.cs`](Workspace1C/ViewModels/ScriptTokenPickerViewModel.cs),
+  [`ScriptParameterResolver.cs`](Workspace1C/Services/ScriptParameterResolver.cs)). Устранены
+  сильные тормоза: контекст запуска платформы кэшируется (TTL-кэш каталогов установленных
+  платформ + контекст один раз на окно редактора), живое превью пересчитывается с
+  задержкой, а не на каждый символ ([`PlatformVersionService.cs`](Workspace1C/Services/PlatformVersionService.cs),
+  окна сценария). **«База для примера» автоматически — база, из которой запущен
+  сценарий** (при запуске из «Утилит» — первая в списке). Для базы с версией 8.3.3
+  `%full_exe_name%` больше не подставляет новейшую 64-битную платформу: версия ищется
+  и в «чужой» разрядности, а только затем — резерв новейшей ([`OneCPlatformLocator.cs`](Workspace1C/Services/OneCPlatformLocator.cs)).
+  Покрыто тестами `ScriptTokenPickerViewModelTests`, `ScriptScenarioEditViewModelTests`,
+  `ScriptPreviewPerfGuardTests`, `PlatformVersionCacheTests`, `OneCPlatformLocatorPlatformVersionTests`.
+
+### Изменено
+
+- **Миграция баз: прогресс, статусы при ошибке и имя группы (issue #41, Windows и
+  Linux)** — полоса прогресса растянута на всю ширину окна (была «только под локалью»);
+  при ошибке переноса статусы приёмника **обновляются автоматически**, без ручного
+  «Получить статусы»; новая группа приёмника именуется «Хост - Кластер (порт)», порт —
+  только если нестандартный (пример пользователя «Платформа 27 - Локальный кластер (27541)»),
+  иначе папки «Локальный кластер» разных серверов не сливаются
+  ([`ClusterMigrationService.BuildGroupName`](Workspace1C/Services/ClusterMigrationService.cs),
+  [`ClusterMigrationViewModel.cs`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs),
+  окно миграции). Покрыто тестами `ClusterMigrationServiceTests`, `ClusterMigrationViewModelTests`,
+  `Issue41WindowLayoutTests`.
+
+- **Меню трея: каталог иконок как в «Утилитах» и применённая иконка (issue #62,
+  Windows и Linux)** — набор иконок пользовательских групп меню трея расширен до общего
+  каталога с редактором «Утилиты» (а не 5 захардкоженных). Исправлен баг «выбрали —
+  сохранили — иконка совсем другая»: WPF-адаптер передаёт выбранный ключ и цвет группы
+  в пункт меню и рисует именно её (геометрия активного набора иконок + цвет каталога)
+  ([`MainWindow.Tray.cs`](Workspace1C/Views/MainWindow.Tray.cs),
+  [`TrayMenuBuilder.cs`](Workspace1C/Services/TrayMenuBuilder.cs),
+  [`TrayMenuEditorViewModel.cs`](Workspace1C/ViewModels/TrayMenuEditorViewModel.cs)).
+  Покрыто тестами `TrayMenuIconCatalogTests`.
+
+### Исправлено
+
+- **Публикация на Apache: `Define` объявлены до `Include` (issue #63, Windows и Linux)** —
+  парсер стал двухпроходным: сначала собираются все `Define` главного конфига **и**
+  включаемых файлов (`MergeDefines`), затем раскрываются `Include`/`DocumentRoot`/`Listen` —
+  `DocumentRoot` и порт могут лежать во включаемом файле, а переменные — в начале
+  главного httpd.conf («имя файла с переменной, но без значения» и «подсказка без порта»
+  устранены) ([`ApacheConfIncludeParser.cs`](Workspace1C/Services/ApacheConfIncludeParser.cs),
+  [`ApacheInstanceDetector.cs`](Workspace1C/Services/ApacheInstanceDetector.cs)). Покрыто
+  тестами `ApacheConfIncludeParserTests`, `ApacheInstanceDetectorTests`.
+
+- **Тёмная тема: читаемые подписи полей форм (issue #61, Windows и Linux)** — введена
+  единая кисть подписи полей формы `FormLabelBrush` (связана с первичным цветом текста
+  темы) во всех четырёх темах; построители окон `WpfUi.Label`/`AvaloniaUi.Label` используют
+  её вместо вторичной кисти, которая у пользовательских схем могла оставаться тёмной в
+  тёмной теме ([`LightTheme`/`DarkTheme` .xaml/.axaml](Workspace1C/Themes/LightTheme.axaml),
+  [`WpfUi.cs`](Workspace1C/Views/WpfUi.cs), [`AvaloniaUi.Avalonia.cs`](Workspace1C/Views/AvaloniaUi.Avalonia.cs)).
+  Покрыто тестами-стражами `ThemeFormLabelTests`, `Issue61DarkPaletteAuditTests`.
+
+---
+
 ## [1.0.0.73] — 2026-10-25
 
 ### Добавлено
