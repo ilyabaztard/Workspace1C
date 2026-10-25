@@ -56,6 +56,13 @@ public class ScriptScenarioEditViewModel : ViewModelBase
         new ScriptTokenHint("%имягруппы%", "Script.TokenGroupName"),
         new ScriptTokenHint("%date%", "Script.TokenDate"),
         new ScriptTokenHint("%date:yyyyMMdd_HHmm%", "Script.TokenDateCustom"),
+        // Полные строки запуска и платформа (issue #67): токены из первого сообщения
+        // issue — «полная строка запуска, которую бы стартер подставил для текущей
+        // базы» (Предприятие/Конфигуратор), путь к файлу платформы и её версия.
+        new ScriptTokenHint("%full_launch_enterprise%", "Script.TokenFullLaunchEnterprise"),
+        new ScriptTokenHint("%full_launch_config%", "Script.TokenFullLaunchConfig"),
+        new ScriptTokenHint("%full_exe_name%", "Script.TokenFullExeName"),
+        new ScriptTokenHint("%platform_version%", "Script.TokenPlatformVersion"),
         // Произвольные поля базы (issue #6): пример подстановки; номер может быть
         // любым (1..N по строкам таблицы «Произвольные поля» вкладки «Идентификатор»).
         new ScriptTokenHint("%Additional_1%", "Script.TokenAdditional")
@@ -183,8 +190,10 @@ public class ScriptScenarioEditViewModel : ViewModelBase
     public static string BuildExampleCommandLine(ScriptScenario scenario, Infobase? infobase, DateTime? now = null)
     {
         // Решённая авторизация (логин при общей авторизации, issue #57) — превью
-        // соответствует фактическому запуску (issue #67).
-        var values = ScriptParameterResolver.BuildValueMap(infobase, ResolvePreviewCredentials(infobase));
+        // соответствует фактическому запуску; контекст платформы (полные строки запуска,
+        // exe, версия) — токены %full_launch_*%, %full_exe_name%, %platform_version% (issue #67).
+        var values = ScriptParameterResolver.BuildValueMap(
+            infobase, ResolvePreviewCredentials(infobase), Services.ScriptLaunchContextResolver.Resolve(infobase));
         // Сборка использует scenario.Shell: разделитель и обёртка соответствуют
         // выбранному интерпретатору; платформа — текущая (для режима «Авто»).
         return ScriptParameterResolver.BuildShellCommandLine(scenario, values, now, OperatingSystem.IsWindows());

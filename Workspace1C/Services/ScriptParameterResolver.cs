@@ -83,8 +83,15 @@ public static class ScriptParameterResolver
     /// у самой базы собственных учётных данных нет (пусто) — сценарий «понимает все
     /// свойства базы» в том виде, в котором база реально запускается (issue #67).
     /// </param>
+    /// <param name="launchContext">
+    /// Контекст запуска платформы (issue #67): <c>%full_launch_enterprise%</c>,
+    /// <c>%full_launch_config%</c>, <c>%full_exe_name%</c>, <c>%platform_version%</c>.
+    /// Собирается <see cref="ScriptLaunchContextResolver"/>; null — ключи остаются пустыми
+    /// (платформа не найдена или контекст не запрошен).
+    /// </param>
     public static Dictionary<string, string> BuildValueMap(Infobase? infobase,
-        (string? User, string? Password)? resolvedCredentials = null)
+        (string? User, string? Password)? resolvedCredentials = null,
+        ScriptLaunchContext? launchContext = null)
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (infobase is null)
@@ -177,6 +184,23 @@ public static class ScriptParameterResolver
                 map["password"] = creds.Password;
             }
         }
+
+        // Полные строки запуска и платформа (issue #67): токены из первого сообщения
+        // issue — «полная строка запуска, которую бы стартер подставил для текущей базы»,
+        // «полный путь к используемому файлу платформы» и «полная версия используемой
+        // платформы». Ключи присутствуют ВСЕГДА: при отсутствии контекста (платформа не
+        // найдена/не запрошена) они пусты, и токен %full_launch_enterprise% не остаётся
+        // литералом в команде («Результата нет» у пользователя) — подставляется пусто.
+        map["full_launch_enterprise"] = launchContext?.EnterpriseCommandLine ?? string.Empty;
+        map["full_launch_config"] = launchContext?.ConfiguratorCommandLine ?? string.Empty;
+        map["full_exe_name"] = launchContext?.ExePath ?? string.Empty;
+        map["platform_version"] = launchContext?.PlatformVersion ?? string.Empty;
+
+        // Русские алиасы для удобства набора (регистронезависимо, как остальные ключи).
+        map["полнаястрокапредприятие"] = launchContext?.EnterpriseCommandLine ?? string.Empty;
+        map["полнаястрокаконфигуратор"] = launchContext?.ConfiguratorCommandLine ?? string.Empty;
+        map["путьплатформы"] = launchContext?.ExePath ?? string.Empty;
+        map["версияплатформы"] = launchContext?.PlatformVersion ?? string.Empty;
         return map;
     }
 

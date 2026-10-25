@@ -120,25 +120,29 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
     /// Строит полный список переменных сценария для базы: статический справочник
     /// окна (описания) + все динамические ключи карты <see cref="ScriptParameterResolver.BuildValueMap"/>
     /// (рефлексия «понимает все реквизиты базы», issue #67); решённая авторизация
-    /// (общая, issue #57) учитывается для логина/пароля.
+    /// (общая, issue #57) учитывается для логина/пароля; контекст платформы
+    /// (<c>%full_launch_*%</c>, <c>%full_exe_name%</c>, <c>%platform_version%</c>, issue #67)
+    /// добавляется в оба раздела списка.
     /// </summary>
     public static IReadOnlyList<ScriptTokenOption> BuildOptions(Infobase? infobase)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<ScriptTokenOption>();
 
+        var launchContext = Services.ScriptLaunchContextResolver.Resolve(infobase);
+
         // Статические токены справочника окна — с человекочитаемыми описаниями.
         foreach (var hint in ScriptScenarioEditViewModel.AvailableTokens)
         {
             if (!seen.Add(hint.Token))
                 continue;
-            var value = ValueForToken(hint.Token, infobase);
+            var value = ValueForToken(hint.Token, infobase, launchContext);
             result.Add(new ScriptTokenOption(hint.Token, value));
         }
 
         // Динамические ключи карты подстановок (рефлексия по всем свойствам базы):
         // ключи, которых нет в статическом справочнике, тоже доступны.
-        var map = ScriptParameterResolver.BuildValueMap(infobase, ResolveEffectiveCredentials(infobase));
+        var map = ScriptParameterResolver.BuildValueMap(infobase, ResolveEffectiveCredentials(infobase), launchContext);
         foreach (var pair in map.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
         {
             var token = "%" + pair.Key + "%";
@@ -150,9 +154,9 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
         return result;
     }
 
-    private static string ValueForToken(string token, Infobase? infobase)
+    private static string ValueForToken(string token, Infobase? infobase, ScriptLaunchContext? launchContext = null)
     {
-        var map = ScriptParameterResolver.BuildValueMap(infobase, ResolveEffectiveCredentials(infobase));
+        var map = ScriptParameterResolver.BuildValueMap(infobase, ResolveEffectiveCredentials(infobase), launchContext);
         var key = token.Trim('%');
         return map.TryGetValue(key, out var value) ? (value ?? string.Empty) : string.Empty;
     }

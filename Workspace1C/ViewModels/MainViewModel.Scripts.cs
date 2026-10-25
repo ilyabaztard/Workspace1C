@@ -83,8 +83,11 @@ public partial class MainViewModel
 
         // Логин/пароль, которые реально подставятся при запуске базы: у базы без
         // собственной авторизации это общая авторизация (issue #57) — сценарий должен
-        // «понимать все свойства базы», в т.ч. логин (issue #67).
-        var values = ScriptParameterResolver.BuildValueMap(infobase, ResolveEffectiveScriptCredentials(infobase));
+        // «понимать все свойства базы», в т.ч. логин (issue #67). Контекст платформы
+        // даёт токены %full_launch_*%, %full_exe_name%, %platform_version% (issue #67).
+        var values = ScriptParameterResolver.BuildValueMap(
+            infobase, ResolveEffectiveScriptCredentials(infobase),
+            ScriptLaunchContextResolver.Resolve(infobase));
         // Шелл сценария передаётся в сборку тела: для PowerShell разделитель
         // между «cd …» и командой — «;» вместо «&&» (issue #308, замечание @7OH).
         var commandBody = ScriptParameterResolver.BuildCommandLine(

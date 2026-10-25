@@ -2931,6 +2931,10 @@
     "Script.TokenConnectionPort": "порт сервера 1С",
     "Script.TokenBaseId": "внутренний идентификатор базы",
     "Script.TokenGroupName": "имя группы базы",
+    "Script.TokenFullLaunchEnterprise": "полная строка запуска для режима «1С:Предприятие»",
+    "Script.TokenFullLaunchConfig": "полная строка запуска для режима «Конфигуратор»",
+    "Script.TokenFullExeName": "полный путь к файлу платформы (1cv8.exe / 1cv8)",
+    "Script.TokenPlatformVersion": "полная версия используемой платформы (например 8.5.4.1878)",
     "Notify.ScriptStarted": "Скрипт запущен для базы «{0}»: «{1}»",
 
     "CustomAction.NameRequired": "Укажите наименование действия.",

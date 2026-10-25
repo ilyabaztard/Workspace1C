@@ -118,4 +118,46 @@ public sealed class ScriptTokenPickerViewModelTests
         Assert.True(option.IsSecret);
         Assert.Equal("••••••", option.DisplayValue);
     }
+
+    [Fact]
+    public void AvailableTokens_IncludesFullLaunchTokens_Issue67()
+    {
+        // Токены из первого сообщения issue #67: полные строки запуска, путь к exe и версия.
+        var tokens = ScriptScenarioEditViewModel.AvailableTokens;
+
+        Assert.Contains(tokens, t => t.Token == "%full_launch_enterprise%");
+        Assert.Contains(tokens, t => t.Token == "%full_launch_config%");
+        Assert.Contains(tokens, t => t.Token == "%full_exe_name%");
+        Assert.Contains(tokens, t => t.Token == "%platform_version%");
+    }
+
+    [Fact]
+    public void TokenPicker_BuildOptions_IncludesFullLaunchTokens_WithValues()
+    {
+        var infobase = BuildBase();
+        var ctx = new ScriptLaunchContext(
+            ExePath: @"C:\1cv8\bin\1cv8.exe",
+            PlatformVersion: "8.5.4.1878",
+            EnterpriseCommandLine: @"""C:\1cv8\bin\1cv8.exe"" ENTERPRISE /S""srv-01:1541\buho""",
+            ConfiguratorCommandLine: @"""C:\1cv8\bin\1cv8.exe"" DESIGNER /S""srv-01:1541\buho""");
+        ScriptLaunchContextResolver.ResolverOverride = _ => ctx;
+        try
+        {
+            var options = ScriptTokenPickerViewModel.BuildOptions(infobase);
+
+            var exe = Assert.Single(options, o => o.Token == "%full_exe_name%");
+            var version = Assert.Single(options, o => o.Token == "%platform_version%");
+            var enterprise = Assert.Single(options, o => o.Token == "%full_launch_enterprise%");
+            var configurator = Assert.Single(options, o => o.Token == "%full_launch_config%");
+
+            Assert.Equal(ctx.ExePath, exe.Value);
+            Assert.Equal(ctx.PlatformVersion, version.Value);
+            Assert.Equal(ctx.EnterpriseCommandLine, enterprise.Value);
+            Assert.Equal(ctx.ConfiguratorCommandLine, configurator.Value);
+        }
+        finally
+        {
+            ScriptLaunchContextResolver.ResolverOverride = null;
+        }
+    }
 }

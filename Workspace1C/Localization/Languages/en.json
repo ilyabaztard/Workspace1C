@@ -2931,6 +2931,10 @@
     "Script.TokenConnectionPort": "1C server port",
     "Script.TokenBaseId": "internal base identifier",
     "Script.TokenGroupName": "base group name",
+    "Script.TokenFullLaunchEnterprise": "full launch command line for \"1C:Enterprise\" mode",
+    "Script.TokenFullLaunchConfig": "full launch command line for \"Designer\" mode",
+    "Script.TokenFullExeName": "full path to the platform executable (1cv8.exe / 1cv8)",
+    "Script.TokenPlatformVersion": "full platform version (e.g. 8.5.4.1878)",
     "Notify.ScriptStarted": "Script launched for base \"{0}\": \"{1}\"",
 
     "CustomAction.NameRequired": "Enter an action name.",

@@ -970,4 +970,51 @@ public sealed class ScriptParameterResolverTests
 
         Assert.Equal("первая|", result);
     }
+
+    // ------------------- Запуск платформы (issue #67) -------------------
+
+    private static ScriptLaunchContext MakeLaunchContext() => new(
+        ExePath: @"C:\Program Files\1cv8\8.5.4.1878\bin\1cv8.exe",
+        PlatformVersion: "8.5.4.1878",
+        EnterpriseCommandLine: @"""C:\Program Files\1cv8\8.5.4.1878\bin\1cv8.exe"" ENTERPRISE /S""srv-1c\acc_main""",
+        ConfiguratorCommandLine: @"""C:\Program Files\1cv8\8.5.4.1878\bin\1cv8.exe"" DESIGNER /S""srv-1c\acc_main""");
+
+    [Fact]
+    public void BuildValueMap_LaunchContext_AddsFullLaunchTokens()
+    {
+        var map = ScriptParameterResolver.BuildValueMap(MakeInfobase(), launchContext: MakeLaunchContext());
+
+        Assert.Equal(MakeLaunchContext().EnterpriseCommandLine, map["full_launch_enterprise"]);
+        Assert.Equal(MakeLaunchContext().ConfiguratorCommandLine, map["full_launch_config"]);
+        Assert.Equal(MakeLaunchContext().ExePath, map["full_exe_name"]);
+        Assert.Equal(MakeLaunchContext().PlatformVersion, map["platform_version"]);
+
+        // Русские алиасы (регистронезависимый словарь).
+        Assert.Equal(MakeLaunchContext().EnterpriseCommandLine, map["полнаястрокапредприятие"]);
+        Assert.Equal(MakeLaunchContext().ConfiguratorCommandLine, map["полнаястрокаконфигуратор"]);
+        Assert.Equal(MakeLaunchContext().ExePath, map["путьплатформы"]);
+        Assert.Equal(MakeLaunchContext().PlatformVersion, map["версияплатформы"]);
+    }
+
+    [Fact]
+    public void BuildValueMap_NoLaunchContext_TokensAreEmpty()
+    {
+        var map = Map(MakeInfobase());
+
+        Assert.Equal(string.Empty, map["full_launch_enterprise"]);
+        Assert.Equal(string.Empty, map["full_launch_config"]);
+        Assert.Equal(string.Empty, map["full_exe_name"]);
+        Assert.Equal(string.Empty, map["platform_version"]);
+    }
+
+    [Fact]
+    public void Resolve_FullLaunchTokens_SubstituteFromContext()
+    {
+        var map = ScriptParameterResolver.BuildValueMap(MakeInfobase(), launchContext: MakeLaunchContext());
+
+        var result = ScriptParameterResolver.Resolve(
+            "%full_exe_name%|%platform_version%|%full_launch_enterprise%", map, FixedNow);
+
+        Assert.Equal($@"{MakeLaunchContext().ExePath}|8.5.4.1878|{MakeLaunchContext().EnterpriseCommandLine}", result);
+    }
 }
