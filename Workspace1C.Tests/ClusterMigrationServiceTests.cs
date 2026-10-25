@@ -28,7 +28,7 @@ public sealed class ClusterMigrationServiceTests
             Dbms = "MSSQLServer",
             DbServer = "sql-01",
             DbName = "buho",
-            DbUser = "old-user",          // rac возвращает пользователя СУБД — но в запрос идёт из диалога
+            DbUser = "old-user",          // rac возвращает пользователя СУБД — он и идёт в запрос (фикс 1.0.0.72)
             Locale = "ru_RU",
             SecurityLevel = 1
         };
@@ -40,7 +40,9 @@ public sealed class ClusterMigrationServiceTests
         Assert.Equal("MSSQLServer", request.Dbms);
         Assert.Equal("sql-01", request.DbServer);
         Assert.Equal("buho", request.DbName);
-        Assert.Equal("new-user", request.DbUser);
+        // Фикс 1.0.0.72: rac отдаёт db-user в «infobase summary list» — пользователь СУБД
+        // переносится из источника автоматически, значение диалога не перетирает его.
+        Assert.Equal("old-user", request.DbUser);
         Assert.Equal("pass", request.DbPassword);
         Assert.Equal("ru_RU", request.Locale);
         Assert.Equal(1, request.SecurityLevel);
@@ -100,6 +102,43 @@ public sealed class ClusterMigrationServiceTests
 
         Assert.Equal("OracleDatabase", request.Dbms);
         Assert.Equal("ora-01", request.DbServer);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_SourceDbUserPresent_UsesSourceValueOverDialog()
+    {
+        // issue #41 (фикс 1.0.0.72), комментарий 7OH: параметр (пользователь СУБД) можно
+        // брать из исходной базы — rac отдаёт db-user в «infobase summary list»; приоритет
+        // у записи источника, значение диалога (fallback) не перетирает его.
+        var source = new RacInfobaseSummary { DbUser = "sa_migrated" };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "form-user", "pass");
+
+        Assert.Equal("sa_migrated", request.DbUser);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_SourceDbUserEmpty_UsesFormDbUser()
+    {
+        // Если rac не вернул db-user — используется пользователь СУБД из диалога миграции
+        // (fallback; раньше форма была единственным источником).
+        var source = new RacInfobaseSummary { DbUser = "" };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "form-user", "pass");
+
+        Assert.Equal("form-user", request.DbUser);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_DbPassword_AlwaysFromForm()
+    {
+        // Пароль СУБД rac не возвращает (RacInfobaseInfo: «rac не возвращает пароль») —
+        // он и в 1.0.0.72 приходит только из диалога миграции.
+        var source = new RacInfobaseSummary { DbUser = "sa" };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "form-user", "secret");
+
+        Assert.Equal("secret", request.DbPassword);
     }
 
     [Fact]

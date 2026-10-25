@@ -41,11 +41,13 @@ public static class ClusterMigrationService
     /// Строит запрос создания информационной базы в новом кластере (rac «infobase create»)
     /// «с теми же данными, что в старом кластере»: имя, описание, СУБД, сервер СУБД,
     /// имя БД в СУБД, локаль и уровень безопасности копируются из записи «infobase summary
-    /// list» источника. Учётные данные СУБД (<paramref name="dbUser"/>/<paramref name="dbPassword"/>)
-    /// приходят из диалога миграции — rac НЕ возвращает пароль СУБД (см.
-    /// <see cref="RacInfobaseInfo"/>: «rac не возвращает пароль»). База данных на сервере
-    /// СУБД уже существует (старый кластер подключался к ней) — <see cref="RacInfobaseCreateRequest.CreateDb"/>
-    /// = false, переносим ТОЛЬКО регистрацию базы в новом кластере.
+    /// list» источника. Пользователь СУБД тоже берётся из источника — rac отдаёт db-user
+    /// в «infobase summary list» (issue #41, фикс 1.0.0.72): <paramref name="dbUser"/> (диалог)
+    /// используется как fallback для баз без db-user у rac; пароль СУБД rac НЕ возвращает
+    /// (см. <see cref="RacInfobaseInfo"/>: «rac не возвращает пароль») — всегда из диалога
+    /// <paramref name="dbPassword"/>. База данных на сервере СУБД уже существует (старый
+    /// кластер подключался к ней) — <see cref="RacInfobaseCreateRequest.CreateDb"/> = false,
+    /// переносим ТОЛЬКО регистрацию базы в новом кластере.
     /// Имя БД в СУБД переносится АВТОМАТИЧЕСКИ (issue #41, фикс 1.0.0.71; поле «Имя БД» на
     /// форме миграции удалено): приоритет у <see cref="RacInfobaseSummary.DbName"/> источника,
     /// а для баз, где rac не вернул db-name в «infobase summary list» (см.
@@ -56,7 +58,7 @@ public static class ClusterMigrationService
     /// корректный fallback без лишних запросов к rac.
     /// </summary>
     /// <param name="source">Запись базы источника («infobase summary list» старого кластера).</param>
-    /// <param name="dbUser">Пользователь СУБД для подключения из нового кластера (диалог).</param>
+    /// <param name="dbUser">Пользователь СУБД из диалога миграции; fallback при пустом db-user у rac.</param>
     /// <param name="dbPassword">Пароль СУБД (диалог; маскируется в журнале RacClient).</param>
     /// <param name="overrideDbms">
     /// Тип СУБД с формы миграции (issue #41): при непустом значении приоритетнее, чем
@@ -85,7 +87,10 @@ public static class ClusterMigrationService
             // Перенос имени БД автоматически: значение rac, а для баз без db-name в summary
             // list — имя ИБ (сервер 1С создаёт БД в СУБД по умолчанию с именем ИБ).
             DbName = FirstNonEmpty(source.DbName, source.Name ?? string.Empty),
-            DbUser = dbUser ?? string.Empty,
+            // Пользователь СУБД берётся из записи источника (rac отдаёт db-user в
+            // «infobase summary list»); значение формы — только fallback для баз без db-user
+            // у rac. Пароль rac не возвращает — всегда из диалога (issue #41, фикс 1.0.0.72).
+            DbUser = FirstNonEmpty(source.DbUser, dbUser),
             DbPassword = dbPassword ?? string.Empty,
             Locale = source.Locale ?? string.Empty,
             SecurityLevel = source.SecurityLevel,
