@@ -59,6 +59,9 @@ public partial class MainViewModel : ViewModelBase
 
     private AppSettings _settings = new();
 
+    /// <summary>Пользовательские параметры запуска, добавленные в справочник параметров (issue #141).</summary>
+    private List<string> _customLaunchParameters = new();
+
     /// <summary>
     /// Текущие настройки приложения (issue #374): нужны построителю меню «Утилиты»
     /// для выбора компоновки (стандартная/пользовательская) по
@@ -714,6 +717,7 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             _settings = _repository.LoadSettings();
+            _customLaunchParameters = new List<string>(_settings.CustomLaunchParameters ?? new List<string>());
             _allInfobases = _repository.Load();
             _groups = _repository.LoadGroups();
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -145,7 +146,7 @@ namespace Workspace1C
         /// <summary>Обновлённый список пользовательских параметров справочника (issue #141).</summary>
         public IReadOnlyList<string> CustomParameters => _customParams;
 
-        private Control BuildToolButton(string labelKey, string iconKey, Action onClick)
+        private Button BuildToolButton(string labelKey, string iconKey, Action onClick)
         {
             var button = new Button
             {

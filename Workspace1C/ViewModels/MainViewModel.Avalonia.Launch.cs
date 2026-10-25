@@ -96,6 +96,23 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Пользовательские параметры запуска, добавленные в справочник параметров (issue #141).</summary>
+    public IReadOnlyList<string> CustomLaunchParameters => _customLaunchParameters;
+
+    /// <summary>
+    /// Сохраняет список пользовательских параметров запуска (дополняет справочник ключей командной строки).
+    /// </summary>
+    public void SetCustomLaunchParameters(IEnumerable<string> values)
+    {
+        _customLaunchParameters = new List<string>(
+            (values ?? Enumerable.Empty<string>())
+            .Select(v => v.Trim())
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase));
+        _settings.CustomLaunchParameters = _customLaunchParameters.ToList();
+        SaveSettingsSilently();
+    }
+
     /// <summary>
     /// Запуск с авторизацией (issue #48): платформа обязательно спрашивает имя и пароль.
     /// Сохранённые учётные данные (общие и отдельные для режима) не подставляются, ключ
