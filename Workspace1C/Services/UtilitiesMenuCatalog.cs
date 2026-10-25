@@ -345,6 +345,22 @@ public static class UtilitiesMenuCatalog
     public static string ResolveItemIconColor(UtilitiesMenuItem item, ColorScheme? scheme, bool dark)
         => ResolveIconColor(item.IconColor, scheme, dark);
 
+    /// <summary>Старые ключи иконок групп трея (до единого каталога «Утилит», 1.0.0.45–1.0.0.73) →
+    /// ключи геометрии Icon* базового словаря (Icons.xaml / Icons.axaml). Объявлены ДО
+    /// <see cref="_wpfIconToGeometryMap"/>: статические поля инициализируются в порядке
+    /// объявления, и маппинг обязан видеть массив непустым.</summary>
+    private static readonly (string PackIcon, string GeometryKey)[] LegacyTrayIconGeometryKeys =
+    {
+        ("Folder", "IconFolder"),
+        ("Database", "IconDatabase"),
+        ("Star", "IconStar"),
+        ("Settings", "IconSettings"),
+        ("Services", "IconServices"),
+        ("ExitToApp", "IconExitToApp"),
+        ("Open", "IconOpen"),
+        ("Sync", "IconSync"),
+    };
+
     /// <summary>Маппинг «ключ PickIcon каталога (WPF) → ключ геометрии Icon* (Icons.xaml/Icons.axaml)».</summary>
     private static readonly IReadOnlyDictionary<string, string> _wpfIconToGeometryMap = BuildWpfIconToGeometryMap();
 
@@ -369,6 +385,12 @@ public static class UtilitiesMenuCatalog
                 continue;
             map[wpfKind] = geometryKey;
         }
+        // Совместимость со старыми ключами иконок меню трея (1.0.0.45–1.0.0.73,
+        // «Несколько иконок для трея» — issue #40): эти PackIcon-имена не входят
+        // в каталог «Утилит», но сохранились в tray_menu_layout.json у пользователей.
+        // Без алиасов старая иконка группы резолвилась бы в запасную «папку».
+        foreach (var (legacy, geometryKey) in LegacyTrayIconGeometryKeys)
+            map[legacy] = geometryKey;
         return map;
     }
 

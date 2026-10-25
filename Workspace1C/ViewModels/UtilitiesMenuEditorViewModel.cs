@@ -495,6 +495,9 @@ public class UtilitiesMenuEditorViewModel : ViewModelBase
     /// Единый каталог иконок пользовательских групп и пунктов меню (issue #62): строится
     /// из <see cref="UtilitiesMenuCatalog.All"/> (ключ PackIcon + цвет). Используется
     /// редакторами «Утилиты» и «Меню в трее» — один набор на оба редактора.
+    /// В каталог попадают только РЕЗОЛВИМЫЕ ключи: <see cref="UtilitiesMenuCatalog.WpfIconGeometryKey"/>
+    /// отображает PackIcon-имя на ключ геометрии Icon*, которую реально рисуют адаптеры
+    /// (меню «Утилиты» и трей) — нерезолвимый ключ показывал бы «совсем другую» иконку.
     /// </summary>
     internal static IReadOnlyList<UtilitiesIconOption> BuildCatalogIcons()
     {
@@ -503,6 +506,8 @@ public class UtilitiesMenuEditorViewModel : ViewModelBase
         foreach (var item in UtilitiesMenuCatalog.All)
         {
             if (string.IsNullOrWhiteSpace(item.WpfIconKind) || string.IsNullOrWhiteSpace(item.IconColor))
+                continue;
+            if (string.IsNullOrEmpty(UtilitiesMenuCatalog.WpfIconGeometryKey(item.WpfIconKind)))
                 continue;
             if (seen.Add(item.WpfIconKind + "|" + item.IconColor))
                 result.Add(new UtilitiesIconOption(item.WpfIconKind, item.IconColor));

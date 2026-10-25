@@ -122,7 +122,14 @@ namespace Workspace1C
                 return new TextBlock { Text = string.Empty };
             var check = new CheckBox().Styled(ControlThemes.CacheCleanCheckBox);
             check.Bind(ToggleButton.IsCheckedProperty, new Binding("IsVisible"));
-            var icon = IconHelper.MakeIcon(node.DisplayIconKey, 16, "TextPrimaryBrush");
+            // Превью = применённая геометрия (issue #62): PackIcon-ключ каталога («Magnify») —
+            // через UtilitiesMenuCatalog.WpfIconGeometryKey на парный ключ Icon*, иначе
+            // IconHelper резолвил бы его в запасную «папку», и редактор показывал бы
+            // «совсем другую» иконку.
+            var geometryKey = Workspace1C.Services.UtilitiesMenuCatalog.WpfIconGeometryKey(node.DisplayIconKey);
+            if (string.IsNullOrEmpty(geometryKey))
+                geometryKey = node.DisplayIconKey;
+            var icon = IconHelper.MakeIcon(geometryKey, 16, "TextPrimaryBrush");
             if (icon is not null)
             {
                 icon.Margin = new Thickness(4, 0, 0, 0);
@@ -375,9 +382,16 @@ namespace Workspace1C
             _vm.UnGroupSelected();
         }
 
+        /// <summary>«Сохранить»: сохраняет компоновку и закрывает окно. Сразу после сохранения
+        /// пересобираем меню трея главного окна — выбранная иконка группы доезжает до трея
+        /// без перезапуска (issue #62). RefreshTrayMenuAfterSettings сбрасывает отпечаток
+        /// состава, иначе RefreshTrayMenu отбросил бы пересборку: иконка не меняет структуру.</summary>
         private void OnOkClick()
         {
             _vm.SaveCommand.Execute(null);
+            if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime
+                { MainWindow: MainWindow main })
+                main.RefreshTrayMenuAfterSettings();
             DialogResult = true;
             Close();
         }

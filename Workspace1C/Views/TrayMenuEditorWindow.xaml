@@ -22,27 +22,29 @@
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
         <Style TargetType="ComboBox" BasedOn="{StaticResource ModernComboBox}"/>
-        <!-- Превью иконок блоков (issue #62): строковый ключ → PackIconKind. -->
-        <conv:PackIconKindConverter x:Key="PackIconKindConverter"/>
+        <!-- Превью иконок блоков (issue #62): ТА ЖЕ геометрия приложения, что рисует
+             адаптер трея (Path по ключу через IconKeyToGeometryConverter), а не
+             MaterialDesign-иконка, которая в трее выглядела бы «совсем другой». -->
+        <conv:IconKeyToGeometryConverter x:Key="IconKeyToGeometry"/>
         <!-- Шаблон узла дерева: чекбокс видимости + иконка + заголовок + пометка вида -->
         <HierarchicalDataTemplate x:Key="TrayNodeTemplate" ItemsSource="{Binding Children}">
             <StackPanel Orientation="Horizontal">
                 <CheckBox IsChecked="{Binding IsVisible}"
                           VerticalAlignment="Center"
                           ToolTip="{loc:Loc TrayMenu.VisibleTooltip}"/>
-                <materialDesign:PackIcon Kind="{Binding DisplayIconKey, Converter={StaticResource PackIconKindConverter}}"
-                                         Width="16" Height="16" Margin="4,0,0,0" VerticalAlignment="Center"
-                                         Foreground="{Binding DisplayIconColor}">
-                    <materialDesign:PackIcon.Style>
-                        <Style TargetType="materialDesign:PackIcon" BasedOn="{StaticResource {x:Type materialDesign:PackIcon}}">
+                <Path Data="{Binding DisplayIconKey, Converter={StaticResource IconKeyToGeometry}}"
+                      Width="16" Height="16" Stretch="Uniform" Margin="4,0,0,0"
+                      VerticalAlignment="Center" Fill="{Binding DisplayIconColor}">
+                    <Path.Style>
+                        <Style TargetType="Path">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding DisplayIconKey}" Value="">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </materialDesign:PackIcon.Style>
-                </materialDesign:PackIcon>
+                    </Path.Style>
+                </Path>
                 <TextBlock Text="{Binding Title}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding KindLabel}" Margin="8,0,0,0" VerticalAlignment="Center"
                            FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"/>

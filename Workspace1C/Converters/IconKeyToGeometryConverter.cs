@@ -35,13 +35,40 @@ public class IconKeyToGeometryConverter : IValueConverter, IMultiValueConverter
 
     private static Geometry Resolve(string key, IconSet set)
     {
+        // Прямой резолв без запасной «папки»: маппинг каталога «Утилит» приоритетнее
+        // фолбэк-папки, иначе PackIcon-ключ каталога («Magnify», «Cog») превращался бы
+        // в «совсем другую» иконку (папку) в меню трея (issue #62).
+        var geometry = ResolveCore(key, set);
+        if (geometry is not null)
+            return geometry;
+
+        // PackIcon-имя каталога отображается на парный ключ геометрии Icon*
+        // (например «Magnify» → «IconSearch»), см. UtilitiesMenuCatalog.WpfIconGeometryKey.
+        var mapped = Workspace1C.Services.UtilitiesMenuCatalog.WpfIconGeometryKey(key);
+        if (!string.IsNullOrEmpty(mapped) && !string.Equals(mapped, key, StringComparison.Ordinal))
+        {
+            geometry = ResolveCore(mapped, set);
+            if (geometry is not null)
+                return geometry;
+        }
+
+        // Запасная «папка» — последний кандидат (как раньше).
+        return ResolveCore("IconFolder", set) ?? Geometry.Empty;
+    }
+
+    /// <summary>Пробует кандидаты резолва ключа, НЕ доходя до запасной «папки»
+    /// (её применяет только <see cref="Resolve"/> последним проходом).</summary>
+    private static Geometry? ResolveCore(string key, IconSet set)
+    {
         foreach (var candidate in ThemeFeatureMap.IconResolutionCandidates(key, set))
         {
+            if (string.Equals(candidate, "IconFolder", StringComparison.Ordinal))
+                break;
             if (Application.Current?.TryFindResource(candidate) is Geometry geometry)
                 return geometry;
         }
 
-        return Geometry.Empty;
+        return null;
     }
 
     /// <summary>

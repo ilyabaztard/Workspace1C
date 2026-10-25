@@ -704,12 +704,18 @@ namespace Workspace1C
 
         /// <summary>
         /// Иконка пользовательской группы трея по ключу каталога (WPF-геометрия активного
-        /// набора иконок через <see cref="Converters.IconKeyToGeometryResolver.ResolveGeometry"/>
-        /// + цвет #RRGGBB; issue #62). Неизвестный/пустой ключ — стандартная иконка группы.
+        /// набора иконок через <see cref="Converters.IconKeyToGeometryConverter.ResolveGeometry"/>
+        /// + цвет #RRGGBB; issue #62). PackIcon-имя каталога («Magnify», «Cog») сначала
+        /// отображается на парный ключ геометрии Icon* (UtilitiesMenuCatalog.WpfIconGeometryKey),
+        /// иначе резолв уходил бы в запасную «папку» — «совсем другая иконка».
+        /// Неизвестный/пустой ключ — стандартная иконка группы.
         /// </summary>
         private static Drawing.Image DrawCustomTrayIcon(string iconKey, string? iconColorHex, int size)
         {
-            var geometry = Workspace1C.Converters.IconKeyToGeometryConverter.ResolveGeometry(iconKey);
+            var geometryKey = Workspace1C.Services.UtilitiesMenuCatalog.WpfIconGeometryKey(iconKey);
+            if (string.IsNullOrEmpty(geometryKey))
+                geometryKey = iconKey;
+            var geometry = Workspace1C.Converters.IconKeyToGeometryConverter.ResolveGeometry(geometryKey);
             if (geometry is null || geometry.IsEmpty())
                 return GetTrayIcon(TrayIconKind.Group);
 

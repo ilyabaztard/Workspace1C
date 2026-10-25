@@ -163,6 +163,64 @@ public sealed class TrayMenuEditorViewModelTests
         Assert.Equal("Новое имя", group.Node.CustomTitle);
     }
 
+    [Fact]
+    public void SaveUserGroup_IconKeyAndColor_RoundTripThroughJson()
+    {
+        // issue #62 (последний комментарий 7OH: «выбор до трея не доходит»): ключ и цвет
+        // выбранной иконки обязаны доезжать до JSON (tray_menu_layout.json) и обратно —
+        // иначе построитель меню получал бы группу без иконки.
+        using var tmp = TempDir();
+        var store = new TrayMenuLayoutStore(directoryOverride: tmp.Path);
+        var vm = new TrayMenuEditorViewModel(store);
+        var icon = vm.CatalogIcons.First();
+
+        vm.AddGroupCommand.Execute(new TrayMenuGroupEditParams("Группа с иконкой", icon.Key));
+        var group = vm.SelectedItem!;
+        Assert.Equal(icon.Key, group.Node.IconKey);
+        Assert.Equal(icon.Color, group.Node.IconColor);
+        vm.SaveCommand.Execute(null);
+
+        // Прямой round-trip хранилища (файл JSON → NormalizeLayout → Load).
+        var layout = store.Load()!;
+        var storedGroup = layout.Root.First(n => n.BlockKind == TrayMenuBlockKind.UserGroup);
+        Assert.Equal(icon.Key, storedGroup.IconKey);
+        Assert.Equal(icon.Color, storedGroup.IconColor);
+
+        // Построитель доносит пару до адаптеров меню.
+        var items = new TrayMenuBuilder(_ => string.Empty).Build(layout);
+        Assert.Contains(items, i => i.IconKey == icon.Key && i.IconColor == icon.Color);
+
+        // Переоткрытие редактора показывает ту же иконку.
+        var reloaded = new TrayMenuEditorViewModel(store);
+        var reloadedGroup = reloaded.Roots.First(r => r.Node.BlockKind == TrayMenuBlockKind.UserGroup);
+        Assert.Equal(icon.Key, reloadedGroup.Node.IconKey);
+        Assert.Equal(icon.Color, reloadedGroup.Node.IconColor);
+    }
+
+    [Fact]
+    public void EditGroup_ChangesUserGroupIcon_AndPersistsAfterSave()
+    {
+        // Смена иконки при «Переименовать» сохраняется в JSON, а не только в памяти.
+        using var tmp = TempDir();
+        var store = new TrayMenuLayoutStore(directoryOverride: tmp.Path);
+        var vm = new TrayMenuEditorViewModel(store);
+        var first = vm.CatalogIcons.First();
+        var second = vm.CatalogIcons.Last();
+        Assert.NotEqual(first.Key, second.Key);
+
+        vm.AddGroupCommand.Execute(new TrayMenuGroupEditParams("Группа", first.Key));
+        var group = vm.SelectedItem!;
+        vm.EditGroupCommand.Execute(new TrayMenuGroupEditParams("Группа", second.Key));
+        Assert.Equal(second.Key, group.Node.IconKey);
+        Assert.Equal(second.Color, group.Node.IconColor);
+        vm.SaveCommand.Execute(null);
+
+        var reloaded = new TrayMenuEditorViewModel(store);
+        var reloadedGroup = reloaded.Roots.First(r => r.Node.BlockKind == TrayMenuBlockKind.UserGroup);
+        Assert.Equal(second.Key, reloadedGroup.Node.IconKey);
+        Assert.Equal(second.Color, reloadedGroup.Node.IconColor);
+    }
+
     /// <summary>Временный каталог, удаляемый при освобождении.</summary>
     private static TempDirectory TempDir() => new();
 

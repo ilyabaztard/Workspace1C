@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using Workspace1C.Converters;
 using Workspace1C.Models;
 using Workspace1C.Services;
 using Workspace1C.ViewModels;
@@ -44,19 +43,64 @@ public sealed class TrayMenuIconCatalogTests
     }
 
     [Fact]
-    public void UtilitiesCatalog_HasMoreThanLegacyFive_AndKeysResolveToGeometry()
+    public void UtilitiesCatalog_HasMoreThanLegacyFive_AndEveryKeyResolvesToGeometryInBothDictionaries()
     {
-        // Каталог «Утилит» больше прежних 5 иконок трея; каждый ключ резолвится в геометрию
-        // активного набора иконок (иначе в трее показывалась бы «совсем другая» иконка).
+        // Каталог «Утилит» больше прежних 5 иконок трея; каждый ключ отображается на парный
+        // ключ геометрии Icon* (UtilitiesMenuCatalog.WpfIconGeometryKey), который присутствует
+        // в ОБОИХ базовых словарях — Icons.xaml (WPF) и Icons.axaml (Avalonia). Если бы ключа
+        // не было, резолв уходил бы в запасную «папку» — в трее и превью рисовалась бы
+        // «совсем другая» иконка (issue #62, последний комментарий 7OH).
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Themes", "Icons.xaml"));
+        var axaml = ReadProjectFile(Path.Combine("Workspace1C", "Themes", "Icons.axaml"));
         var catalog = UtilitiesMenuEditorViewModel.BuildCatalogIcons();
 
         Assert.True(catalog.Count > 5, $"Каталог иконок должен быть больше прежних 5 (реально: {catalog.Count})");
 
         foreach (var option in catalog)
         {
-            Assert.NotNull(IconKeyToGeometryConverter.ResolveGeometry(option.Key));
+            var geometryKey = UtilitiesMenuCatalog.WpfIconGeometryKey(option.Key);
+            Assert.False(string.IsNullOrEmpty(geometryKey),
+                $"Ключ каталога {option.Key} не отображается на ключ геометрии Icon*");
+            Assert.Contains("x:Key=\"" + geometryKey + "\"", xaml, StringComparison.Ordinal);
+            Assert.Contains("x:Key=\"" + geometryKey + "\"", axaml, StringComparison.Ordinal);
             Assert.StartsWith("#", option.Color);
         }
+    }
+
+    [Fact]
+    public void LegacyTrayGroupIconKeys_StillMapToGeometry()
+    {
+        // Совместимость с tray_menu_layout.json, сохранёнными до единого каталога «Утилит»
+        // (1.0.0.45–1.0.0.73): старые PackIcon-ключи групп продолжают давать реальную
+        // геометрию, а не запасную «папку».
+        Assert.Equal("IconFolder", UtilitiesMenuCatalog.WpfIconGeometryKey("Folder"));
+        Assert.Equal("IconDatabase", UtilitiesMenuCatalog.WpfIconGeometryKey("Database"));
+        Assert.Equal("IconStar", UtilitiesMenuCatalog.WpfIconGeometryKey("Star"));
+        Assert.Equal("IconSettings", UtilitiesMenuCatalog.WpfIconGeometryKey("Settings"));
+        Assert.Equal("IconServices", UtilitiesMenuCatalog.WpfIconGeometryKey("Services"));
+        Assert.Equal("IconExitToApp", UtilitiesMenuCatalog.WpfIconGeometryKey("ExitToApp"));
+    }
+
+    [Fact]
+    public void EditorPreviews_UseApplicationGeometry_SharedWithTray()
+    {
+        // Превью редактора и диалога иконок обязано рисовать ТУ ЖЕ геометрию, что применяет
+        // адаптер трея (IconKeyToGeometryConverter), а не MaterialDesign PackIcon — иначе
+        // выбранная иконка «менялась бы по дороге» (issue #62).
+        var trayEditorXaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "TrayMenuEditorWindow.xaml"));
+        Assert.Contains("conv:IconKeyToGeometryConverter x:Key=\"IconKeyToGeometry\"", trayEditorXaml, StringComparison.Ordinal);
+        Assert.Contains("Data=\"{Binding DisplayIconKey, Converter={StaticResource IconKeyToGeometry}}\"", trayEditorXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PackIconKindConverter", trayEditorXaml);
+
+        var groupDialogXaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "UtilitiesGroupEditWindow.xaml"));
+        Assert.Contains("conv:IconKeyToGeometryConverter x:Key=\"IconKeyToGeometry\"", groupDialogXaml, StringComparison.Ordinal);
+        Assert.Contains("Data=\"{Binding Key, Converter={StaticResource IconKeyToGeometry}}\"", groupDialogXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PackIconKindConverter", groupDialogXaml);
+
+        // Avalonia: ключи превью проходят тот же маппинг каталога (иначе IconHelper
+        // резолвил бы PackIcon-имя в запасную «папку»).
+        var avalonia = ReadProjectFile(Path.Combine("Workspace1C", "Views", "TrayMenuEditorWindow.Avalonia.cs"));
+        Assert.Contains("UtilitiesMenuCatalog.WpfIconGeometryKey", avalonia, StringComparison.Ordinal);
     }
 
     [Fact]

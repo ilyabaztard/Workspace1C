@@ -130,9 +130,11 @@ public sealed class TrayMenuBuilder
     /// <summary>
     /// Отпечаток компоновки для «ленивой» пересборки меню (Avalonia
     /// <c>RefreshTrayMenu</c>): строка, однозначно отражающая структуру
-    /// верхнего уровня (виды пунктов и блоков). Если пользователь изменил
-    /// компоновку в редакторе или настройки («Правка структуры») сменились —
-    /// отпечаток меняется, и меню пересобирается.
+    /// верхнего уровня (виды пунктов и блоков), а также ключ/цвет иконки
+    /// пользовательских групп (issue #62). Если пользователь изменил
+    /// компоновку в редакторе — в том числе только иконку группы, — или
+    /// настройки («Правка структуры») сменились, отпечаток меняется,
+    /// и меню пересобирается.
     /// </summary>
     public static string LayoutSignature(TrayMenuLayout? layout)
     {
@@ -143,6 +145,7 @@ public sealed class TrayMenuBuilder
             sb.Append((int)item.Kind).Append(':');
             if (item.Block is { } block)
                 sb.Append((int)block);
+            sb.Append('~').Append(item.IconKey).Append('~').Append(item.IconColor);
             sb.Append(';');
         }
         return sb.ToString();

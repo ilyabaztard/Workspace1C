@@ -88,10 +88,14 @@ namespace Workspace1C
             _vm.UnGroupSelected();
         }
 
-        /// <summary>«Сохранить»: сохраняет компоновку и закрывает окно (как «Готово» других редакторов).</summary>
+        /// <summary>«Сохранить»: сохраняет компоновку и закрывает окно (как «Готово» других редакторов).
+        /// Сразу после сохранения пересобираем меню трея главного окна — выбранная иконка группы
+        /// применяется без перезапуска и без ожидания закрытия всего окна настроек (issue #62).</summary>
         private void OnOk_Click(object sender, RoutedEventArgs e)
         {
             _vm.SaveCommand.Execute(null);
+            if (Application.Current?.MainWindow is MainWindow main)
+                main.RebuildTrayMenuNow();
             DialogResult = true;
         }
 

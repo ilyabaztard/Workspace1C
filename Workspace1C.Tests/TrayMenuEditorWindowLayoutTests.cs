@@ -108,6 +108,31 @@ public sealed class TrayMenuEditorWindowLayoutTests
     }
 
     [Fact]
+    public void EditorSave_RebuildsTrayMenu_OnBothPlatforms()
+    {
+        // issue #62 (последний комментарий 7OH — иконка не меняется в трее): после
+        // «Сохранить» в редакторе меню трея пересобирается БЕЗ ожидания закрытия окна
+        // настроек и БЕЗ перезапуска приложения.
+        var wpf = ReadProjectFile(Path.Combine("Workspace1C", "Views", "TrayMenuEditorWindow.xaml.cs"));
+        Assert.Contains("main.RebuildTrayMenuNow()", wpf, StringComparison.Ordinal);
+
+        var avalonia = ReadProjectFile(Path.Combine("Workspace1C", "Views", "TrayMenuEditorWindow.Avalonia.cs"));
+        Assert.Contains("main.RefreshTrayMenuAfterSettings()", avalonia, StringComparison.Ordinal);
+
+        // Avalonia: пересборка после настроек форсируется сбросом отпечатка состава —
+        // смена ТОЛЬКО иконки не меняет структуру, и RefreshTrayMenu иначе отбросил бы её.
+        var avaloniaTray = ReadProjectFile(Path.Combine("Workspace1C", "Views", "MainWindow.Avalonia.Tray.cs"));
+        Assert.Contains("RefreshTrayMenuAfterSettings()", avaloniaTray, StringComparison.Ordinal);
+        Assert.Contains("_traySignature = null", avaloniaTray, StringComparison.Ordinal);
+
+        // Отпечаток компоновки учитывает ключ/цвет иконки группы — «ленивая» пересборка
+        // реагирует и на смену иконки (TrayMenuBuilder.LayoutSignature).
+        var builder = ReadProjectFile(Path.Combine("Workspace1C", "Services", "TrayMenuBuilder.cs"));
+        Assert.Contains("item.IconKey", builder, StringComparison.Ordinal);
+        Assert.Contains("item.IconColor", builder, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TrayMenu_LocalizationKeys_SymmetricInRuAndEn()
     {
         // issue #62: наборы ключей TrayMenu.* и Settings.TrayMenu.* ru/en совпадают

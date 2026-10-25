@@ -121,15 +121,41 @@ namespace Workspace1C
             return grid;
         }
 
-        /// <summary>Строка иконки: превью слева + подпись.</summary>
+        /// <summary>Строка иконки: превью слева + подпись. Превью = та же геометрия,
+        /// что применяют меню «Утилиты» и трей (issue #62): PackIcon-ключ каталога —
+        /// через UtilitiesMenuCatalog.WpfIconGeometryKey на парный ключ Icon*, иначе
+        /// резолв уходил бы в запасную «папку». Цвет — выбранного варианта каталога.</summary>
         private Control BuildIconRow(UtilitiesIconOption option)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            var icon = IconHelper.MakeIcon(option.Key, 16, "TextPrimaryBrush");
-            if (icon is not null)
-                row.Children.Add(icon);
+            var geometryKey = Services.UtilitiesMenuCatalog.WpfIconGeometryKey(option.Key);
+            if (string.IsNullOrEmpty(geometryKey))
+                geometryKey = option.Key;
+            Control icon;
+            if (TryParseColor(option.Color) is { } brush)
+                icon = IconHelper.MakeIcon(geometryKey, 16, brush);
+            else
+                icon = IconHelper.MakeIcon(geometryKey, 16, "TextPrimaryBrush");
+            row.Children.Add(icon);
             row.Children.Add(new TextBlock { Text = option.Label, VerticalAlignment = VerticalAlignment.Center });
             return row;
+        }
+
+        /// <summary>Разбирает цвет #RRGGBB в кисть (невалидный — null, рисуем кистью темы).</summary>
+        private static IBrush? TryParseColor(string? hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex))
+                return null;
+            try
+            {
+                if (!Avalonia.Media.Color.TryParse(hex!.Trim(), out var color))
+                    return null;
+                return new SolidColorBrush(color);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void UpdateOkEnabled()

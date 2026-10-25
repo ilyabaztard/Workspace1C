@@ -511,9 +511,11 @@ public sealed class TrayMenuNodeItem : ViewModelBase
     /// <summary>Эффективный стиль блока (дефолт по виду блока, если явный не задан).</summary>
     public TrayMenuBlockStyle EffectiveStyle => Node.Style ?? TrayMenuLayouts.DefaultStyle(Node.BlockKind);
 
-    /// <summary>Ключ иконки для отображения в дереве (пусто — без иконки).</summary>
+    /// <summary>Ключ иконки для отображения в дереве (пусто — без иконки).
+    /// У разделителя — ключ геометрии «IconMinus» (есть в Icons.xaml/Icons.axaml,
+    /// в отличие от PackIcon-имени «Minus», которое резолвилось бы в папку).</summary>
     public string DisplayIconKey =>
-        IsSeparator ? "Minus" : (Node.IconKey ?? string.Empty);
+        IsSeparator ? "IconMinus" : (Node.IconKey ?? string.Empty);
 
     /// <summary>Цвет иконки (#RRGGBB) для отображения в дереве.</summary>
     public string DisplayIconColor => IsSeparator ? "#9CA3AF" : (Node.IconColor ?? "#9CA3AF");
