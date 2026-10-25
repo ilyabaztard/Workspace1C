@@ -319,8 +319,6 @@ public partial class MainWindow
                 item.Command = _viewModel.DbmsBackupCommand; break;
             case UtilitiesMenuCommandKind.ServerAlerts:
                 item.Command = _viewModel.ServerAlertsCommand; break;
-            case UtilitiesMenuCommandKind.WebPublish:
-                item.Command = _viewModel.WebPublishCommand; break;
             case UtilitiesMenuCommandKind.TechLog:
                 item.Command = _viewModel.TechLogCommand; break;
             case UtilitiesMenuCommandKind.GitVersioning:

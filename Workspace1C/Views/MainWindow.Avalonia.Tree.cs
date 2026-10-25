@@ -1952,8 +1952,6 @@ namespace Workspace1C
                     item.Command = _vm!.DbmsBackupCommand; break;
                 case UtilitiesMenuCommandKind.ServerAlerts:
                     item.Command = _vm!.ServerAlertsCommand; break;
-                case UtilitiesMenuCommandKind.WebPublish:
-                    item.Command = _vm!.WebPublishCommand; break;
                 case UtilitiesMenuCommandKind.TechLog:
                     item.Command = _vm!.TechLogCommand; break;
                 case UtilitiesMenuCommandKind.GitVersioning:
@@ -2278,6 +2276,8 @@ namespace Workspace1C
                     item.Command = _vm!.CloneInfobaseCommand; break;
                 case ContextMenuCommandKind.CheckIntegrity:
                     item.Command = _vm!.CheckIntegrityCommand; break;
+                case ContextMenuCommandKind.WebPublish:
+                    item.Command = _vm!.WebPublishCommand; break;
                 case ContextMenuCommandKind.LaunchHistory:
                     break; // команды нет на Linux (фильтр CreateRowAvaloniaItem)
                 case ContextMenuCommandKind.DumpToDt:

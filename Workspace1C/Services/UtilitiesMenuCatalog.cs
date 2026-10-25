@@ -132,8 +132,6 @@ public enum UtilitiesMenuCommandKind
     /// <summary>Технологический журнал (1.0.0.69).</summary>
     TechLog,
 
-    /// <summary>Публикация на веб-сервере (1.0.0.69).</summary>
-    WebPublish,
 
     /// <summary>Мониторинг и оповещения (1.0.0.69).</summary>
     ServerAlerts,
@@ -460,10 +458,6 @@ public static class UtilitiesMenuCatalog
             new("TechLog", "TechLog.MenuItem", GroupOperations,
                 "IconMonitoring", "IconMonitoring", "#0EA5E9", UtilitiesMenuCommandKind.TechLog,
                 isNew: true),
-            // «Публикация на веб-сервере (1.0.0.69)».
-            new("WebPublish", "WebPublish.MenuItem", GroupOperations,
-                "IconWeb", "IconWeb", "#22C55E", UtilitiesMenuCommandKind.WebPublish,
-                isNew: true),
             // «Мониторинг и оповещения (1.0.0.69)».
             new("ServerAlerts", "Alerts.MenuItem", GroupOperations,
                 "IconMonitoring", "IconMonitoring", "#EF4444", UtilitiesMenuCommandKind.ServerAlerts,
@@ -585,7 +579,6 @@ public static class UtilitiesMenuLayouts
                 Item("ConfigExtensions"),
                 Item("GitVersioning"),
                 Item("TechLog"),
-                Item("WebPublish"),
                 Item("ServerAlerts"),
                 Item("DbmsBackup"),
                 Item("TelegramBot"),

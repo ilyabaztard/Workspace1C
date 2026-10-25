@@ -64,7 +64,8 @@ public sealed class ContextMenuLayoutStoreTests : IDisposable
         Assert.Equal(ContextMenuCatalog.GroupUpdateAndLink, restored.Root[12].GroupId);
         Assert.Equal(4, restored.Root[12].Children.Count);
         Assert.Equal(ContextMenuCatalog.GroupAdministration, restored.Root[13].GroupId);
-        Assert.Equal(10, restored.Root[13].Children.Count);
+        // «Публикация на веб-сервере» добавлена в «Администрирование» (issue #63).
+        Assert.Equal(11, restored.Root[13].Children.Count);
     }
 
     [Fact]

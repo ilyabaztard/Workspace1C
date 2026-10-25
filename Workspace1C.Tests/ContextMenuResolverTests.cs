@@ -92,14 +92,16 @@ public sealed class ContextMenuResolverTests
     [Fact]
     public void CollectNewItems_LayoutWithoutNewItem_ReturnsIt()
     {
-        // Пользовательская компоновка без пункта-«новинки»: он попадает в «Новинки».
+        // Пользовательская компоновка без пунктов-«новинок»: они попадают в «Новинки».
         var layout = new ContextMenuLayout
         {
             Root = new List<ContextMenuNode> { ContextMenuLayouts.Item("LaunchEnterprise") }
         };
         var newItems = ContextMenuResolver.CollectNewItems(layout);
-        var news = Assert.Single(newItems);
-        Assert.Equal("CreateDesktopShortcut", news.Id);
+        var ids = newItems.Select(i => i.Id).ToHashSet();
+        Assert.Contains("CreateDesktopShortcut", ids);
+        // «Публикация на веб-сервере» — новая в контекстном меню (перенос из «Утилиты», #63).
+        Assert.Contains("WebPublish", ids);
     }
 
     [Fact]
@@ -201,7 +203,9 @@ public sealed class ContextMenuResolverTests
         var group = result.Root[0];
         Assert.Equal(ContextMenuCatalog.GroupNewItems, group.GroupId);
         Assert.True(group.Visible);
-        Assert.Equal(2, group.Children.Count);
+        // «WebPublish» — неразмещённая новинка (перенесена из «Утилиты», #63) —
+        // добавляется в существующую группу «Новинки».
+        Assert.Equal(3, group.Children.Count);
     }
 
     [Fact]

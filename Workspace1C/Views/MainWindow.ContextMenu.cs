@@ -292,6 +292,8 @@ public partial class MainWindow
                 item.Command = _viewModel.CloneInfobaseCommand; break;
             case ContextMenuCommandKind.CheckIntegrity:
                 item.Command = _viewModel.CheckIntegrityCommand; break;
+            case ContextMenuCommandKind.WebPublish:
+                item.Command = _viewModel.WebPublishCommand; break;
             case ContextMenuCommandKind.LaunchHistory:
                 item.Command = _viewModel.ShowLaunchHistoryCommand; break;
             case ContextMenuCommandKind.DumpToDt:

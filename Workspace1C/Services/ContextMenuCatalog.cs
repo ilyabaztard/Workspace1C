@@ -61,6 +61,9 @@ public enum ContextMenuCommandKind
     /// <summary>Проверка целостности файловой ИБ (chdbfl).</summary>
     CheckIntegrity,
 
+    /// <summary>Публикация на веб-сервере (перенесена из «Утилиты», issue #63).</summary>
+    WebPublish,
+
     /// <summary>История запусков базы.</summary>
     LaunchHistory,
 
@@ -325,6 +328,10 @@ public static class ContextMenuCatalog
             // Администрирование ИБ (Этап 6, функция №29): проверка целостности (chdbfl).
             new("CheckIntegrity", "Admin.CheckIntegrity", GroupAdministration,
                 "DatabaseCheck", "IconDatabase", "#10B981", ContextMenuCommandKind.CheckIntegrity, "HotkeyCheckIntegrity"),
+            // Публикация на веб-сервере (перенесена из «Утилиты» в контекстное меню базы — issue #63).
+            new("WebPublish", "WebPublish.MenuItem", GroupAdministration,
+                "IconWeb", "IconWeb", "#22C55E", ContextMenuCommandKind.WebPublish,
+                isNew: true),
             new("LaunchHistory", "Main.LaunchHistory", GroupAdministration,
                 "History", "IconHistory", "#8B5CF6", ContextMenuCommandKind.LaunchHistory),
 
@@ -420,6 +427,7 @@ public static class ContextMenuLayouts
                 Item("CloneBase"),
                 Item("CheckIntegrity"),
                 Separator(),
+                Item("WebPublish"),
                 Item("LaunchHistory")
             }),
             Group(ContextMenuCatalog.GroupBackup, new List<ContextMenuNode>

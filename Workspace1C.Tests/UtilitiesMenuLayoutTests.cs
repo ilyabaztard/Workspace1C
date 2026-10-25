@@ -77,45 +77,46 @@ public sealed class UtilitiesMenuLayoutTests
         AssertSeparator(layout.Root[13]);
         AssertGroup(layout.Root[14], UtilitiesMenuCatalog.GroupOperations);
         var opsChildren = layout.Root[14].Children;
-        Assert.Equal(30, opsChildren.Count);
+        Assert.Equal(29, opsChildren.Count);
         AssertItem(opsChildren[0], "ConfigDiff");
         AssertItem(opsChildren[1], "MetadataExplorer");
-        // Новые функции 1.0.0.69–1.0.0.69 — сразу после «Обозревателя метаданных».
+        // Новые функции 1.0.0.69–1.0.0.71 — сразу после «Обозревателя метаданных».
         AssertItem(opsChildren[2], "EventLog");
         AssertItem(opsChildren[3], "ConfigExtensions");
         AssertItem(opsChildren[4], "GitVersioning");
         AssertItem(opsChildren[5], "TechLog");
-        AssertItem(opsChildren[6], "WebPublish");
-        AssertItem(opsChildren[7], "ServerAlerts");
-        AssertItem(opsChildren[8], "DbmsBackup");
-        AssertItem(opsChildren[9], "TelegramBot");
-        AssertItem(opsChildren[10], "SharedLists");
-        AssertSeparator(opsChildren[11]);
-        AssertItem(opsChildren[12], "RepositoryBatchUpdate");
-        AssertItem(opsChildren[13], "RepositoryBrowser");
-        AssertSeparator(opsChildren[14]);
-        AssertItem(opsChildren[15], "ExportCsv");
-        AssertItem(opsChildren[16], "ExportHtml");
-        AssertItem(opsChildren[17], "ExportJson");
-        AssertItem(opsChildren[18], "ImportJson");
+        // «Публикация на веб-сервере» перенесена в контекстное меню базы (issue #63).
+        AssertItem(opsChildren[6], "ServerAlerts");
+        AssertItem(opsChildren[7], "DbmsBackup");
+        AssertItem(opsChildren[8], "TelegramBot");
+        AssertItem(opsChildren[9], "SharedLists");
+        AssertSeparator(opsChildren[10]);
+        AssertItem(opsChildren[11], "RepositoryBatchUpdate");
+        AssertItem(opsChildren[12], "RepositoryBrowser");
+        AssertSeparator(opsChildren[13]);
+        AssertItem(opsChildren[14], "ExportCsv");
+        AssertItem(opsChildren[15], "ExportHtml");
+        AssertItem(opsChildren[16], "ExportJson");
+        AssertItem(opsChildren[17], "ImportJson");
         // Экспорт/импорт в произвольный файл *.v8i (issue #29): те же операции,
         // что в настройках (вкладка «Базы» → «Список баз»).
-        AssertItem(opsChildren[19], "ExportV8iFile");
-        AssertItem(opsChildren[20], "ImportV8iFile");
+        AssertItem(opsChildren[18], "ExportV8iFile");
+        AssertItem(opsChildren[19], "ImportV8iFile");
         // «Импорт из кластера 1С» и «Миграция между кластерами 1С» (issue #41):
         // отдельные пункты — миграция вынесена в самостоятельное окно.
-        AssertItem(opsChildren[21], "ClusterImport");
-        AssertItem(opsChildren[22], "ClusterMigration");
-        AssertSeparator(opsChildren[23]);
-        AssertItem(opsChildren[24], "ProcessInspector");
-        AssertItem(opsChildren[25], "KillOneCProcesses");
-        AssertSeparator(opsChildren[26]);
-        AssertItem(opsChildren[27], "ConnectionReplace");
-        AssertItem(opsChildren[28], "UndoConnectionReplace");
+        AssertItem(opsChildren[20], "ClusterImport");
+        AssertItem(opsChildren[21], "ClusterMigration");
+        AssertSeparator(opsChildren[22]);
+        AssertItem(opsChildren[23], "ProcessInspector");
+        AssertItem(opsChildren[24], "KillOneCProcesses");
+        AssertSeparator(opsChildren[25]);
+        AssertItem(opsChildren[26], "ConnectionReplace");
+        AssertItem(opsChildren[27], "UndoConnectionReplace");
         // «Удаление отсутствующих файловых баз» — сразу после «Отмены замены» (issue #66:
         // пункт «Блокировка сеансов ИБ» из меню «Утилиты» удалён вместе с разделителями;
-        // функция блокировки осталась в контекстном меню базы и на хоткее Ctrl+Alt+L).
-        AssertItem(opsChildren[29], "RemoveMissingFileBases");
+        // функция блокировки осталась в контекстном меню базы и на хоткее Ctrl+Alt+L;
+        // «Публикация на веб-сервере» ушла в контекстное меню — issue #63).
+        AssertItem(opsChildren[28], "RemoveMissingFileBases");
 
         // ---- «Проверить обновления» в конце, с разделителем ----
         AssertSeparator(layout.Root[15]);
