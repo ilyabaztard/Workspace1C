@@ -5,8 +5,17 @@ using System.IO;
 namespace Workspace1C.Services;
 
 /// <summary>
-/// Разбор директив <c>Include</c>/<c>IncludeOptional</c> из текста конфигурации Apache
-/// (issue #63). Чистая функция без I/O — тестируется на обеих платформах.
+/// Разбор директив <c>Include</c>/<c>IncludeOptional</c>, <c>Define</c>, <c>DocumentRoot</c>
+/// и <c>Listen</c> из текста конфигурации Apache (issue #63). Чистая функция без I/O —
+/// тестируется на обеих платформах.
+/// <para>
+/// С версии 1.0.0.73 поддерживаются директивы <c>Define</c> и подстановка переменных
+/// <c>${VAR}</c> в значениях директив (типовые конфиги задают пути через
+/// <c>Define SRVROOT "c:/Apache/Apache24"</c>, а порт — через <c>Define OneCPort 8027</c>):
+/// <see cref="ParseDefines"/> собирает словарь, <see cref="ExpandVariables"/> раскрывает
+/// его в значении <c>DocumentRoot</c>/<c>Listen</c>/<c>Include</c> — иначе каталог
+/// публикации и порт оставались бы с литералами <c>${…}</c> (замечание @7OH в issue #63).
+/// </para>
 /// </summary>
 public static class ApacheConfIncludeParser
 {
@@ -15,13 +24,17 @@ public static class ApacheConfIncludeParser
     /// Относительные пути резолвятся против каталога конфигурации
     /// <paramref name="confDirectory"/>; цели с wildcard «*» сохраняются как есть
     /// (обозначают каталог/маску). Комментарии (#) и прочие директивы игнорируются.
+    /// Значения раскрываются по переменным <c>Define</c> (issue #63); готовый словарь
+    /// можно передать в <paramref name="defines"/> (иначе вычисляется из текста).
     /// </summary>
-    public static IReadOnlyList<string> ParseIncludeTargets(string confText, string confDirectory)
+    public static IReadOnlyList<string> ParseIncludeTargets(string confText, string confDirectory,
+        IReadOnlyDictionary<string, string>? defines = null)
     {
         var result = new List<string>();
         if (string.IsNullOrWhiteSpace(confText))
             return result;
 
+        var vars = defines ?? ParseDefines(confText);
         confDirectory = string.IsNullOrWhiteSpace(confDirectory) ? "." : confDirectory;
         var lines = confText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -39,7 +52,7 @@ public static class ApacheConfIncludeParser
             if (!IsInclude(directive))
                 continue;
 
-            var rest = TrimQuotes(line.Substring(separator).Trim());
+            var rest = ExpandVariables(TrimQuotes(line.Substring(separator).Trim()), vars);
             if (string.IsNullOrWhiteSpace(rest))
                 continue;
 
@@ -53,6 +66,79 @@ public static class ApacheConfIncludeParser
     public static bool IsInclude(string directive)
         => string.Equals(directive, "Include", StringComparison.OrdinalIgnoreCase)
            || string.Equals(directive, "IncludeOptional", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Директивы <c>Define NAME value</c> / <c>Define NAME "value"</c> из текста конфига
+    /// (issue #63) как словарь (регистронезависимый по имени). Позднее определение
+    /// перезаписывает более раннее; значение снимается с кавычек. Регистр директивы
+    /// не важен; строки без значения и прочие директивы игнорируются.
+    /// <para>Apache разрешает варианты имени в <c>${Name}</c>, <c>${NAME}</c> и т.п. —
+    /// словарь сравнивает ключи без учёта регистра, раскрытие работает для любого вида.</para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ParseDefines(string? confText)
+    {
+        var defines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(confText))
+            return defines;
+
+        foreach (var raw in SplitLines(confText))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line[0] == '#')
+                continue;
+            var separator = line.IndexOfAny(new[] { ' ', '\t' });
+            if (separator <= 0)
+                continue;
+            var directive = line.Substring(0, separator);
+            if (!string.Equals(directive, "Define", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var rest = TrimQuotes(line.Substring(separator).Trim());
+            if (string.IsNullOrWhiteSpace(rest))
+                continue;
+            var nameSeparator = rest.IndexOfAny(new[] { ' ', '\t' });
+            var name = nameSeparator > 0 ? rest[..nameSeparator] : rest;
+            if (name.Length == 0)
+                continue;
+            var value = nameSeparator > 0 ? TrimQuotes(rest[(nameSeparator + 1)..].Trim()) : string.Empty;
+            defines[name] = value;
+        }
+
+        return defines;
+    }
+
+    /// <summary>
+    /// Раскрывает переменные <c>${Name}</c> в тексте по словарю <see cref="ParseDefines"/>
+    /// (issue #63). Имя переменной ищется регистронезависимо. Неизвестная переменная
+    /// остаётся в строке как есть (не роняем разбор); без словаря/переменных текст
+    /// возвращается без изменений.
+    /// </summary>
+    public static string ExpandVariables(string? text, IReadOnlyDictionary<string, string>? defines)
+    {
+        if (string.IsNullOrEmpty(text) || defines is null || defines.Count == 0 || text!.IndexOf("${", StringComparison.Ordinal) < 0)
+            return text ?? string.Empty;
+
+        var result = new System.Text.StringBuilder(text.Length + 32);
+        for (var i = 0; i < text!.Length; i++)
+        {
+            if (text[i] == '$' && i + 1 < text.Length && text[i + 1] == '{')
+            {
+                var closing = text.IndexOf('}', i + 2);
+                if (closing > i + 2)
+                {
+                    var name = text.Substring(i + 2, closing - i - 2);
+                    if (defines.TryGetValue(name, out var value))
+                    {
+                        result.Append(value ?? string.Empty);
+                        i = closing;
+                        continue;
+                    }
+                }
+            }
+            result.Append(text[i]);
+        }
+        return result.ToString();
+    }
 
     /// <summary>
     /// Объединяет базовый каталог и относительный путь. POSIX-каталог (начинается
@@ -74,11 +160,13 @@ public static class ApacheConfIncludeParser
     /// <paramref name="resolveBase"/> (обычно ServerRoot или каталог конфига);
     /// <c>null</c> — директива не найдена.
     /// </summary>
-    public static string? ParseDocumentRoot(string? confText, string? resolveBase)
+    public static string? ParseDocumentRoot(string? confText, string? resolveBase,
+        IReadOnlyDictionary<string, string>? defines = null)
     {
         if (string.IsNullOrWhiteSpace(confText))
             return null;
 
+        var vars = defines ?? ParseDefines(confText);
         foreach (var raw in SplitLines(confText))
         {
             var line = raw.Trim();
@@ -90,7 +178,7 @@ public static class ApacheConfIncludeParser
             var directive = line.Substring(0, separator);
             if (!string.Equals(directive, "DocumentRoot", StringComparison.OrdinalIgnoreCase))
                 continue;
-            var target = TrimQuotes(line.Substring(separator).Trim());
+            var target = ExpandVariables(TrimQuotes(line.Substring(separator).Trim()), vars);
             if (string.IsNullOrWhiteSpace(target))
                 continue;
             return string.IsNullOrWhiteSpace(resolveBase) ? target : Resolve(target, resolveBase);
@@ -104,12 +192,14 @@ public static class ApacheConfIncludeParser
     /// «Listen 80», «Listen 0.0.0.0:80», «Listen [::]:8080». Пустой результат — конфиг без
     /// Listen (порт 80 по умолчанию).
     /// </summary>
-    public static IReadOnlyList<int> ParseListenPorts(string? confText)
+    public static IReadOnlyList<int> ParseListenPorts(string? confText,
+        IReadOnlyDictionary<string, string>? defines = null)
     {
         var result = new List<int>();
         if (string.IsNullOrWhiteSpace(confText))
             return result;
 
+        var vars = defines ?? ParseDefines(confText);
         var seen = new HashSet<int>();
         foreach (var raw in SplitLines(confText))
         {
@@ -122,7 +212,7 @@ public static class ApacheConfIncludeParser
             var directive = line.Substring(0, separator);
             if (!string.Equals(directive, "Listen", StringComparison.OrdinalIgnoreCase))
                 continue;
-            var value = TrimQuotes(line.Substring(separator).Trim());
+            var value = ExpandVariables(TrimQuotes(line.Substring(separator).Trim()), vars);
             if (string.IsNullOrEmpty(value))
                 continue;
 

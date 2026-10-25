@@ -117,4 +117,36 @@ Main DocumentRoot: ""/var/www/html""
         Assert.Equal(@"C:\apache\conf\extra\httpd-vhosts.conf", instance.IncludeFiles[0]);
         Assert.Contains(@"C:\apache\conf\extra\sites\*.conf", instance.IncludeDirs);
     }
+
+    [Fact]
+    public void ApacheInstanceDetector_PopulateIncludes_ExpandsDefineVariables_Issue63()
+    {
+        const string conf = """
+        Define SRVROOT "c:/Apache/Apache24"
+        Define OneCPort "8027"
+        DocumentRoot "${SRVROOT}/htdocs/${OneCPort}/demo_27_file"
+        Listen 80
+        Listen 0.0.0.0:${OneCPort}
+        """;
+
+        var instance = new ApacheInstance { ServerRoot = @"C:\apache", ConfPath = @"C:\apache\httpd.conf" };
+        ApacheInstanceDetector.PopulateIncludes(instance, conf, @"C:\apache\conf");
+
+        // Переменные из файла раскрыты («а переменные из файла кто подставлять будет сейчас?»).
+        Assert.Equal(Path.GetFullPath(@"c:\Apache\Apache24\htdocs\8027\demo_27_file"), instance.DocumentRoot);
+        Assert.Contains(8027, instance.ListenPorts);
+        Assert.Contains(80, instance.ListenPorts);
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_PopulateIncludes_WithoutDefines_KeepsDocumentRootAndPort80()
+    {
+        var instance = new ApacheInstance { ServerRoot = @"C:\apache", ConfPath = @"C:\apache\httpd.conf" };
+        ApacheInstanceDetector.PopulateIncludes(instance,
+            "DocumentRoot \"C:/apache/htdocs\"\nListen 80\n",
+            @"C:\apache\conf");
+
+        Assert.Equal(Path.GetFullPath(@"C:\apache\htdocs"), instance.DocumentRoot);
+        Assert.Equal(new[] { 80 }, instance.ListenPorts);
+    }
 }

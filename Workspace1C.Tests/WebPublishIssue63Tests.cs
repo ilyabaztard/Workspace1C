@@ -162,4 +162,50 @@ public sealed class WebPublishIssue63Tests
         Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\htdocs\27\demo_27"), vm.PhysicalDirectory);
         Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
     }
+
+    [Fact]
+    public void ViewModel_PopulatedFromDefineConfig_ResolvesDocumentRootAndPort_Issue63()
+    {
+        // Конфиг с директивами Define: парсер детектора раскрывает ${SRVROOT}/${OneCPort};
+        // VM получает инстанс уже с раскрытыми значениями (замечание 7OH: «а переменные
+        // из файла кто подставлять будет сейчас?», «Порт … так и не подставлен»).
+        const string conf = """
+        Define SRVROOT "c:/Apache/Apache24"
+        Define OneCPort 8027
+        DocumentRoot "${SRVROOT}/htdocs/${OneCPort}/demo_27_file"
+        Listen 0.0.0.0:${OneCPort}
+        """;
+
+        var instance = new ApacheInstance
+        {
+            Id = "httpd27",
+            Name = "Apache 2.4 (httpd-27)",
+            ConfPath = @"C:\Apache\Apache24\conf\httpd.conf",
+            ServerRoot = @"C:\Apache\Apache24",
+            Htdocs = @"C:\Apache\Apache24\htdocs",
+            Kind = WebServerKind.Apache24
+        };
+        ApacheInstanceDetector.PopulateIncludes(instance, conf, @"C:\Apache\Apache24\conf");
+
+        Assert.Equal(Path.GetFullPath(@"c:\Apache\Apache24\htdocs\8027\demo_27_file"), instance.DocumentRoot);
+        Assert.Equal(new[] { 8027 }, instance.ListenPorts);
+
+        var infobase = new Infobase
+        {
+            Name = "Тестовая база",
+            Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+        };
+        var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+        vm.ServerIndex = vm.ServerIndexFor(instance);
+        vm.VirtualDirectory = "demo_27";
+
+        // Регистр диска в конфиге пользователя — строчный («c:/Apache/…»), а в исходном
+        // sibling-тесте — прописной: сравниваем без учёта регистра пути.
+        Assert.True(string.Equals(
+                vm.PhysicalDirectory,
+                Path.GetFullPath(@"c:\Apache\Apache24\htdocs\8027\demo_27_file\demo_27"),
+                System.StringComparison.OrdinalIgnoreCase),
+            $"Физический каталог не совпал: {vm.PhysicalDirectory}");
+        Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+    }
 }

@@ -132,15 +132,23 @@ public static partial class ApacheInstanceDetector
 
     /// <summary>
     /// Читает include-директивы конфига и заполняет <see cref="ApacheInstance.IncludeFiles"/>/
-    /// <see cref="ApacheInstance.IncludeDirs"/> инстанса (разбор по <see cref="ApacheConfIncludeParser"/>).
+    /// <see cref="ApacheInstance.IncludeDirs"/> инстанса (разбор по <see cref="ApacheConfIncludeParser"/>),
+    /// а также точный <see cref="ApacheInstance.DocumentRoot"/> и порты
+    /// <see cref="ApacheInstance.ListenPorts"/>. Директивы <c>Define</c> конфига учитываются
+    /// при раскрытии <c>${VAR}</c> в значениях (issue #63: «а переменные из файла кто
+    /// подставлять будет сейчас?» — иначе DocumentRoot/порт оставались бы с литералами).
     /// </summary>
     public static void PopulateIncludes(ApacheInstance instance, string? confText, string? confDirectory)
     {
         if (instance is null)
             return;
+
+        var text = confText ?? string.Empty;
+        var defines = ApacheConfIncludeParser.ParseDefines(text);
+
         var files = new List<string>();
         var dirs = new List<string>();
-        foreach (var target in ApacheConfIncludeParser.ParseIncludeTargets(confText ?? string.Empty, confDirectory ?? string.Empty))
+        foreach (var target in ApacheConfIncludeParser.ParseIncludeTargets(text, confDirectory ?? string.Empty, defines))
         {
             if (target.Contains('*') || target.Contains('?'))
                 dirs.Add(target);
@@ -155,11 +163,11 @@ public static partial class ApacheInstanceDetector
         if (string.IsNullOrWhiteSpace(instance.DocumentRoot))
         {
             instance.DocumentRoot = ApacheConfIncludeParser.ParseDocumentRoot(
-                confText ?? string.Empty, confDirectory ?? instance.ServerRoot) ?? string.Empty;
+                text, confDirectory ?? instance.ServerRoot, defines) ?? string.Empty;
         }
         if (instance.ListenPorts is null || instance.ListenPorts.Count == 0)
         {
-            instance.ListenPorts = ApacheConfIncludeParser.ParseListenPorts(confText ?? string.Empty);
+            instance.ListenPorts = ApacheConfIncludeParser.ParseListenPorts(text, defines);
         }
     }
 
