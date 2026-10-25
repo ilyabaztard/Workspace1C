@@ -11,6 +11,87 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.75] — 2026-10-25
+
+### Добавлено
+
+- **Подстановки для сценариев: раздельная авторизация и пояснения в диалоге «Выбрать…»
+  (issue #67, Windows и Linux)** — добавлена секция **«Авторизация»** с токенами раздельной
+  авторизации `%enterpriseauth.user%`/`%enterpriseauth.password%`/`%enterpriseauth.mode%` и
+  `%configuratorauth.user%`/`%configuratorauth.password%`/`%configuratorauth.mode%` (канонические
+  и русские алиасы `%авторизацияпредприятия.…%`/`%авторизацияконфигуратора.…%`, плоские
+  `%enterpriseuser%`/`%enterprisepassword%`/`%configuratoruser%`/`%configuratorpassword%`);
+  если раздельная авторизация не задана или дефолтная — токен подставляется пустым
+  (фактически используется авторизация базы/общая)
+  ([`ScriptParameterResolver.cs`](Workspace1C/Services/ScriptParameterResolver.cs),
+  [`ScriptScenarioEditViewModel.cs`](Workspace1C/ViewModels/ScriptScenarioEditViewModel.cs)).
+  В диалоге «Выбрать…» у каждого поля — человекочитаемое пояснение (что означает значение
+  и откуда берётся, в т.ч. для `%connection.user%` при общей авторизации), поиск идёт и по
+  описанию ([`ScriptTokenPickerViewModel.cs`](Workspace1C/ViewModels/ScriptTokenPickerViewModel.cs),
+  окно выбора). Стабилизирован кэш каталогов установленных платформ: устранена гонка
+  параллельного доступа, тест `PlatformVersionCacheTests` больше не флакает
+  ([`PlatformVersionService.cs`](Workspace1C/Services/PlatformVersionService.cs)). Покрыто
+  тестами `ScriptParameterResolverTests`, `ScriptTokenPickerViewModelTests`,
+  `PlatformVersionCacheTests`, `OneCPlatformLocatorPlatformVersionTests`.
+
+### Изменено
+
+- **Меню трея: выбранная иконка пользовательской группы применяется сразу после сохранения
+  (issue #62, Windows и Linux)** — после сохранения в редакторе меню трея меню пересобирается
+  немедленно: `LayoutSignature` теперь учитывает ключ/цвет иконки группы, кэш компоновки
+  редактируется, поэтому иконка доезжает до трея без перезапуска
+  ([`TrayMenuBuilder.cs`](Workspace1C/Services/TrayMenuBuilder.cs),
+  [`MainWindow.Tray.cs`](Workspace1C/Views/MainWindow.Tray.cs),
+  [`MainWindow.Avalonia.Tray.cs`](Workspace1C/Views/MainWindow.Avalonia.Tray.cs)). Исправлен баг
+  «совсем другая иконка»: ключи каталога «Утилит» резолвятся в геометрию через
+  `WpfIconGeometryKey` (PackIcon-имя → парный ключ `Icon*`), а не падают в запасную «папку»
+  ([`IconKeyToGeometryConverter.cs`](Workspace1C/Converters/IconKeyToGeometryConverter.cs),
+  [`UtilitiesMenuCatalog.cs`](Workspace1C/Services/UtilitiesMenuCatalog.cs)); превью редактора
+  показывает ту же геометрию, что применяет адаптер. Покрыто тестами `TrayMenuIconCatalogTests`,
+  `TrayMenuEditorViewModelTests`, `TrayMenuEditorWindowLayoutTests`.
+
+### Исправлено
+
+- **Удаление информационной базы из кластера: диалог повтора с логином/паролем (issue #69,
+  Windows и Linux)** — при ошибке «infobase drop» (например, защищённая база) вместо простого
+  предупреждения показывается диалог с полями **«Логин»/«Пароль»** администратора ИБ и
+  кнопками **«Повторить попытку»/«Отмена»**: повтор удаления выполняется с введёнными
+  учётными данными (при повторной ошибке — снова тот же диалог: логин сохраняется, пароль
+  вводится заново), «Отмена» — выход
+  ([`ServerMonitorViewModel.cs`](Workspace1C/ViewModels/ServerMonitorViewModel.cs),
+  [`RacInfobaseDropRetryWindow.xaml`](Workspace1C/Views/RacInfobaseDropRetryWindow.xaml),
+  [`RacInfobaseDropRetryWindow.Avalonia.cs`](Workspace1C/Views/RacInfobaseDropRetryWindow.Avalonia.cs),
+  [`RacClient.cs`](Workspace1C/Services/RacClient.cs)). Покрыто тестами `RacClientTests`,
+  `ServerMonitorViewModelTests`, `Issue69DropRetryWindowLayoutTests`.
+
+- **Тёмная тема: единая кисть подписей полей форм во всех построителях и схемах (issue #61,
+  Windows и Linux)** — `FormLabelBrush` теперь используется во всех построителях форм
+  (`WpfUi`/`AvaloniaUi`: `FieldLabel`/`Section` и подписи полей), а не только в `Label`, и
+  попадает в генерируемые/пользовательские схемы — тёмные буквы заголовков полей ввода в
+  тёмной теме устранены системно, а не точечно
+  ([`WpfUi.cs`](Workspace1C/Views/WpfUi.cs),
+  [`AvaloniaUi.Avalonia.cs`](Workspace1C/Views/AvaloniaUi.Avalonia.cs),
+  [`ColorScheme.cs`](Workspace1C/Models/ColorScheme.cs)). Покрыто тестами-стражами
+  `Issue61DarkPaletteAuditTests`, `ThemeFormLabelTests`, `ColorSchemeThemeTests`.
+
+### Подтверждено пользователем
+
+Пользователь подтвердил работоспособность исправлений, внесённых в предыдущих релизах цикла;
+сами issues на GitHub **не закрываются** (по правилу владельца):
+
+- **#52** — запоминание выбранной вкладки «Все / Избранное / Недавние / Запущенные»;
+- **#53** — перемещение выбранной базы в группу через контекстное меню;
+- **#54** — массовые действия над выбранными базами в списке;
+- **#55** — правка форм и элементов (надписи остаются читаемыми при уменьшении окна);
+- **#57** — общая авторизация (раздельно для ИБ и общая);
+- **#26** — отображение сохранённых акцентных цветов и контрастность текста в тёмной теме;
+- **#41** — миграция баз между кластерами (прогресс, статусы при ошибке, имя группы);
+- **#63** — публикация на Apache (`Define` до `Include`).
+
+Issues **#26/#41/#63** ждут подтверждения пользователя после 1.0.0.74 — не закрываются.
+
+---
+
 ## [1.0.0.74] — 2026-10-25
 
 ### Добавлено
