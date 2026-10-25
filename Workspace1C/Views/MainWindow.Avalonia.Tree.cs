@@ -1406,10 +1406,15 @@ namespace Workspace1C
                 FontWeight = themeBrushKey is null ? FontWeight.Normal : FontWeight.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            if (themeBrushKey is not null)
-                ThemeBrushes.Bind(text, TextBlock.ForegroundProperty, themeBrushKey);
+            if (themeBrushKey is not null || string.IsNullOrWhiteSpace(textHex))
+            {
+                // Без явного цвета подпись бейджа обязана следовать теме: раньше при
+                // отсутствии textHex подставлялся фиксированный чёрный (#000000), который
+                // в тёмной теме давал «тёмный текст на тёмном фоне» (issue #61).
+                ThemeBrushes.Bind(text, TextBlock.ForegroundProperty, themeBrushKey ?? "TextPrimaryBrush");
+            }
             else
-                text.Foreground = new SolidColorBrush(Color.Parse(textHex ?? "#000000"));
+                text.Foreground = new SolidColorBrush(Color.Parse(textHex));
             if (textBinding is not null)
                 text.Bind(TextBlock.TextProperty, textBinding);
             row.Children.Add(text);
