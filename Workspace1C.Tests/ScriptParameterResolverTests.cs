@@ -1017,4 +1017,187 @@ public sealed class ScriptParameterResolverTests
 
         Assert.Equal($@"{MakeLaunchContext().ExePath}|8.5.4.1878|{MakeLaunchContext().EnterpriseCommandLine}", result);
     }
+
+    // ------------------- Раздельная авторизация (issue #67) -------------------
+
+    [Fact]
+    public void BuildValueMap_SeparateAuth_AddsAuthKeys()
+    {
+        // EnterpriseAuth/ConfiguratorAuth — объекты InfobaseAuthSettings, рефлексией не
+        // подхватываются («ConfiguratorAuth напрочь отсутствует»): производные ключи
+        // обязаны появиться с заданными значениями.
+        var ib = MakeInfobase();
+        ib.EnterpriseAuth = new InfobaseAuthSettings
+        {
+            AuthenticationMode = AuthenticationMode.Credentials,
+            User = "ent-user",
+            Password = "ent-pass"
+        };
+        ib.ConfiguratorAuth = new InfobaseAuthSettings
+        {
+            AuthenticationMode = AuthenticationMode.Credentials,
+            User = "cfg-user",
+            Password = "cfg-pass"
+        };
+
+        var map = Map(ib);
+
+        Assert.Equal("Credentials", map["enterpriseauth.mode"]);
+        Assert.Equal("ent-user", map["enterpriseauth.user"]);
+        Assert.Equal("ent-pass", map["enterpriseauth.password"]);
+        Assert.Equal("Credentials", map["configuratorauth.mode"]);
+        Assert.Equal("cfg-user", map["configuratorauth.user"]);
+        Assert.Equal("cfg-pass", map["configuratorauth.password"]);
+
+        // Русские вложенные алиасы.
+        Assert.Equal("ent-user", map["авторизацияпредприятия.логин"]);
+        Assert.Equal("ent-pass", map["авторизацияпредприятия.пароль"]);
+        Assert.Equal("Credentials", map["авторизацияпредприятия.режим"]);
+        Assert.Equal("cfg-user", map["авторизацияконфигуратора.логин"]);
+        Assert.Equal("cfg-pass", map["авторизацияконфигуратора.пароль"]);
+
+        // Плоские алиасы.
+        Assert.Equal("ent-user", map["enterpriseuser"]);
+        Assert.Equal("ent-pass", map["enterprisepassword"]);
+        Assert.Equal("cfg-user", map["configuratoruser"]);
+        Assert.Equal("cfg-pass", map["configuratorpassword"]);
+    }
+
+    [Fact]
+    public void BuildValueMap_AuthDefaultOrNull_AuthKeysAreEmpty()
+    {
+        // Дефолтная раздельная авторизация (IsDefault — «Запрос» с пустыми реквизитами)
+        // считается незаданной, null — не задана вообще: ключи остаются в карте с
+        // ПУСТЫМИ значениями, чтобы токен подставлялся пустым, а не литералом.
+        var ib = MakeInfobase();
+        ib.EnterpriseAuth = new InfobaseAuthSettings(); // IsDefault
+        ib.ConfiguratorAuth = null;
+
+        var map = Map(ib);
+
+        Assert.Equal(string.Empty, map["enterpriseauth.mode"]);
+        Assert.Equal(string.Empty, map["enterpriseauth.user"]);
+        Assert.Equal(string.Empty, map["enterpriseauth.password"]);
+        Assert.Equal(string.Empty, map["configuratorauth.mode"]);
+        Assert.Equal(string.Empty, map["configuratorauth.user"]);
+        Assert.Equal(string.Empty, map["configuratorauth.password"]);
+
+        Assert.Equal("", ScriptParameterResolver.Resolve("%configuratorauth.user%", map, FixedNow));
+        Assert.Equal("", ScriptParameterResolver.Resolve("%enterpriseauth.password%", map, FixedNow));
+    }
+
+    [Fact]
+    public void BuildValueMap_ResolvedCredentials_DoNotOverwriteSeparateAuth()
+    {
+        // У базы нет собственных Connection.User/Password — connection.user получает
+        // решённый общий логин (issue #57), НО заданная раздельная авторизация
+        // Предприятия остаётся в своих ключах нетронутой (issue #67).
+        var ib = MakeInfobase();
+        ib.Connection.User = "";
+        ib.Connection.Password = "";
+        ib.EnterpriseAuth = new InfobaseAuthSettings
+        {
+            AuthenticationMode = AuthenticationMode.Credentials,
+            User = "ent-user",
+            Password = "ent-pass"
+        };
+
+        var map = ScriptParameterResolver.BuildValueMap(ib, resolvedCredentials: ("common-user", "common-pass"));
+
+        Assert.Equal("common-user", map["connection.user"]);
+        Assert.Equal("ent-user", map["enterpriseauth.user"]);
+        Assert.Equal("ent-pass", map["enterpriseauth.password"]);
+        Assert.Equal("common-pass", map["connection.password"]);
+    }
+
+    [Fact]
+    public void BuildValueMap_CoverageContract_HasAllScalarAndDerivedKeys()
+    {
+        // Контракт полноты структуры (issue #67, план 4.2 п.3): для образца Infobase
+        // каждый публичный скалярный ключ моделей + производные (auth, теги, extrafields,
+        // группа, full_launch_*) присутствуют в карте 1-в-1 — «доступные поля = структура
+        // базы в файле настроек».
+        var ib = MakeInfobase();
+        ib.Id = "ib-1";
+        ib.Group = "Группа";
+        ib.Tags = new List<string> { "тег" };
+        ib.AdditionalFields = new List<string> { "поле1" };
+        ib.EnterpriseAuth = new InfobaseAuthSettings
+        {
+            AuthenticationMode = AuthenticationMode.Credentials,
+            User = "u",
+            Password = "p"
+        };
+        ib.ConfiguratorAuth = new InfobaseAuthSettings
+        {
+            AuthenticationMode = AuthenticationMode.Credentials,
+            User = "u2",
+            Password = "p2"
+        };
+
+        var map = ScriptParameterResolver.BuildValueMap(ib, launchContext: MakeLaunchContext());
+
+        // Производные ключи (секция «Авторизация», теги, произвольные поля, группа, платформа).
+        foreach (var key in new[]
+        {
+            "enterpriseauth.mode", "enterpriseauth.user", "enterpriseauth.password",
+            "configuratorauth.mode", "configuratorauth.user", "configuratorauth.password",
+            "авторизацияпредприятия.логин", "авторизацияпредприятия.пароль",
+            "авторизацияконфигуратора.логин", "авторизацияконфигуратора.пароль",
+            "enterpriseuser", "enterprisepassword", "configuratoruser", "configuratorpassword",
+            "тэги", "tags", "дополнительныеполя", "extrafields", "группа",
+            "full_launch_enterprise", "full_launch_config", "full_exe_name", "platform_version",
+            "полнаястрокапредприятие", "полнаястрокаконфигуратор", "путьплатформы", "версияплатформы"
+        })
+            Assert.True(map.ContainsKey(key), $"Производный ключ отсутствует в карте: {key}");
+
+        // Каждый публичный скалярный ключ ConnectionSettings — connection.<имя> в карте.
+        foreach (var prop in typeof(ConnectionSettings).GetProperties(BindingFlags.Instance | BindingFlags.Public))
+        {
+            var key = "connection." + prop.Name.ToLowerInvariant();
+            Assert.True(map.ContainsKey(key), $"Карта не содержит ключ {key} для {prop.Name}");
+        }
+
+        // Каждый публичный СКАЛЯРНЫЙ ключ Infobase с безопасно заполняемым значением —
+        // плоский ключ в карте (1-в-1 со структурой базы; рефлексия).
+        foreach (var prop in typeof(Infobase).GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(p => p.CanWrite && (p.SetMethod?.IsPublic ?? false)))
+        {
+            var type = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+            var isScalar = type == typeof(string) || type.IsEnum
+                || type == typeof(bool) || type == typeof(int) || type == typeof(long)
+                || type == typeof(DateTime);
+            if (!isScalar)
+                continue;
+
+            var previous = prop.GetValue(ib);
+            try
+            {
+                if (type == typeof(string))
+                    prop.SetValue(ib, "значение");
+                else if (type == typeof(bool))
+                    prop.SetValue(ib, true);
+                else if (type.IsEnum)
+                    prop.SetValue(ib, Enum.GetValues(type).GetValue(0));
+                else if (type == typeof(int))
+                    prop.SetValue(ib, 1);
+                else if (type == typeof(long))
+                    prop.SetValue(ib, 1L);
+                else if (type == typeof(DateTime))
+                    prop.SetValue(ib, new DateTime(2026, 1, 1));
+
+                var key = prop.Name.ToLowerInvariant();
+                Assert.True(Map(ib).ContainsKey(key),
+                    $"Публичный скалярный ключ Infobase отсутствует в карте: {key} ({prop.Name})");
+            }
+            catch
+            {
+                // Свойство с побочными эффектами в сеттере — вне контракта (не динам. карта).
+            }
+            finally
+            {
+                try { prop.SetValue(ib, previous); } catch { /* обратная установка не удалась */ }
+            }
+        }
+    }
 }

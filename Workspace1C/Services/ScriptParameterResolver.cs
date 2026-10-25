@@ -204,6 +204,22 @@ public static class ScriptParameterResolver
             }
         }
 
+        // Раздельная авторизация (issue #57/#236, продолжение #67): EnterpriseAuth и
+        // ConfiguratorAuth — объекты InfobaseAuthSettings, рефлексией скалярных свойств
+        // не подхватываются («ConfiguratorAuth напрочь отсутствует» у пользователя).
+        // Даём производные ключи «enterpriseauth.*»/«configuratorauth.*» (+ русские
+        // вложенные «авторизацияпредприятия.»/«авторизацияконфигуратора.» и плоские
+        // enterpriseuser/enterprisepassword/configuratoruser/configuratorpassword).
+        // Ключи присутствуют ВСЕГДА: если авторизация не задана (null) или дефолтная
+        // (IsDefault — «Запрос» с пустыми реквизитами, означает «используется авторизация
+        // базы/общая», см. InfobaseAuthResolver), значения пустые — токен подставляется
+        // пустым, а не остаётся литералом (как для full_launch_*); собственные данные
+        // раздельной авторизации не перезаписываются resolvedCredentials.
+        AddAuthKeys(map, "enterpriseauth", "enterpriseuser", "enterprisepassword",
+            "авторизацияпредприятия", infobase.EnterpriseAuth);
+        AddAuthKeys(map, "configuratorauth", "configuratoruser", "configuratorpassword",
+            "авторизацияконфигуратора", infobase.ConfiguratorAuth);
+
         // Полные строки запуска и платформа (issue #67): токены из первого сообщения
         // issue — «полная строка запуска, которую бы стартер подставил для текущей базы»,
         // «полный путь к используемому файлу платформы» и «полная версия используемой
@@ -241,6 +257,32 @@ public static class ScriptParameterResolver
             // Значение свойства недоступно — ключ просто не попадёт в карту.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Добавляет производные ключи раздельной авторизации (<see cref="InfobaseAuthSettings"/>)
+    /// в карту подстановок (issue #67): <c>prefix.mode|user|password</c>, русские вложенные
+    /// <c>ruPrefix.режим|логин|пароль</c> и плоские <c>flatUser</c>/<c>flatPassword</c>.
+    /// Авторизация не задана (null) или дефолтная (<see cref="InfobaseAuthSettings.IsDefault"/> —
+    /// «Запрос» с пустыми реквизитами, означает «используется авторизация базы/общая») —
+    /// ключи остаются в карте с пустыми значениями: токен не остаётся литералом в команде.
+    /// </summary>
+    private static void AddAuthKeys(Dictionary<string, string> map, string prefix,
+        string flatUser, string flatPassword, string ruPrefix, InfobaseAuthSettings? auth)
+    {
+        var effective = auth is not null && !auth.IsDefault;
+        var mode = effective ? auth!.AuthenticationMode.ToString() : string.Empty;
+        var user = effective ? auth!.User ?? string.Empty : string.Empty;
+        var password = effective ? auth!.Password ?? string.Empty : string.Empty;
+
+        map[prefix + ".mode"] = mode;
+        map[prefix + ".user"] = user;
+        map[prefix + ".password"] = password;
+        map[ruPrefix + ".режим"] = mode;
+        map[ruPrefix + ".логин"] = user;
+        map[ruPrefix + ".пароль"] = password;
+        map[flatUser] = user;
+        map[flatPassword] = password;
     }
 
     /// <summary>

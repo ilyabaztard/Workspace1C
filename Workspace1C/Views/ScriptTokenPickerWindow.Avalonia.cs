@@ -95,6 +95,22 @@ namespace Workspace1C
                 Grid.SetColumn(value, 1);
                 panel.Children.Add(value);
                 root.Children.Add(panel);
+
+                // Пояснение значения (issue #67): «что означает и откуда берётся» — текст
+                // всегда виден под строкой (поиск ищет и по нему; пароль не светится).
+                var description = new TextBlock
+                {
+                    Text = item.DisplayDescription,
+                    FontSize = 11,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = 600,
+                    Margin = new Thickness(14, 0, 2, 2),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Themes.ThemeBrushes.Bind(description, TextBlock.ForegroundProperty, "TextSecondaryBrush");
+                root.Children.Add(description);
+
                 return root;
             });
             _list.DoubleTapped += (_, e) =>

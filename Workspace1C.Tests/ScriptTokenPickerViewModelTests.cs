@@ -248,4 +248,117 @@ public sealed class ScriptTokenPickerViewModelTests
         Assert.Equal("Поле1; Поле2", map["дополнительныеполя"]);
         Assert.Equal("Поле1; Поле2", map["extrafields"]);
     }
+
+    // ---------------- Раздельная авторизация и пояснения (issue #67) ----------------
+
+    [Fact]
+    public void AvailableTokens_IncludesSeparateAuthTokens()
+    {
+        // «ConfiguratorAuth напрочь отсутствует»: токены раздельной авторизации теперь
+        // в справочнике редактора (и, как следствие, в секции «Авторизация» пикера).
+        var tokens = ScriptScenarioEditViewModel.AvailableTokens;
+        var set = tokens.Select(t => t.Token).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.Contains("%enterpriseauth.user%", set);
+        Assert.Contains("%enterpriseauth.password%", set);
+        Assert.Contains("%enterpriseauth.mode%", set);
+        Assert.Contains("%configuratorauth.user%", set);
+        Assert.Contains("%configuratorauth.password%", set);
+        Assert.Contains("%configuratorauth.mode%", set);
+    }
+
+    [Fact]
+    public void TokenPicker_BuildOptions_IncludesAuthSection()
+    {
+        var infobase = BuildBase();
+        infobase.EnterpriseAuth = new InfobaseAuthSettings
+        {
+            AuthenticationMode = AuthenticationMode.Credentials,
+            User = "ent", Password = "ep"
+        };
+        infobase.ConfiguratorAuth = new InfobaseAuthSettings
+        {
+            AuthenticationMode = AuthenticationMode.Credentials,
+            User = "cfg", Password = "cp"
+        };
+        ScriptLaunchContextResolver.ResolverOverride = _ => null;
+        try
+        {
+            var options = ScriptTokenPickerViewModel.BuildOptions(infobase);
+
+            // Секция «Авторизация» присутствует и содержит все шесть токенов.
+            var authOptions = options.Where(o => o.SectionKey == "Script.TokenSectionAuth").ToList();
+            Assert.NotEmpty(authOptions);
+            Assert.Contains(authOptions, o => o.Token == "%enterpriseauth.user%" && o.Value == "ent");
+            Assert.Contains(authOptions, o => o.Token == "%enterpriseauth.password%" && o.Value == "ep");
+            Assert.Contains(authOptions, o => o.Token == "%configuratorauth.user%" && o.Value == "cfg");
+            Assert.Contains(authOptions, o => o.Token == "%configuratorauth.password%" && o.Value == "cp");
+            Assert.Contains(authOptions, o => o.Token == "%configuratorauth.mode%" && o.Value == "Credentials");
+        }
+        finally
+        {
+            ScriptLaunchContextResolver.ResolverOverride = null;
+        }
+    }
+
+    [Fact]
+    public void TokenPicker_EveryOption_HasNonEmptyDisplayDescription()
+    {
+        // Пояснения (issue #67): у каждого ключа есть описание — статическое из
+        // AvailableTokens, динамическое из каталога или универсальная подпись.
+        var infobase = BuildBase();
+        infobase.Tags = new List<string> { "т" };
+        infobase.AdditionalFields = new List<string> { "a" };
+        ScriptLaunchContextResolver.ResolverOverride = _ => null;
+        try
+        {
+            var options = ScriptTokenPickerViewModel.BuildOptions(infobase);
+
+            Assert.NotEmpty(options);
+            foreach (var option in options)
+            {
+                Assert.False(string.IsNullOrWhiteSpace(option.DisplayDescription),
+                    $"Токен {option.Token} не имеет пояснения (DisplayDescription).");
+            }
+        }
+        finally
+        {
+            ScriptLaunchContextResolver.ResolverOverride = null;
+        }
+    }
+
+    [Fact]
+    public void TokenPicker_FilterOptions_MatchesDescription()
+    {
+        // Поиск ищет и по пояснению («раздельная авторизация…»), не только по имени
+        // и значению. Строки создаются напрямую — тест не зависит от состояния
+        // локализации в тестовом окружении.
+        var options = new System.Collections.Generic.List<ScriptTokenOption>
+        {
+            new ScriptTokenOption("%configuratorauth.user%", "cfg", description: "логин раздельной авторизации Конфигуратора"),
+            new ScriptTokenOption("%connection.user%", "администратор", description: "логин из настроек подключения базы; если пусто — из общей/раздельной авторизации"),
+            new ScriptTokenOption("%name%", "База", description: "имя базы")
+        };
+
+        // Запрос в родительном падеже — совпадает с пояснением «…раздельной авторизации…».
+        var byDescription = ScriptTokenPickerViewModel.FilterOptions(options, "раздельной авторизации");
+
+        Assert.Contains(byDescription, o => o.Token == "%configuratorauth.user%");
+        Assert.Contains(byDescription, o => o.Token == "%connection.user%");
+        Assert.DoesNotContain(byDescription, o => o.Token == "%name%");
+    }
+
+    [Fact]
+    public void TokenOption_SeparateAuthPasswordTokens_MaskedInDisplay()
+    {
+        // Политика маскирования (как для connection.password): пароли раздельной
+        // авторизации не светятся в списке значений.
+        var enterprise = new ScriptTokenOption("%enterpriseauth.password%", "secret1");
+        var configurator = new ScriptTokenOption("%configuratorauth.password%", "secret2");
+
+        Assert.True(enterprise.IsSecret);
+        Assert.Equal("••••••", enterprise.DisplayValue);
+        Assert.True(configurator.IsSecret);
+        Assert.Equal("••••••", configurator.DisplayValue);
+    }
 }

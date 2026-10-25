@@ -13,6 +13,7 @@ namespace Workspace1C.Tests;
 /// не совпадает с фактической версией (X64-дефолт против установленной x86), и только при
 /// полном отсутствии версии — запасной вариант «новейшая установленная».
 /// </summary>
+[Collection("PlatformVersionCache")]
 public sealed class OneCPlatformLocatorPlatformVersionTests
 {
     [Fact]

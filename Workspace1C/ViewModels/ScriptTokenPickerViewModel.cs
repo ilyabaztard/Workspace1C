@@ -11,16 +11,19 @@ namespace Workspace1C.ViewModels;
 /// <summary>
 /// Строка диалога выбора переменной подстановки сценария (issue #67): итоговое имя
 /// переменной (токен %…%), значение для выбранной базы (для превью; пароль маскируется),
-/// секция («Основные»/«Подключение»/…) и признак начала секции для заголовков в списке.
+/// человекочитаемое описание (что означает значение и откуда берётся), секция
+/// («Основные»/«Подключение»/…) и признак начала секции для заголовков в списке.
 /// </summary>
 public sealed class ScriptTokenOption
 {
-    public ScriptTokenOption(string token, string value, string? sectionKey = null, bool sectionStart = false)
+    public ScriptTokenOption(string token, string value, string? sectionKey = null,
+        bool sectionStart = false, string? description = null)
     {
         Token = token;
         Value = value;
         SectionKey = sectionKey;
         SectionStart = sectionStart;
+        Description = description;
     }
 
     /// <summary>Итоговое имя переменной (токен вида <c>%connection.server%</c>).</summary>
@@ -34,6 +37,22 @@ public sealed class ScriptTokenOption
 
     /// <summary>Признак первой строки секции — перед ней показывается заголовок.</summary>
     public bool SectionStart { get; }
+
+    /// <summary>
+    /// Человекочитаемое описание значения и его происхождения (issue #67: «нужны пояснения» —
+    /// почему <c>Connection.User</c> пуст в файле баз, а справа «администратор», и откуда берётся
+    /// раздельная авторизация). Для неизвестных динамических полей — <c>null</c> (показывается
+    /// универсальная подпись).
+    /// </summary>
+    public string? Description { get; }
+
+    /// <summary>
+    /// Описание для отображения: при отсутствии — обобщённая подпись «поле базы из файла
+    /// настроек» (Script.TokenDescriptionFallback), чтобы у каждого ключа была подпись.
+    /// </summary>
+    public string DisplayDescription => string.IsNullOrEmpty(Description)
+        ? LocalizationManager.T("Script.TokenDescriptionFallback")
+        : Description;
 
     /// <summary>Локализованное имя секции (заголовок группы в диалоге).</summary>
     public string SectionDisplay => string.IsNullOrEmpty(SectionKey) ? string.Empty : LocalizationManager.T(SectionKey);
@@ -66,6 +85,7 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
     // Ключи локализации секций диалога (issue #67 — «список доступных полей = структура базы»).
     private const string SectionMain = "Script.TokenSectionMain";
     private const string SectionConnection = "Script.TokenSectionConnection";
+    private const string SectionAuth = "Script.TokenSectionAuth";
     private const string SectionExtra = "Script.TokenSectionExtra";
     private const string SectionPlatform = "Script.TokenSectionPlatform";
     private const string SectionDate = "Script.TokenSectionDate";
@@ -117,9 +137,10 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Фильтр строк по запросу (регистронезависимо, имя или значение). Порядок исходного
-    /// списка сохраняется; флаги начала секций пересчитываются, чтобы после фильтрации
-    /// заголовки секций оставались корректными (первая строка каждой секции — с флагом).
+    /// Фильтр строк по запросу (регистронезависимо; имя, значение ИЛИ описание — issue #67).
+    /// Порядок исходного списка сохраняется; флаги начала секций пересчитываются, чтобы
+    /// после фильтрации заголовки секций оставались корректными (первая строка каждой
+    /// секции — с флагом). Описание сохраняется в отфильтрованных строках.
     /// </summary>
     public static IReadOnlyList<ScriptTokenOption> FilterOptions(
         IReadOnlyList<ScriptTokenOption> options, string? query)
@@ -128,7 +149,8 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
         IEnumerable<ScriptTokenOption> source = options;
         if (q.Length > 0)
             source = options.Where(o => o.Token.Contains(q, StringComparison.OrdinalIgnoreCase)
-                || o.Value.Contains(q, StringComparison.OrdinalIgnoreCase));
+                || o.Value.Contains(q, StringComparison.OrdinalIgnoreCase)
+                || (o.Description ?? string.Empty).Contains(q, StringComparison.OrdinalIgnoreCase));
 
         var result = new List<ScriptTokenOption>();
         string? currentSection = null;
@@ -136,7 +158,7 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
         {
             var section = option.SectionKey;
             var isStart = section is not null && !string.Equals(section, currentSection, StringComparison.Ordinal);
-            result.Add(new ScriptTokenOption(option.Token, option.Value, section, isStart));
+            result.Add(new ScriptTokenOption(option.Token, option.Value, section, isStart, option.Description));
             if (section is not null)
                 currentSection = section;
         }
@@ -156,9 +178,13 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
     /// Строит полный список переменных сценария для базы: статический справочник окна + все
     /// динамические ключи карты <see cref="ScriptParameterResolver.BuildValueMap"/> (рефлексия
     /// «понимает все реквизиты базы» — список полей 1-в-1 с картой, issue #67). Решённая
-    /// авторизация (общая, issue #57) учитывается для логина/пароля; контекст платформы
-    /// (<c>%full_launch_*%</c>, <c>%full_exe_name%</c>, <c>%platform_version%</c>) добавляется
-    /// в секцию «Платформа». Итоговый список упорядочен по секциям: «Основные», «Подключение»,
+    /// авторизация (общая, issue #57) учитывается для логина/пароля; раздельные авторизации
+    /// (<c>enterpriseauth.*</c>/<c>configuratorauth.*</c>) попадают в секцию «Авторизация»;
+    /// контекст платформы (<c>%full_launch_*%</c>, <c>%full_exe_name%</c>, <c>%platform_version%</c>)
+    /// добавляется в секцию «Платформа». У каждого ключа — человекочитаемое описание:
+    /// статические токены берут его из <see cref="ScriptScenarioEditViewModel.AvailableTokens"/>
+    /// (ключ локализации), динамические — из каталога описаний (или универсальная подпись).
+    /// Итоговый список упорядочен по секциям: «Основные», «Подключение», «Авторизация»,
     /// «Произвольные поля», «Платформа», «Дата» — с локализованными заголовками.
     /// </summary>
     public static IReadOnlyList<ScriptTokenOption> BuildOptions(Infobase? infobase)
@@ -172,23 +198,22 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
         // Порядок секций: статический справочник сначала (по секциям, внутри — по токену),
         // затем оставшиеся динамические ключи карты (тоже по секциям).
         string? lastSection = null;
-        void AddOption(string token, string value, string section)
+        void AddOption(string token, string value, string section, string description)
         {
             if (!seen.Add(token))
                 return;
             var isStart = section is not null && !string.Equals(section, lastSection, StringComparison.Ordinal);
-            result.Add(new ScriptTokenOption(token, value, section, isStart));
+            result.Add(new ScriptTokenOption(token, value, section, isStart, description));
             if (section is not null)
                 lastSection = section;
         }
 
-        // Статические токены справочника окна — с человекочитаемыми описаниями.
         foreach (var hint in ScriptScenarioEditViewModel.AvailableTokens
                      .OrderBy(t => SectionOrder(SectionForToken(t.Token)))
                      .ThenBy(t => t.Token, StringComparer.OrdinalIgnoreCase))
         {
             var value = map.TryGetValue(hint.Token.Trim('%'), out var v) ? (v ?? string.Empty) : string.Empty;
-            AddOption(hint.Token, value, SectionForToken(hint.Token));
+            AddOption(hint.Token, value, SectionForToken(hint.Token), LocalizationManager.T(hint.LocalizationKey));
         }
 
         // Динамические ключи карты (рефлексия по всем свойствам базы): ключи, которых нет
@@ -198,7 +223,12 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
                      .OrderBy(SectionOrderForKey)
                      .ThenBy(k => k, StringComparer.OrdinalIgnoreCase))
         {
-            AddOption("%" + key + "%", map[key] ?? string.Empty, SectionForToken(key));
+            var value = map[key] ?? string.Empty;
+            var descriptionKey = DescriptionKeyFor(key);
+            var description = descriptionKey is null
+                ? string.Empty
+                : LocalizationManager.T(descriptionKey);
+            AddOption("%" + key + "%", value, SectionForToken(key), description);
         }
 
         // Стабильная сортировка по секциям — секции строго подряд (внутри секции сначала
@@ -211,7 +241,7 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
         {
             var section = option.SectionKey;
             var isStart = section is not null && !string.Equals(section, last, StringComparison.Ordinal);
-            result.Add(new ScriptTokenOption(option.Token, option.Value, section, isStart));
+            result.Add(new ScriptTokenOption(option.Token, option.Value, section, isStart, option.Description));
             if (section is not null)
                 last = section;
         }
@@ -235,6 +265,20 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
             || key.Equals("каталог", StringComparison.Ordinal)
             || key.Equals("путьиб", StringComparison.Ordinal))
             return SectionConnection;
+
+        // Раздельная авторизация (issue #67): enterpriseauth.*/configuratorauth.*, русские
+        // вложенные «авторизацияпредприятия.…»/«авторизацияконфигуратора.…», плоские
+        // enterpriseuser/enterprisepassword/configuratoruser/configuratorpassword и скаляр
+        // configuratoruseenterpriseauth (флаг «авторизация как для Предприятия»).
+        if (key.Contains("enterpriseauth", StringComparison.Ordinal)
+            || key.Contains("configuratorauth", StringComparison.Ordinal)
+            || key.Contains("авторизацияпредприятия", StringComparison.Ordinal)
+            || key.Contains("авторизацияконфигуратора", StringComparison.Ordinal)
+            || key.Equals("enterpriseuser", StringComparison.Ordinal)
+            || key.Equals("enterprisepassword", StringComparison.Ordinal)
+            || key.Equals("configuratoruser", StringComparison.Ordinal)
+            || key.Equals("configuratorpassword", StringComparison.Ordinal))
+            return SectionAuth;
 
         if (key.Equals("date", StringComparison.Ordinal)
             || key.StartsWith("date:", StringComparison.Ordinal)
@@ -264,11 +308,113 @@ public sealed class ScriptTokenPickerViewModel : ViewModelBase
     {
         SectionMain => 0,
         SectionConnection => 1,
-        SectionExtra => 2,
-        SectionPlatform => 3,
-        SectionDate => 4,
-        _ => 5
+        SectionAuth => 2,
+        SectionExtra => 3,
+        SectionPlatform => 4,
+        SectionDate => 5,
+        _ => 6
     };
+
+    /// <summary>
+    /// Каталог описаний для динамических ключей карты (issue #67): для известных ключей —
+    /// ключ локализации человекочитаемого пояснения («что означает значение и откуда
+    /// берётся»), для остальных — обобщённая подпись по типу ключа (или <c>null</c> —
+    /// универсальная <c>Script.TokenDescriptionFallback</c>).
+    /// </summary>
+    private static string? DescriptionKeyFor(string token)
+    {
+        var key = (token ?? string.Empty).Trim('%').ToLowerInvariant();
+        switch (key)
+        {
+            case "connection.user":
+            case "пользователь":
+                return "Script.TokenConnectionUser";
+
+            case "connection.password":
+            case "пароль":
+            case "password":
+                return "Script.TokenConnectionPassword";
+
+            case "enterpriseauth.user":
+            case "enterpriseuser":
+            case "авторизацияпредприятия.логин":
+                return "Script.TokenEnterpriseAuthUser";
+
+            case "enterpriseauth.password":
+            case "enterprisepassword":
+            case "авторизацияпредприятия.пароль":
+                return "Script.TokenEnterpriseAuthPassword";
+
+            case "enterpriseauth.mode":
+            case "авторизацияпредприятия.режим":
+                return "Script.TokenEnterpriseAuthMode";
+
+            case "configuratorauth.user":
+            case "configuratoruser":
+            case "авторизацияконфигуратора.логин":
+                return "Script.TokenConfiguratorAuthUser";
+
+            case "configuratorauth.password":
+            case "configuratorpassword":
+            case "авторизацияконфигуратора.пароль":
+                return "Script.TokenConfiguratorAuthPassword";
+
+            case "configuratorauth.mode":
+            case "авторизацияконфигуратора.режим":
+                return "Script.TokenConfiguratorAuthMode";
+
+            case "configuratoruseenterpriseauth":
+                return "Script.TokenConfiguratorUseEnterpriseAuth";
+
+            case "name":
+            case "имябазы":
+                return "Script.TokenName";
+
+            case "id":
+                return "Script.TokenBaseId";
+
+            case "имягруппы":
+            case "группа":
+                return "Script.TokenDescrGroup";
+
+            case "тэги":
+            case "tags":
+                return "Script.TokenDescrTags";
+
+            case "дополнительныеполя":
+            case "extrafields":
+                return "Script.TokenDescrExtraFields";
+
+            case "date":
+            case "дата":
+                return "Script.TokenDescrDate";
+
+            case "full_launch_enterprise":
+            case "полнаястрокапредприятие":
+                return "Script.TokenFullLaunchEnterprise";
+
+            case "full_launch_config":
+            case "полнаястрокаконфигуратор":
+                return "Script.TokenFullLaunchConfig";
+
+            case "full_exe_name":
+            case "путьплатформы":
+                return "Script.TokenFullExeName";
+
+            case "platform_version":
+            case "версияплатформы":
+                return "Script.TokenPlatformVersion";
+        }
+
+        // Обобщённые подписи по типу ключа: connection.* и произвольные поля extrafields.
+        if (key.StartsWith("connection.", StringComparison.Ordinal))
+            return "Script.TokenDescrConnectionAny";
+        if (key.StartsWith("additional", StringComparison.Ordinal)
+            || key.StartsWith("дополнительн", StringComparison.Ordinal))
+            return "Script.TokenDescrAdditionalN";
+
+        return null;
+    }
 
     /// <summary>Решённая авторизация режима «1С:Предприятие» (общая авторизация, issue #57).</summary>
     private static (string? User, string? Password)? ResolveEffectiveCredentials(Infobase? infobase)

@@ -73,6 +73,13 @@
                                        Foreground="{DynamicResource TextSecondaryBrush}"
                                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                         </Grid>
+                        <!-- Пояснение значения (issue #67): «что означает и откуда берётся» —
+                             поиск ищет и по нему, тултип не требуется (текст всегда виден). -->
+                        <TextBlock Text="{Binding DisplayDescription}"
+                                   Margin="14,0,2,2" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="600"
+                                   HorizontalAlignment="Left" VerticalAlignment="Center"/>
                     </StackPanel>
                 </DataTemplate>
             </ListBox.ItemTemplate>

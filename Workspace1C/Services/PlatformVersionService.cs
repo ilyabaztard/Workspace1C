@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO;
 
 namespace Workspace1C.Services;
@@ -19,9 +20,15 @@ public static class PlatformVersionService
     // платформы). Результаты не модифицируются потребителями (только чтение/foreach).
     private const int SearchCacheTtlSeconds = 300;
 
-    private static readonly object _searchCacheLock = new();
-    private static readonly Dictionary<string, (DateTime At, List<(string Version, string BinDir)> Entries)> _platformVersionDirsCache = new();
-    private static readonly Dictionary<(string Version, string Arch), (DateTime At, string? Result)> _resolvedVersionBinCache = new();
+    // Потокобезопасные TTL-кэши (issue #67, продолжение): ConcurrentDictionary + Lazy с
+    // атомарной публикацией результата — параллельные читатели не видят частично
+    // инициализированных записей, а InvalidateSearchCache().Clear() атомарно сбрасывает
+    // кэши без гонки чтения/записи (починка флака PlatformVersionCacheTests в параллельном
+    // xUnit-прогоне: глобальный кэш делится между тестовыми коллекциями).
+    private static readonly ConcurrentDictionary<string, Lazy<(DateTime At, List<(string Version, string BinDir)> Entries)>>
+        _platformVersionDirsCache = new();
+    private static readonly ConcurrentDictionary<(string Version, string Arch), Lazy<(DateTime At, string? Result)>>
+        _resolvedVersionBinCache = new();
 
     /// <summary>
     /// Сбрасывает TTL-кэши поиска каталогов платформ (issue #67). Вызывается при смене
@@ -30,11 +37,8 @@ public static class PlatformVersionService
     /// </summary>
     public static void InvalidateSearchCache()
     {
-        lock (_searchCacheLock)
-        {
-            _platformVersionDirsCache.Clear();
-            _resolvedVersionBinCache.Clear();
-        }
+        _platformVersionDirsCache.Clear();
+        _resolvedVersionBinCache.Clear();
     }
 
     public static void SetAdditionalSearchPaths(IEnumerable<string>? paths)
@@ -197,19 +201,14 @@ public static class PlatformVersionService
         var archKey = architecture == "64" ? "64" : "32";
         var cacheKey = (cleanVersion, archKey);
 
-        lock (_searchCacheLock)
-        {
-            if (_resolvedVersionBinCache.TryGetValue(cacheKey, out var cached)
-                && DateTime.UtcNow - cached.At < TimeSpan.FromSeconds(SearchCacheTtlSeconds))
-                return cached.Result;
-        }
+        if (_resolvedVersionBinCache.TryGetValue(cacheKey, out var cached)
+            && DateTime.UtcNow - cached.Value.At < TimeSpan.FromSeconds(SearchCacheTtlSeconds))
+            return cached.Value.Result;
 
         var result = ResolveVersionBinDirectoryCore(cleanVersion, archKey);
-        lock (_searchCacheLock)
-        {
-            _resolvedVersionBinCache[cacheKey] = (DateTime.UtcNow, result);
-        }
-
+        var stamp = (At: DateTime.UtcNow, Result: result);
+        _resolvedVersionBinCache[cacheKey] = new Lazy<(DateTime At, string? Result)>(
+            () => stamp, LazyThreadSafetyMode.ExecutionAndPublication);
         return result;
     }
 
@@ -338,19 +337,14 @@ public static class PlatformVersionService
     {
         var archKey = architecture == "64" ? "64" : "32";
 
-        lock (_searchCacheLock)
-        {
-            if (_platformVersionDirsCache.TryGetValue(archKey, out var cached)
-                && DateTime.UtcNow - cached.At < TimeSpan.FromSeconds(SearchCacheTtlSeconds))
-                return cached.Entries;
-        }
+        if (_platformVersionDirsCache.TryGetValue(archKey, out var cached)
+            && DateTime.UtcNow - cached.Value.At < TimeSpan.FromSeconds(SearchCacheTtlSeconds))
+            return cached.Value.Entries;
 
         var computed = ComputePlatformVersionDirs(archKey);
-        lock (_searchCacheLock)
-        {
-            _platformVersionDirsCache[archKey] = (DateTime.UtcNow, computed);
-        }
-
+        var stamp = (At: DateTime.UtcNow, Entries: computed);
+        _platformVersionDirsCache[archKey] = new Lazy<(DateTime At, List<(string Version, string BinDir)> Entries)>(
+            () => stamp, LazyThreadSafetyMode.ExecutionAndPublication);
         return computed;
     }
 

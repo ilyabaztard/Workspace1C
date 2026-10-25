@@ -63,6 +63,16 @@ public class ScriptScenarioEditViewModel : ViewModelBase
         new ScriptTokenHint("%full_launch_config%", "Script.TokenFullLaunchConfig"),
         new ScriptTokenHint("%full_exe_name%", "Script.TokenFullExeName"),
         new ScriptTokenHint("%platform_version%", "Script.TokenPlatformVersion"),
+        // Раздельная авторизация (issue #67, продолжение #57/#236): токены EnterpriseAuth и
+        // ConfiguratorAuth — пользователь «не может добраться до раздельной авторизации»
+        // («ConfiguratorAuth — напрочь отсутствует»). Пустая в базе авторизация (не задана
+        // или IsDefault) подставляет пусто — фактически используется авторизация базы/общая.
+        new ScriptTokenHint("%enterpriseauth.user%", "Script.TokenEnterpriseAuthUser"),
+        new ScriptTokenHint("%enterpriseauth.password%", "Script.TokenEnterpriseAuthPassword"),
+        new ScriptTokenHint("%enterpriseauth.mode%", "Script.TokenEnterpriseAuthMode"),
+        new ScriptTokenHint("%configuratorauth.user%", "Script.TokenConfiguratorAuthUser"),
+        new ScriptTokenHint("%configuratorauth.password%", "Script.TokenConfiguratorAuthPassword"),
+        new ScriptTokenHint("%configuratorauth.mode%", "Script.TokenConfiguratorAuthMode"),
         // Произвольные поля базы (issue #6): пример подстановки; номер может быть
         // любым (1..N по строкам таблицы «Произвольные поля» вкладки «Идентификатор»).
         new ScriptTokenHint("%Additional_1%", "Script.TokenAdditional")
