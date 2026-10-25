@@ -11,6 +11,86 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.72] — 2026-10-25
+
+### Добавлено
+
+- **Конфигуратор параметров запуска: правка, порядок и поиск пользовательских
+  параметров (issue #68, Windows и Linux)** — окно «Запустить с выбором параметров»
+  ([`LaunchParametersWindow.xaml`](Workspace1C/Views/LaunchParametersWindow.xaml),
+  [`LaunchParametersWindow.Avalonia.cs`](Workspace1C/Views/LaunchParametersWindow.Avalonia.cs)):
+  кнопка **«Изменить»** (между «Добавить» и «Удалить») открывает отдельный диалог
+  правки пользовательского параметра ([`LaunchParameterEditWindow.xaml`](Workspace1C/Views/LaunchParameterEditWindow.xaml)+[`.xaml.cs`](Workspace1C/Views/LaunchParameterEditWindow.xaml.cs),
+  [`LaunchParameterEditWindow.Avalonia.cs`](Workspace1C/Views/LaunchParameterEditWindow.Avalonia.cs));
+  кнопки **«Вверх/Вниз»** меняют порядок пользовательских параметров в справочнике;
+  поле **поиска** над списком фильтрует строки по ключу и описанию. Чистая логика —
+  [`OneCLaunchArgumentParser.cs`](Workspace1C/Services/OneCLaunchArgumentParser.cs)
+  (`FilterReferenceCatalog`, `MoveCustomParameter`, `SplitCustomEntry`). Пользовательские
+  параметры стали доступны и на Linux (передача из `MainViewModel.Avalonia.Launch`).
+  Покрыто тестами `LaunchParametersCatalogTests`.
+
+- **Подстановки для сценариев: все реквизиты базы и диалог «Выбрать переменную»
+  (issue #67, Windows и Linux)** — справочник токенов окна сценария расширен
+  (`%connection.user%` — логин, `%connection.type%`, `%connection.port%`, `%id%`,
+  `%имягруппы%`); резолвер [`ScriptParameterResolver.cs`](Workspace1C/Services/ScriptParameterResolver.cs)
+  понимает логин/пароль, которые реально подставит стартер — при общей авторизации
+  (issue #57) в карту попадают решённые учётные данные, когда у базы их нет
+  ([`InfobaseAuthResolver`](Workspace1C/Services/InfobaseAuthResolver.cs) — в запуске
+  сценария и превью); под списком подстановок добавлена кнопка **«Выбрать…»**,
+  открывающая диалог со ВСЕМИ переменными базы (имя переменной — значение для базы,
+  поиск по обеим колонкам, вставка по «Ок» и двойному клику; пароли маскируются):
+  [`ScriptTokenPickerViewModel.cs`](Workspace1C/ViewModels/ScriptTokenPickerViewModel.cs),
+  [`ScriptTokenPickerWindow.xaml`](Workspace1C/Views/ScriptTokenPickerWindow.xaml)+[`.xaml.cs`](Workspace1C/Views/ScriptTokenPickerWindow.xaml.cs),
+  [`ScriptTokenPickerWindow.Avalonia.cs`](Workspace1C/Views/ScriptTokenPickerWindow.Avalonia.cs).
+  Покрыто тестами `ScriptTokenPickerViewModelTests`.
+
+### Изменено
+
+- **«Публикация на веб-сервере» перенесена из «Утилиты» в контекстное меню базы
+  (issue #63, Windows и Linux)** — пункт теперь в подменю **«Администрирование»**
+  (над «Историей запусков», с разделителем): удалён из каталога «Утилиты»
+  ([`UtilitiesMenuCatalog.cs`](Workspace1C/Services/UtilitiesMenuCatalog.cs) — enum/`All`/Default;
+  старые компоновки `utilities_menu_layout.json` с `WebPublish` отбрасываются
+  нормализацией) и добавлен в [`ContextMenuCatalog.cs`](Workspace1C/Services/ContextMenuCatalog.cs)
+  (`GroupAdministration`, `isNew`). Парсер конфигов Apache теперь разбирает
+  **DocumentRoot** (точной каталог публикации, включая подкаталог сайта вида
+  «ServerRoot\htdocs\27») и **Listen** (порт) — [`ApacheConfIncludeParser.cs`](Workspace1C/Services/ApacheConfIncludeParser.cs),
+  [`ApacheInstance.cs`](Workspace1C/Models/ApacheInstance.cs) (+`DocumentRoot`/`ListenPorts`);
+  URL публикации учитывает порт: при LISTEN ≠ 80 — `http://localhost:8027/demo_27/`
+  ([`WebPublishService.LocalUrl`](Workspace1C/Services/WebPublishService.cs),
+  [`WebPublishViewModel.cs`](Workspace1C/ViewModels/WebPublishViewModel.cs)).
+  Покрыто тестами `WebPublishIssue63Tests` (и обновлены регресс-тесты меню).
+
+- **Редактор меню трея: перемещение блоков в пользовательскую группу (issue #62,
+  Windows и Linux)** — «Создал группу, но переместить туда 2 блока не смог» (7OH):
+  добавлены кнопки **«В группу…»** (диалог выбора пользовательской группы — подменю)
+  и **«В корень»**; блоки/разделители переносятся в группу и обратно
+  ([`TrayMenuEditorViewModel.cs`](Workspace1C/ViewModels/TrayMenuEditorViewModel.cs),
+  [`TrayMenuGroupPickWindow.xaml`](Workspace1C/Views/TrayMenuGroupPickWindow.xaml)+[`.xaml.cs`](Workspace1C/Views/TrayMenuGroupPickWindow.xaml.cs),
+  [`TrayMenuGroupPickWindow.Avalonia.cs`](Workspace1C/Views/TrayMenuGroupPickWindow.Avalonia.cs));
+  резолвер/построитель учитывают вложенность и скрытые дети
+  ([`TrayMenuResolver.cs`](Workspace1C/Services/TrayMenuResolver.cs)). Покрыто тестами
+  `TrayMenuGroupMoveTests`.
+
+- **Миграция баз: пользователь СУБД берётся из исходной базы (issue #41, Windows и
+  Linux)** — «этот параметр можно брать из исходной базы» (7OH): rac отдаёт db-user
+  в «infobase summary list», поэтому [`ClusterMigrationService.BuildCreateRequest`](Workspace1C/Services/ClusterMigrationService.cs)
+  использует его с приоритетом, значение диалога — fallback (пароль, который rac не
+  возвращает, по-прежнему из диалога). Покрыто тестами
+  `ClusterMigrationServiceTests` (+3).
+
+### Исправлено
+
+- **Остатки тёмной темы: окно «Изменение сервера» (issue #61, Windows и Linux)** —
+  заголовки полей и заголовок окна на Linux снова не читались (подписи строились
+  кодом без привязки кисти) — привязаны к `TextPrimaryBrush`
+  ([`ServerEditWindow.Avalonia.cs`](Workspace1C/Views/ServerEditWindow.Avalonia.cs));
+  поле показа пароля на Windows переведено на стиль темы `ModernTextBox`
+  ([`ServerEditWindow.xaml`](Workspace1C/Views/ServerEditWindow.xaml)). Тест-стражи
+  `Issue61TitleColorsTests` расширены.
+
+---
+
 ## [1.0.0.71] — 2026-10-24
 
 ### Добавлено
