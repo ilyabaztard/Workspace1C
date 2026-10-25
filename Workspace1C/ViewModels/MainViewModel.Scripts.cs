@@ -81,7 +81,10 @@ public partial class MainViewModel
         if (infobase is null || scenario is null)
             return;
 
-        var values = ScriptParameterResolver.BuildValueMap(infobase);
+        // Логин/пароль, которые реально подставятся при запуске базы: у базы без
+        // собственной авторизации это общая авторизация (issue #57) — сценарий должен
+        // «понимать все свойства базы», в т.ч. логин (issue #67).
+        var values = ScriptParameterResolver.BuildValueMap(infobase, ResolveEffectiveScriptCredentials(infobase));
         // Шелл сценария передаётся в сборку тела: для PowerShell разделитель
         // между «cd …» и командой — «;» вместо «&&» (issue #308, замечание @7OH).
         var commandBody = ScriptParameterResolver.BuildCommandLine(
@@ -152,6 +155,29 @@ public partial class MainViewModel
         }
 
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Логин/пароль, которые реально подставятся при запуске базы в режиме
+    /// «1С:Предприятие» (собственная авторизация базы/режима или общая — issue #57).
+    /// Для сценариев (issue #67): чтобы подстановка %connection.user%/%connection.password%
+    /// соответствовала фактическому запуску. null — авторизация не в виде
+    /// «Логин+Пароль» (аутентификация ОС/запрос от платформы).
+    /// </summary>
+    private static (string? User, string? Password)? ResolveEffectiveScriptCredentials(Infobase infobase)
+    {
+        if (infobase is null)
+            return null;
+
+        Workspace1C.Services.InfobaseAuthResolver.Resolve(
+            infobase, Workspace1C.Services.OneCLaunchMode.Enterprise,
+            out var authMode, out var authUser, out var authPassword,
+            Workspace1C.Services.OneCLauncher.CommonEnterpriseAuthorization,
+            Workspace1C.Services.OneCLauncher.CommonConfiguratorAuthorization,
+            Workspace1C.Services.OneCLauncher.CommonAuthorization);
+        return authMode == Workspace1C.Models.AuthenticationMode.Credentials
+            ? (authUser, authPassword)
+            : null;
     }
 }
 #endif

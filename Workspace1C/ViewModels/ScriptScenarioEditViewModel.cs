@@ -44,8 +44,16 @@ public class ScriptScenarioEditViewModel : ViewModelBase
         new ScriptTokenHint("%connection.filePath%", "Script.TokenConnectionFilePath"),
         new ScriptTokenHint("%connection.webUrl%", "Script.TokenConnectionWebUrl"),
         new ScriptTokenHint("%connection.connectionString%", "Script.TokenConnectionString"),
+        // Логин и остальные свойства запуска (issue #67): резолвер понимает ВСЕ
+        // реквизиты базы динамически (%connection.<имя>%; решённый логин при общей
+        // авторизации issue #57 подставляется, когда у базы нет собственных данных).
+        new ScriptTokenHint("%connection.user%", "Script.TokenConnectionUser"),
         new ScriptTokenHint("%connection.password%", "Script.TokenConnectionPassword"),
+        new ScriptTokenHint("%connection.type%", "Script.TokenConnectionType"),
+        new ScriptTokenHint("%connection.port%", "Script.TokenConnectionPort"),
         new ScriptTokenHint("%password%", "Script.TokenPassword"),
+        new ScriptTokenHint("%id%", "Script.TokenBaseId"),
+        new ScriptTokenHint("%имягруппы%", "Script.TokenGroupName"),
         new ScriptTokenHint("%date%", "Script.TokenDate"),
         new ScriptTokenHint("%date:yyyyMMdd_HHmm%", "Script.TokenDateCustom"),
         // Произвольные поля базы (issue #6): пример подстановки; номер может быть
@@ -174,9 +182,32 @@ public class ScriptScenarioEditViewModel : ViewModelBase
     /// </summary>
     public static string BuildExampleCommandLine(ScriptScenario scenario, Infobase? infobase, DateTime? now = null)
     {
-        var values = ScriptParameterResolver.BuildValueMap(infobase);
+        // Решённая авторизация (логин при общей авторизации, issue #57) — превью
+        // соответствует фактическому запуску (issue #67).
+        var values = ScriptParameterResolver.BuildValueMap(infobase, ResolvePreviewCredentials(infobase));
         // Сборка использует scenario.Shell: разделитель и обёртка соответствуют
         // выбранному интерпретатору; платформа — текущая (для режима «Авто»).
         return ScriptParameterResolver.BuildShellCommandLine(scenario, values, now, OperatingSystem.IsWindows());
+    }
+
+    /// <summary>
+    /// Логин/пароль, решённые для режима «1С:Предприятие» (общая авторизация
+    /// issue #57), для превью подстановок и диалога выбора переменной (issue #67).
+    /// null — аутентификация не «Логин+Пароль» (ОС или запрос платформы).
+    /// </summary>
+    private static (string? User, string? Password)? ResolvePreviewCredentials(Infobase? infobase)
+    {
+        if (infobase is null)
+            return null;
+
+        Services.InfobaseAuthResolver.Resolve(
+            infobase, Services.OneCLaunchMode.Enterprise,
+            out var authMode, out var authUser, out var authPassword,
+            Services.OneCLauncher.CommonEnterpriseAuthorization,
+            Services.OneCLauncher.CommonConfiguratorAuthorization,
+            Services.OneCLauncher.CommonAuthorization);
+        return authMode == Models.AuthenticationMode.Credentials
+            ? (authUser, authPassword)
+            : null;
     }
 }

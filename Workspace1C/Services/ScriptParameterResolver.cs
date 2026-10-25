@@ -76,7 +76,15 @@ public static class ScriptParameterResolver
     /// Публичные свойства <see cref="Infobase"/> и <see cref="ConnectionSettings"/>
     /// попадают в карту динамически (в нижнем регистре), явные ключи — поверх.
     /// </summary>
-    public static Dictionary<string, string> BuildValueMap(Infobase? infobase)
+    /// <param name="infobase">База (может быть null — пустая карта).</param>
+    /// <param name="resolvedCredentials">
+    /// Логин/пароль, решённые для реального запуска (issue #57: общая авторизация базы —
+    /// <c>InfobaseAuthResolver</c>). Подставляются в ключи логина/пароля только когда
+    /// у самой базы собственных учётных данных нет (пусто) — сценарий «понимает все
+    /// свойства базы» в том виде, в котором база реально запускается (issue #67).
+    /// </param>
+    public static Dictionary<string, string> BuildValueMap(Infobase? infobase,
+        (string? User, string? Password)? resolvedCredentials = null)
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (infobase is null)
@@ -149,6 +157,25 @@ public static class ScriptParameterResolver
         {
             for (var i = 0; i < additional.Count; i++)
                 map["additional_" + (i + 1)] = additional[i] ?? "";
+        }
+
+        // Логин/пароль при общей авторизации (issue #67, продолжение #57): собственных
+        // учётных данных у базы нет (пусто) — подставляем решённые для реального запуска
+        // («Договаривались на старте, что будет понимать ВСЕ свойства базы… подставить
+        // логин оно пока не может»). Собственные данные не перезаписываются.
+        if (conn is not null && resolvedCredentials is { } creds)
+        {
+            if (string.IsNullOrWhiteSpace(conn.User) && !string.IsNullOrWhiteSpace(creds.User))
+            {
+                map["connection.user"] = creds.User;
+                map["пользователь"] = creds.User;
+            }
+            if (string.IsNullOrWhiteSpace(conn.Password) && !string.IsNullOrWhiteSpace(creds.Password))
+            {
+                map["connection.password"] = creds.Password;
+                map["пароль"] = creds.Password;
+                map["password"] = creds.Password;
+            }
         }
         return map;
     }

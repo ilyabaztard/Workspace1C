@@ -105,7 +105,15 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <TextBlock x:Name="TokensHint" Text="" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" Margin="2,0,0,10"/>
+                <!-- Issue #67: кнопка «Выбрать…» — слева от поясняющей надписи; открывает
+                     диалог со ВСЕМИ переменными базы (имя — значение) и поиском. -->
+                <StackPanel Orientation="Horizontal" Margin="2,0,0,10">
+                    <Button x:Name="PickTokenButton" Style="{DynamicResource SecondaryButton}"
+                            Content="{loc:Loc Script.PickButton}" Padding="10,3"
+                            Click="OnPickToken_Click" Cursor="Hand"/>
+                    <TextBlock x:Name="TokensHint" Text="" Foreground="{DynamicResource TextSecondaryBrush}"
+                               FontSize="11" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
 
                 <TextBlock x:Name="ExampleBaseLabel" Text="База для примера подстановок" FontWeight="SemiBold" Margin="0,0,0,4"/>
                 <!-- Issue #308, п.14:37: явный ItemTemplate — закрытый комбобокс показывает

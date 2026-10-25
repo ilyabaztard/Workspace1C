@@ -55,6 +55,7 @@ public partial class ScriptScenarioEditWindow : Window
         ParametersLabel.Text = T("Script.Parameters");
         ParametersHint.Text = T("Script.ParametersHint");
         TokensLabel.Text = T("Script.Tokens");
+        PickTokenButton.Content = T("Script.PickButton");
         TokensHint.Text = T("Script.TokensHint");
         ExampleBaseLabel.Text = T("Script.ExampleBase");
         PreviewLabel.Text = T("Script.CommandLinePreview");
@@ -189,6 +190,30 @@ public partial class ScriptScenarioEditWindow : Window
         var token = hint.Token;
         // Вставка токена в позицию курсора поля параметров (план #308: «двойной клик
         // по параметру вставляет его в позицию курсора поля параметров»).
+        var text = ParametersBox.Text ?? "";
+        var caret = ParametersBox.CaretIndex;
+        if (caret > text.Length)
+            caret = text.Length;
+        ParametersBox.Text = text.Insert(caret, token);
+        ParametersBox.CaretIndex = caret + token.Length;
+        ParametersBox.Focus();
+        UpdatePreview();
+    }
+
+    /// <summary>
+    /// «Выбрать…» (issue #67): открывает диалог со ВСЕМИ переменными базы (имя — значение,
+    /// поиск); по «Ок»/двойному клику вставка выбранного токена в поле параметров.
+    /// </summary>
+    private void OnPickToken_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ScriptTokenPickerWindow(SelectedExampleBase)
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.SelectedToken))
+            return;
+
+        var token = dialog.SelectedToken!;
         var text = ParametersBox.Text ?? "";
         var caret = ParametersBox.CaretIndex;
         if (caret > text.Length)

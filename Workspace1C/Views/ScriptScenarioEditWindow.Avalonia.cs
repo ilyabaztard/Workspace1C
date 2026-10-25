@@ -299,7 +299,20 @@ public sealed class ScriptScenarioEditWindow : ModalWindowBase
         _tokensList.Height = 130;
         _tokensList.DoubleTapped += (_, _) => InsertTokenAtCaret();
         panel.Children.Add(_tokensList);
-        panel.Children.Add(HintLabel(T("Script.TokensHint")));
+        // Issue #67: кнопка «Выбрать…» — слева от поясняющей надписи; открывает диалог
+        // со ВСЕМИ переменными базы (имя — значение, поиск) и вставляет токен.
+        var tokenRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            Margin = new Avalonia.Thickness(0, 0, 0, 10)
+        };
+        var pickButton = new Button { Content = T("Script.PickButton"), Padding = new Avalonia.Thickness(10, 3) };
+        pickButton.Styled(ControlThemes.SecondaryButton);
+        pickButton.Click += (_, _) => OpenTokenPicker();
+        tokenRow.Children.Add(pickButton);
+        tokenRow.Children.Add(HintLabel(T("Script.TokensHint")));
+        panel.Children.Add(tokenRow);
 
         panel.Children.Add(Label(T("Script.ExampleBase")));
         try
@@ -402,6 +415,29 @@ public sealed class ScriptScenarioEditWindow : ModalWindowBase
         var token = hint.Token;
         // Вставка токена в позицию курсора поля параметров (план #308: «двойной клик
         // по параметру вставляет его в позицию курсора поля параметров»).
+        var text = _parametersBox.Text ?? "";
+        var caret = _parametersBox.CaretIndex;
+        if (caret > text.Length)
+            caret = text.Length;
+        _parametersBox.Text = text.Insert(caret, token);
+        _parametersBox.CaretIndex = caret + token.Length;
+        _parametersBox.Focus();
+        UpdatePreview();
+    }
+
+    /// <summary>
+    /// «Выбрать…» (issue #67): диалог со ВСЕМИ переменными базы (имя — значение, поиск);
+    /// по «Ок»/двойному клику вставка выбранного токена в поле параметров.
+    /// </summary>
+    private void OpenTokenPicker()
+    {
+        var dialog = new ScriptTokenPickerWindow(SelectedExampleBase);
+        if (!dialog.ShowDialogSync(this))
+            return;
+        var token = dialog.SelectedToken;
+        if (string.IsNullOrWhiteSpace(token))
+            return;
+
         var text = _parametersBox.Text ?? "";
         var caret = _parametersBox.CaretIndex;
         if (caret > text.Length)
