@@ -1,0 +1,54 @@
+<!-- Диалог «В группу» редактора меню трея (issue #62): выбор пользовательской группы
+     (подменю), куда перемещается выбранный блок/разделитель. WPF-версия; Avalonia —
+     TrayMenuGroupPickWindow.Avalonia.cs. -->
+<Window x:Class="Workspace1C.TrayMenuGroupPickWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:Workspace1C.Localization"
+        Icon="{StaticResource AppIcon}"
+        Title="{loc:Loc TrayMenu.PickGroupTitle}"
+        Height="330" Width="420" MinHeight="280" MinWidth="360"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        FontSize="13"
+        Background="{DynamicResource ContentBackgroundBrush}">
+
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style TargetType="ListBoxItem" BasedOn="{StaticResource ModernListBoxItem}"/>
+        <Style TargetType="Button" BasedOn="{StaticResource ModernButton}"/>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="{loc:Loc TrayMenu.PickGroupHint}"
+                   TextWrapping="Wrap" FontSize="12"
+                   Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+
+        <ListBox x:Name="GroupList" Grid.Row="1"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 DisplayMemberPath="Title" SelectionMode="Single"
+                 MouseDoubleClick="OnGroupDoubleClick"/>
+        <TextBlock x:Name="NoGroupsHint" Grid.Row="1" Text="{loc:Loc TrayMenu.NoGroupsHint}"
+                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
+                   TextWrapping="Wrap" Visibility="Collapsed"/>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Width="120" Height="34" Margin="0,0,10,0" IsDefault="True" Click="OnOk_Click"
+                    Background="#16A34A" BorderThickness="0" Foreground="White" Cursor="Hand">
+                <TextBlock Text="{loc:Loc Common.Ok}" Foreground="White" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            </Button>
+            <Button Width="120" Height="34" IsCancel="True" Click="OnCancel_Click"
+                    Background="{DynamicResource ItemHoverBrush}" Cursor="Hand">
+                <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center"/>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

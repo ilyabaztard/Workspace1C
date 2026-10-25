@@ -155,6 +155,28 @@
                 <!-- Переименование / удаление -->
                 <TextBlock Text="{loc:Loc TrayMenu.GroupsHeader}" Margin="0,14,0,4"
                            Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <!-- Перемещение блоков в пользовательскую группу (issue #62, замечание 7OH:
+                     «Создал группу, но переместить туда 2 блока не смог»). -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <Button Style="{StaticResource ModernButton}" Click="OnMoveToGroupClick"
+                            Padding="12,7" Margin="0,0,6,0" HorizontalAlignment="Left"
+                            IsEnabled="{Binding CanMoveToGroup}"
+                            ToolTip="{loc:Loc TrayMenu.MoveToGroupTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="FolderMove" Width="16" Height="16" Margin="0,0,4,0"/>
+                            <TextBlock Text="{loc:Loc TrayMenu.MoveToGroup}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource ModernButton}" Click="OnUnGroupClick"
+                            Padding="12,7" HorizontalAlignment="Left"
+                            IsEnabled="{Binding CanUnGroup}"
+                            ToolTip="{loc:Loc TrayMenu.UnGroupTooltip}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Restore" Width="16" Height="16" Margin="0,0,4,0"/>
+                            <TextBlock Text="{loc:Loc TrayMenu.UnGroup}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
                 <Button Style="{StaticResource ModernButton}" Click="OnEditGroupClick"
                         Padding="12,7" Margin="0,0,0,6" HorizontalAlignment="Left"
                         IsEnabled="{Binding CanEditGroup}">

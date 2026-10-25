@@ -70,6 +70,24 @@ namespace Workspace1C
             _vm.DeleteCommand.Execute(null);
         }
 
+        /// <summary>«В группу…»: выбор пользовательской группы → перемещение блока/разделителя
+        /// в неё как подменю (issue #62, замечание 7OH).</summary>
+        private void OnMoveToGroupClick(object sender, RoutedEventArgs e)
+        {
+            if (!_vm.CanMoveToGroup)
+                return;
+
+            var pick = new TrayMenuGroupPickWindow(_vm.UserGroups) { Owner = this };
+            if (pick.ShowDialog() == true && pick.SelectedGroup is not null)
+                _vm.MoveSelectedToGroup(pick.SelectedGroup);
+        }
+
+        /// <summary>«В корень»: возврат выбранного узла из группы в корень (issue #62).</summary>
+        private void OnUnGroupClick(object sender, RoutedEventArgs e)
+        {
+            _vm.UnGroupSelected();
+        }
+
         /// <summary>«Сохранить»: сохраняет компоновку и закрывает окно (как «Готово» других редакторов).</summary>
         private void OnOk_Click(object sender, RoutedEventArgs e)
         {

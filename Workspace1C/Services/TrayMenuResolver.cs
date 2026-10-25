@@ -135,8 +135,10 @@ public static class TrayMenuResolver
         };
         foreach (var child in node.Children ?? new List<TrayMenuNode>())
         {
-            if (child is not null)
-                copy.Children.Add(CloneNode(child));
+            // Скрытые узлы (в т.ч. дочерние блоки внутри групп) в меню не попадают.
+            if (child is null || !child.Visible)
+                continue;
+            copy.Children.Add(CloneNode(child));
         }
         return copy;
     }

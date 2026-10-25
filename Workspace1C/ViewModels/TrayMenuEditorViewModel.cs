@@ -74,6 +74,7 @@ public class TrayMenuEditorViewModel : ViewModelBase
         {
             if (SetPropertyWithRelated(ref _selectedItem, value, nameof(SelectedItem), nameof(HasSelection),
                 nameof(CanMoveSelectedUp), nameof(CanMoveSelectedDown), nameof(CanEditGroup), nameof(CanDelete),
+                nameof(CanMoveToGroup), nameof(CanUnGroup),
                 nameof(SelectedBlockStyle)))
             {
                 // Показываем в поле выбора иконки текущую иконку узла (для групп).
@@ -148,7 +149,7 @@ public class TrayMenuEditorViewModel : ViewModelBase
     public RelayCommand CloseCommand { get; }
     public RelayCommand ToggleVisibleCommand { get; }
 
-    /// <summary>Восстанавливает дерево верхнего уровня из компоновки.</summary>
+    /// <summary>Восстанавливает дерево верхнего уровня из компоновки (рекурсивно, с детьми групп).</summary>
     private static ObservableCollection<TrayMenuNodeItem> BuildTree(IEnumerable<TrayMenuNode> nodes)
     {
         var result = new ObservableCollection<TrayMenuNodeItem>();
@@ -157,19 +158,38 @@ public class TrayMenuEditorViewModel : ViewModelBase
             if (node is null)
                 continue;
             var item = new TrayMenuNodeItem(node, null);
+            BuildChildren(item);
             result.Add(item);
         }
         return result;
     }
+
+    /// <summary>Наполняет Children узла-группы (иерархия для перемещения блоков в подменю).</summary>
+    private static void BuildChildren(TrayMenuNodeItem parent)
+    {
+        foreach (var child in parent.Node.Children ?? new List<TrayMenuNode>())
+        {
+            if (child is null)
+                continue;
+            var item = new TrayMenuNodeItem(child, parent);
+            BuildChildren(item);
+            parent.Children.Add(item);
+        }
+    }
+
+    /// <summary>Коллекция-контейнер узла: корневой список либо Children родителя-группы.</summary>
+    private ObservableCollection<TrayMenuNodeItem> ContainerOf(TrayMenuNodeItem item)
+        => item.Parent is null ? Roots : item.Parent.Children;
 
     private bool CanMoveSelected(int delta)
     {
         var item = SelectedItem;
         if (item is null)
             return false;
-        var index = Roots.IndexOf(item);
+        var container = ContainerOf(item);
+        var index = container.IndexOf(item);
         var target = index + delta;
-        return target >= 0 && target < Roots.Count;
+        return target >= 0 && target < container.Count;
     }
 
     private void MoveSelected(int delta)
@@ -177,11 +197,12 @@ public class TrayMenuEditorViewModel : ViewModelBase
         var item = SelectedItem;
         if (item is null)
             return;
-        var index = Roots.IndexOf(item);
+        var container = ContainerOf(item);
+        var index = container.IndexOf(item);
         var target = index + delta;
-        if (target < 0 || target >= Roots.Count)
+        if (target < 0 || target >= container.Count)
             return;
-        Roots.Move(index, target);
+        container.Move(index, target);
         RaiseCommandsCanExecuteChanged();
     }
 
@@ -192,9 +213,10 @@ public class TrayMenuEditorViewModel : ViewModelBase
         var selected = SelectedItem;
         if (selected is not null)
         {
-            var index = Roots.IndexOf(selected);
-            var item = new TrayMenuNodeItem(node, null);
-            Roots.Insert(index + 1, item);
+            var container = ContainerOf(selected);
+            var index = container.IndexOf(selected);
+            var item = new TrayMenuNodeItem(node, selected.Parent);
+            container.Insert(index + 1, item);
             SelectedItem = item;
         }
         else
@@ -243,11 +265,80 @@ public class TrayMenuEditorViewModel : ViewModelBase
         var item = SelectedItem;
         if (item is null || !CanDelete)
             return;
-        var index = Roots.IndexOf(item);
-        Roots.Remove(item);
+        var container = ContainerOf(item);
+        container.Remove(item);
         SelectedItem = null;
-        SelectNodeAt(index);
+        if (ReferenceEquals(container, Roots))
+            SelectNodeAt(Math.Min(0, Roots.Count - 1));
         RaiseCommandsCanExecuteChanged();
+    }
+
+    // ===================== Перемещение блоков в пользовательскую группу (issue #62) =====================
+
+    /// <summary>Все пользовательские группы дерева (приёмники для «В группу…»).</summary>
+    public IReadOnlyList<TrayMenuNodeItem> UserGroups
+    {
+        get
+        {
+            var result = new List<TrayMenuNodeItem>();
+            CollectUserGroups(Roots, result);
+            return result;
+        }
+    }
+
+    private static void CollectUserGroups(IEnumerable<TrayMenuNodeItem> items, List<TrayMenuNodeItem> result)
+    {
+        foreach (var item in items)
+        {
+            if (IsUserGroup(item))
+                result.Add(item);
+            CollectUserGroups(item.Children, result);
+        }
+    }
+
+    /// <summary>Можно ли «В группу…»: выбран не-группа и есть хотя бы одна группа-приёмник.</summary>
+    public bool CanMoveToGroup =>
+        SelectedItem is not null && !IsUserGroup(SelectedItem)
+        && UserGroups.Any(g => !ReferenceEquals(g, SelectedItem));
+
+    /// <summary>Можно ли «В корень»: выбранный узел внутри группы.</summary>
+    public bool CanUnGroup => SelectedItem?.Parent is not null;
+
+    /// <summary>Переносит выбранный узел в указанную пользовательскую группу (подменю). <c>true</c> — перемещён.</summary>
+    public bool MoveSelectedToGroup(TrayMenuNodeItem? group)
+    {
+        var item = SelectedItem;
+        if (item is null || group is null || !IsUserGroup(group) || ReferenceEquals(group, item))
+            return false;
+
+        // Одна вложенность: внутри группы допускаются блоки и разделители, но не другие группы.
+        if (IsUserGroup(item))
+            return false;
+
+        var container = ContainerOf(item);
+        container.Remove(item);
+        item.Parent = group;
+        group.Children.Add(item);
+        SelectedItem = item;
+        RaiseCommandsCanExecuteChanged();
+        return true;
+    }
+
+    /// <summary>Возвращает выбранный узел из группы в корень (сразу после группы). <c>true</c> — возвращён.</summary>
+    public bool UnGroupSelected()
+    {
+        var item = SelectedItem;
+        var parent = item?.Parent;
+        if (parent is null)
+            return false;
+
+        parent.Children.Remove(item);
+        var insertAt = Math.Min(Roots.IndexOf(parent) + 1, Roots.Count);
+        item.Parent = null;
+        Roots.Insert(insertAt, item);
+        SelectedItem = item;
+        RaiseCommandsCanExecuteChanged();
+        return true;
     }
 
     /// <summary>Выбирает узел на месте удалённого: тот же индекс в списке, если индекс за концом — последний.</summary>

@@ -182,6 +182,17 @@ namespace Workspace1C
                 Foreground = new SolidColorBrush(Color.Parse("#94A3B8"))
             });
 
+            // Перемещение блоков в пользовательскую группу (issue #62, замечание 7OH:
+            // «Создал группу, но переместить туда 2 блока не смог»).
+            var moveGroupRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            var moveToGroupButton = TextButton("TrayMenu.MoveToGroup", OnMoveToGroupClick);
+            moveToGroupButton.Bind(Button.IsEnabledProperty, new Binding("CanMoveToGroup"));
+            var unGroupButton = TextButton("TrayMenu.UnGroup", OnUnGroupClick);
+            unGroupButton.Bind(Button.IsEnabledProperty, new Binding("CanUnGroup"));
+            moveGroupRow.Children.Add(moveToGroupButton);
+            moveGroupRow.Children.Add(unGroupButton);
+            panel.Children.Add(moveGroupRow);
+
             // Переименование / удаление.
             panel.Children.Add(SectionHeader("TrayMenu.GroupsHeader", top: 14));
             var editGroupButton = TextButton("TrayMenu.EditGroup", OnEditGroupClick);
@@ -339,6 +350,24 @@ namespace Workspace1C
         private void OnDeleteClick()
         {
             _vm.DeleteCommand.Execute(null);
+        }
+
+        /// <summary>«В группу…»: выбор пользовательской группы → перемещение блока/разделителя
+        /// в неё как подменю (issue #62, замечание 7OH).</summary>
+        private void OnMoveToGroupClick()
+        {
+            if (!_vm.CanMoveToGroup)
+                return;
+
+            var pick = new TrayMenuGroupPickWindow(_vm.UserGroups);
+            if (pick.ShowDialogSync(this) && pick.SelectedGroup is not null)
+                _vm.MoveSelectedToGroup(pick.SelectedGroup);
+        }
+
+        /// <summary>«В корень»: возврат выбранного узла из группы в корень (issue #62).</summary>
+        private void OnUnGroupClick()
+        {
+            _vm.UnGroupSelected();
         }
 
         private void OnOkClick()
