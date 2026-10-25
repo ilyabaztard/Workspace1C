@@ -39,8 +39,16 @@ namespace Workspace1C
             return block;
         }
 
-        public static TextBlock Label(string key, double fontSize = 12) =>
-            Text(LocalizationManager.T(key), fontSize, secondary: true);
+        /// <summary>Подпись по ключу локализации. Кисть — «подпись поля формы»
+        /// (<c>FormLabelBrush</c>, issue #61): всегда контрастна в обеих темах, включая
+        /// стенерированные схемы (вместо вторичной кисти, которая в тёмной теме могла
+        /// оказаться тёмной у пользовательских схем).</summary>
+        public static TextBlock Label(string key, double fontSize = 12)
+        {
+            var block = Text(LocalizationManager.T(key), fontSize, secondary: true);
+            ThemeBrushes.Bind(block, TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
+        }
 
         public static TextBlock BoundText(string path, double fontSize = 12, bool secondary = true)
         {

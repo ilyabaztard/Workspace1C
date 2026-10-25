@@ -53,6 +53,9 @@
     <SolidColorBrush x:Key="BorderBrushColor" Color="{DynamicResource BorderColor}"/>
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource TextPrimaryColor}"/>
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="{DynamicResource TextSecondaryColor}"/>
+    <!-- Единая кисть «подпись поля формы» (issue #61): подписи и заголовки полей ввода
+         всегда контрастны в обеих темах, включая стенерированные схемы. -->
+    <SolidColorBrush x:Key="FormLabelBrush" Color="{DynamicResource TextPrimaryColor}"/>
     <SolidColorBrush x:Key="TextOnAccentBrush" Color="{DynamicResource TextOnAccentColor}"/>
     <SolidColorBrush x:Key="ButtonTextBrush" Color="{DynamicResource ButtonTextColor}"/>
     <SolidColorBrush x:Key="FavoriteBrush" Color="{DynamicResource FavoriteColor}"/>
