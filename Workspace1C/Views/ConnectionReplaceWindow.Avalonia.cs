@@ -199,6 +199,9 @@ namespace Workspace1C
 
         private static Control Labeled(string textKey, Control input)
         {
+            var label = new TextBlock { Text = LocalizationManager.T(textKey), VerticalAlignment = VerticalAlignment.Center };
+            // Issue #61: подпись поля формы — единая кисть FormLabelBrush.
+            ThemeBrushes.Bind(label, TextBlock.ForegroundProperty, "FormLabelBrush");
             var panel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -206,7 +209,7 @@ namespace Workspace1C
                 VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    new TextBlock { Text = LocalizationManager.T(textKey), VerticalAlignment = VerticalAlignment.Center },
+                    label,
                     input
                 }
             };

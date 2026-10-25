@@ -55,7 +55,9 @@ namespace Workspace1C
                     ExistsText.Text = string.IsNullOrEmpty(dir)
                         ? LocalizationManager.T("DeleteInfobase.DirNotSpecified")
                         : string.Format(LocalizationManager.T("DeleteInfobase.DirNotFound"), dir);
-                    ExistsText.Foreground = System.Windows.Media.Brushes.Gray;
+                    // Issue #61: фиксированный серый нечитаем в тёмной теме — используем
+                    // вторичную кисть темы (как для остальных статусных подписей).
+                    ExistsText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush");
                     PhysicalDeleteCheck.IsEnabled = false;
                     PhysicalDeleteCheck.IsChecked = false;
                     PhysicalHint.Text = LocalizationManager.T("DeleteInfobase.PhysicalUnavailable");
@@ -64,7 +66,7 @@ namespace Workspace1C
             else
             {
                 ExistsText.Text = LocalizationManager.T("DeleteInfobase.NonFileOnlyFromList");
-                ExistsText.Foreground = System.Windows.Media.Brushes.Gray;
+                ExistsText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush");
             }
         }
 

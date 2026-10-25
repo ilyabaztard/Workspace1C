@@ -144,15 +144,21 @@ namespace Workspace1C
             RootPanel.Children.Add(buttons);
         }
 
-        /// <summary>Подпись секции окна предпросмотра.</summary>
-        private static TextBlock GroupLabel(string text) => new()
+        /// <summary>Подпись секции окна предпросмотра. Issue #61: вместо фиксированного
+        /// Gray — кисть темы FormLabelBrush (читаема в обеих темах).</summary>
+        private static TextBlock GroupLabel(string text)
         {
-            Text = text,
-            FontSize = 12,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = Brushes.Gray,
-            Margin = new Thickness(0, 0, 0, 6)
-        };
+            var block = new TextBlock
+            {
+                Text = text,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            if (Application.Current?.TryFindResource("FormLabelBrush") is Brush brush)
+                block.Foreground = brush;
+            return block;
+        }
 
         /// <summary>Крупная кнопка управления окном в стиле темы (увеличенный BuildMiniWindowButton).</summary>
         private FrameworkElement BuildLargeWindowButton(string glyphKey, ThemeFeatureMap.ThemePreviewColors colors)

@@ -226,6 +226,7 @@ namespace Workspace1C
                 Spacing = 8
             };
             var label = new TextBlock { Text = LocalizationManager.T(labelKey), Opacity = 0.65 };
+            ThemeBrushes.Bind(label, TextBlock.ForegroundProperty, "FormLabelBrush");
             var value = new TextBlock { FontWeight = FontWeight.SemiBold };
             value.Bind(TextBlock.TextProperty, new Binding(binding));
             panel.Children.Add(label);

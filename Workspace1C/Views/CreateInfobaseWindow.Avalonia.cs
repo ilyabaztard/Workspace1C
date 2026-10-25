@@ -216,7 +216,9 @@ namespace Workspace1C
             groupRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(150)));
             groupRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             groupRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            // Issue #61: подписи полей формы привязываются к FormLabelBrush.
             var gl = new TextBlock { Text = LocalizationManager.T("CreateInfobase.GroupLabel"), VerticalAlignment = VerticalAlignment.Center };
+            Themes.ThemeBrushes.Bind(gl, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetColumn(gl, 0);
             groupRow.Children.Add(gl);
             ToolTip.SetTip(_groupPathBox, LocalizationManager.T("CreateInfobase.GroupTooltip"));
@@ -237,6 +239,7 @@ namespace Workspace1C
             platRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             platRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
             var pl = new TextBlock { Text = LocalizationManager.T("CreateInfobase.PlatformVersionLabel"), VerticalAlignment = VerticalAlignment.Center };
+            Themes.ThemeBrushes.Bind(pl, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetColumn(pl, 0);
             platRow.Children.Add(pl);
             ToolTip.SetTip(_platformBox, LocalizationManager.T("CreateInfobase.SelectedPlatformTooltip"));
@@ -766,7 +769,9 @@ namespace Workspace1C
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(150)));
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
 
+            // Issue #61: подпись поля формы — единая кисть FormLabelBrush.
             var labelBlock = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center };
+            Themes.ThemeBrushes.Bind(labelBlock, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetColumn(labelBlock, 0);
             grid.Children.Add(labelBlock);
 

@@ -371,13 +371,16 @@ namespace Workspace1C
                 new Avalonia.Data.Binding(nameof(TabItem.Foreground)) { Source = tab });
             icon.Margin = new Thickness(0, 0, 6, 0);
 
+            var tabCaption = new TextBlock { Text = LocalizationManager.T(titleKey), VerticalAlignment = VerticalAlignment.Center };
+            // Issue #61: текст заголовка вкладки привязан к кисти темы.
+            Themes.ThemeBrushes.Bind(tabCaption, TextBlock.ForegroundProperty, "FormLabelBrush");
             tab.Header = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Children =
                 {
                     icon,
-                    new TextBlock { Text = LocalizationManager.T(titleKey), VerticalAlignment = VerticalAlignment.Center }
+                    tabCaption
                 }
             };
             return tab;

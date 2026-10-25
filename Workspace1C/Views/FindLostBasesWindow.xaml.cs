@@ -94,10 +94,12 @@ namespace Workspace1C
             var roots = InfobaseDiskScanner.EnumerateSearchRoots();
             if (roots.Count == 0)
             {
+                // Issue #61: текст-заглушка «Нет корней поиска» красится кистью темы,
+                // а не фиксированным Gray (нечитаем в тёмной теме).
                 DrivesPanel.Children.Add(new TextBlock
                 {
                     Text = T("FindLostBases.NoRoots"),
-                    Foreground = System.Windows.Media.Brushes.Gray,
+                    Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush"),
                     Margin = new Thickness(4, 4, 4, 4)
                 });
                 SearchButton.IsEnabled = false;

@@ -60,6 +60,16 @@ namespace Workspace1C
             return block;
         }
 
+        /// <summary>Подпись поля формы по строке (не по ключу локализации). Кисть —
+        /// <c>FormLabelBrush</c> (issue #61): единая точка для подписей полей, собранных
+        /// кодом, чтобы они не остались чёрными в тёмной теме и пользовательских схемах.</summary>
+        public static TextBlock FieldLabel(string text, double fontSize = 12)
+        {
+            var block = Text(text, fontSize, secondary: false);
+            block.SetResourceReference(TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
+        }
+
         /// <summary>Текст, привязанный к свойству DataContext.</summary>
         public static TextBlock BoundText(string path, double fontSize = 12, bool secondary = true)
         {
@@ -233,9 +243,14 @@ namespace Workspace1C
             return column;
         }
 
-        /// <summary>Заголовок секции окна.</summary>
-        public static TextBlock Section(string key) =>
-            Text(LocalizationManager.T(key), 13, bold: true);
+        /// <summary>Заголовок секции окна. Кисть — <c>FormLabelBrush</c> (issue #61):
+        /// заголовки секций, как и подписи полей, читаемы в обеих темах.</summary>
+        public static TextBlock Section(string key)
+        {
+            var block = Text(LocalizationManager.T(key), 13, bold: true);
+            block.SetResourceReference(TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
+        }
 
         /// <summary>Рамка-карточка вокруг группы элементов.</summary>
         public static Border Card(UIElement child)

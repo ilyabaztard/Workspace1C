@@ -155,6 +155,14 @@ public class ColorScheme
         FillMissing(LightColors, DefaultLightPalette());
         FillMissing(DarkColors, DefaultDarkPalette());
 
+        // Подпись поля формы всегда равна первичному тексту своей палитры (issue #61):
+        // у старых пользовательских схем ключ мог появиться из палитры по умолчанию,
+        // и тогда FormLabelBrush отставал бы от собственного TextPrimaryColor схемы.
+        if (LightColors.TryGetValue("TextPrimaryColor", out var lightText) && !string.IsNullOrWhiteSpace(lightText))
+            LightColors["FormLabelBrush"] = lightText;
+        if (DarkColors.TryGetValue("TextPrimaryColor", out var darkText) && !string.IsNullOrWhiteSpace(darkText))
+            DarkColors["FormLabelBrush"] = darkText;
+
         // Акцентный цвет: если не задан (старые JSON-файлы) — берём акцент активной палитры.
         if (string.IsNullOrWhiteSpace(AccentColor))
             AccentColor = PaletteValue(IsDark, "AccentColor");
@@ -345,6 +353,10 @@ public class ColorScheme
         ["TextSecondaryColor"] = "#64748B",
         ["TextOnAccentColor"] = "#FFFFFF",
         ["ButtonTextColor"] = "#000000",
+        // Подпись поля формы (issue #61): равна первичному тексту темы — ключ в палитре
+        // гарантирует, что ApplyColors пересоздаёт кисть для ВСЕХ схем (в т.ч. пользовательских
+        // и генерируемых), а не только для тем по умолчанию.
+        ["FormLabelBrush"] = "#000000",
         ["FavoriteColor"] = "#F59E0B",
         // Текст на плашке избранного: тёмный (плашка всегда яркая). Реальный контраст
         // к палитре схемы добирает ThemeManager (SetContrastBrush FavoriteTextBrush).
@@ -383,6 +395,8 @@ public class ColorScheme
         ["TextSecondaryColor"] = "#CBD5E1",
         ["TextOnAccentColor"] = "#FFFFFF",
         ["ButtonTextColor"] = "#000000",
+        // Подпись поля формы (issue #61): равна первичному тексту тёмной темы.
+        ["FormLabelBrush"] = "#F1F5F9",
         ["FavoriteColor"] = "#FBBF24",
         ["FavoriteTextColor"] = "#1C1917",
         ["FolderColor"] = "#3B82F6",
@@ -439,6 +453,9 @@ public class ColorScheme
                 ["InputBackgroundColor"] = C(0.22, 0.40),
                 ["BorderColor"] = C(0.28, 0.35),
                 ["TextPrimaryColor"] = "#F1F5F9",
+                // Подпись поля формы (issue #61): в генерируемых схемах тоже присутствует
+                // и повторяет первичный текст — контрастна и на карточке, и на поле ввода.
+                ["FormLabelBrush"] = "#F1F5F9",
                 ["TextSecondaryColor"] = C(0.80, 0.30),
                 ["TextOnAccentColor"] = "#000000",
                 ["ButtonTextColor"] = "#000000",
@@ -475,6 +492,8 @@ public class ColorScheme
             ["InputBackgroundColor"] = C(0.95, 0.25),
             ["BorderColor"] = C(0.88, 0.30),
             ["TextPrimaryColor"] = "#000000",
+            // Подпись поля формы (issue #61): в генерируемых схемах повторяет первичный текст.
+            ["FormLabelBrush"] = "#000000",
             ["TextSecondaryColor"] = C(0.45, 0.40),
             ["TextOnAccentColor"] = "#FFFFFF",
             ["ButtonTextColor"] = "#000000",

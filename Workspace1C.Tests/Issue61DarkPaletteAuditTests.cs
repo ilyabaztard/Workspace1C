@@ -18,7 +18,9 @@ public sealed class Issue61DarkPaletteAuditTests
 {
     private static readonly string[] ForbiddenDarkHex =
     {
-        "#000000", "#000", "#0F172A", "#111827", "#1F2937", "#1C1917", "#0B1120"
+        // Тёмные hex подписей/заголовков: на тёмном фоне карточек и полей ввода
+        // такие буквы нечитаемы (issue #61). Расширено в 1.0.0.75 (#1E293B).
+        "#000000", "#000", "#0F172A", "#111827", "#1F2937", "#1C1917", "#1E293B", "#0B1120"
     };
 
     private static string FindRepoRoot()
@@ -89,6 +91,94 @@ public sealed class Issue61DarkPaletteAuditTests
             if (!file.Contains(".Avalonia.", StringComparison.Ordinal) && !file.Contains("AvaloniaUi", StringComparison.Ordinal))
                 continue;
             AssertNoDarkForegroundHex(File.ReadAllText(file), file, xamlStyle: false);
+        }
+    }
+
+    [Fact]
+    public void WpfCodeBehind_HasNoFixedGrayOrDarkForeground()
+    {
+        // Code-behind WPF-окон (issue #61): подписи полей и заголовки не должны
+        // краситься фиксированными тёмными константами или Brushes.Gray — такие
+        // тексты нечитаемы в тёмной теме (FindLostBases/ThemePreview исправлены).
+        foreach (var file in ReadViewFiles("*.xaml.cs"))
+        {
+            var code = File.ReadAllText(file);
+            code = Regex.Replace(code, @"//.*?$", string.Empty, RegexOptions.Multiline);
+            code = Regex.Replace(code, @"<!--.*?-->", string.Empty, RegexOptions.Singleline);
+
+            // Оставляем только строки, затрагивающие Foreground (иконки и фоны не считаем).
+            // Строки с фолбэком вида «as Brush ?? Brushes.Gray» (Defensive fallback при
+            // отсутствии ресурса темы) не являются стилевым присвоением — не считаем.
+            var body = new System.Text.StringBuilder();
+            foreach (var line in code.Split('\n'))
+            {
+                if (line.IndexOf("Foreground", StringComparison.Ordinal) >= 0
+                    && !line.Contains("??", StringComparison.Ordinal))
+                    body.AppendLine(line);
+            }
+            var bodyText = body.ToString();
+
+            foreach (var hex in ForbiddenDarkHex)
+            {
+                Assert.DoesNotContain(hex, bodyText, StringComparison.OrdinalIgnoreCase);
+            }
+            Assert.DoesNotContain("Brushes.Gray", bodyText, StringComparison.Ordinal);
+            Assert.DoesNotContain("Brushes.Black", bodyText, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>Окна-кандидаты issue #61 (1.0.0.75): подписи полей форм, собранные кодом
+    /// (Field/Place/Label/MakeLabel/SectionHeader/GroupLabel), привязаны к единой кисти
+    /// FormLabelBrush, а не остаются чёрными из-за дефолта TextBlock.</summary>
+    public static TheoryData<string> AvaloniaFormWindows { get; } = new()
+    {
+        "CloneServerInfobaseWindow.Avalonia.cs",
+        "CreateInfobaseWindow.Avalonia.cs",
+        "RacInfobasePropertiesWindow.Avalonia.cs",
+        "ConnectionSettingsWindow.Avalonia.cs",
+        "PlatformDownloadWindow.Avalonia.cs",
+        "SettingsWindow.Avalonia.cs",
+        "ClusterMigrationWindow.Avalonia.cs",
+        "ServerMonitorWindow.Avalonia.cs",
+        "PlatformChangeWindow.Avalonia.cs",
+        "ProfilesWindow.Avalonia.cs",
+        "LoginWindow.Avalonia.cs",
+        "NetworkDiagnosticsWindow.Avalonia.cs",
+        "ConnectionReplaceWindow.Avalonia.cs",
+        "GroupEditWindow.Avalonia.cs",
+        "UsageStatisticsWindow.Avalonia.cs",
+        "ContextMenuEditorWindow.Avalonia.cs",
+        "TrayMenuEditorWindow.Avalonia.cs",
+        "UtilitiesMenuEditorWindow.Avalonia.cs",
+        "ThemePreviewWindow.Avalonia.cs"
+    };
+
+    [Theory]
+    [MemberData(nameof(AvaloniaFormWindows))]
+    public void AvaloniaFormWindow_FieldLabelsBindFormLabelBrush(string fileName)
+    {
+        var code = File.ReadAllText(Path.Combine(FindRepoRoot(), "Workspace1C", "Views", fileName));
+        Assert.Contains("\"FormLabelBrush\"", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AvaloniaEditorSectionHeaders_NoFixedGrayForeground()
+    {
+        // Заголовки секций в редакторах меню и настройках: фиксированный серый
+        // #94A3B8 заменён на кисти темы (issue #61).
+        foreach (var name in new[]
+        {
+            "ContextMenuEditorWindow.Avalonia.cs",
+            "TrayMenuEditorWindow.Avalonia.cs",
+            "UtilitiesMenuEditorWindow.Avalonia.cs",
+            "SettingsWindow.Avalonia.cs",
+            "ThemePreviewWindow.Avalonia.cs",
+            "UsageStatisticsWindow.Avalonia.cs"
+        })
+        {
+            var code = File.ReadAllText(Path.Combine(FindRepoRoot(), "Workspace1C", "Views", name));
+            Assert.DoesNotContain("Color.Parse(\"#94A3B8\")", code, StringComparison.Ordinal);
+            Assert.Contains("\"FormLabelBrush\"", code, StringComparison.Ordinal);
         }
     }
 

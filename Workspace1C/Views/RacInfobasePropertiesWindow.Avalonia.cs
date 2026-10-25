@@ -302,14 +302,20 @@ namespace Workspace1C
 
         // ===================== Построители =====================
 
-        private static TextBlock Label(string text) => new()
+        private static TextBlock Label(string text)
         {
-            Text = text,
-            FontSize = 12,
-            FontWeight = FontWeight.SemiBold,
-            // Компактнее (issue #3, 1.0.0.14): часть полей не помещалась по высоте.
-            Margin = new Thickness(0, 4, 0, 2)
-        };
+            var block = new TextBlock
+            {
+                Text = text,
+                FontSize = 12,
+                FontWeight = FontWeight.SemiBold,
+                // Компактнее (issue #3, 1.0.0.14): часть полей не помещалась по высоте.
+                Margin = new Thickness(0, 4, 0, 2)
+            };
+            // Issue #61: подпись поля формы — единая кисть FormLabelBrush.
+            Themes.ThemeBrushes.Bind(block, TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
+        }
 
         private static TextBox Text(string path, bool readOnly = false)
         {

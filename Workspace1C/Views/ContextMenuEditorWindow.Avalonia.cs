@@ -69,12 +69,13 @@ namespace Workspace1C
             dock.Children.Add(buttons);
 
             // Дерево слева.
+            // Issue #61: заголовок дерева — кисть темы (FormLabelBrush), не фиксированный серый.
             var treeHeader = new TextBlock
             {
                 Text = LocalizationManager.T("ContextMenu.Editor.TreeHeader"),
-                Foreground = new SolidColorBrush(Color.Parse("#94A3B8")),
                 Margin = new Thickness(4, 4, 4, 8)
             };
+            ThemeBrushes.Bind(treeHeader, TextBlock.ForegroundProperty, "FormLabelBrush");
             DockPanel.SetDock(treeHeader, Dock.Top);
             dock.Children.Add(treeHeader);
 
@@ -141,9 +142,10 @@ namespace Workspace1C
             {
                 Text = node.KindLabel,
                 FontSize = 11,
-                Margin = new Thickness(8, 0, 0, 0),
-                Foreground = new SolidColorBrush(Color.Parse("#94A3B8"))
+                Margin = new Thickness(8, 0, 0, 0)
             };
+            // Issue #61: вторичный текст строки — вторичная кисть темы.
+            ThemeBrushes.Bind(kind, TextBlock.ForegroundProperty, "TextSecondaryBrush");
             kind.Bind(TextBlock.TextProperty, new Binding("KindLabel"));
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
             row.Children.Add(check);
@@ -203,13 +205,14 @@ namespace Workspace1C
                 Padding = new Thickness(10),
                 Margin = new Thickness(0, 14, 0, 0)
             };
-            hint.Child = new TextBlock
+            var hintBlock = new TextBlock
             {
                 Text = LocalizationManager.T("ContextMenu.Editor.Hint"),
                 TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.Parse("#94A3B8"))
+                FontSize = 12
             };
+            ThemeBrushes.Bind(hintBlock, TextBlock.ForegroundProperty, "TextSecondaryBrush");
+            hint.Child = hintBlock;
             panel.Children.Add(hint);
 
             return panel;
@@ -220,9 +223,10 @@ namespace Workspace1C
             var text = new TextBlock
             {
                 Text = LocalizationManager.T(key),
-                Margin = new Thickness(0, top, 0, 4),
-                Foreground = new SolidColorBrush(Color.Parse("#94A3B8"))
+                Margin = new Thickness(0, top, 0, 4)
             };
+            // Issue #61: заголовок секции — единая кисть FormLabelBrush.
+            ThemeBrushes.Bind(text, TextBlock.ForegroundProperty, "FormLabelBrush");
             return text;
         }
 

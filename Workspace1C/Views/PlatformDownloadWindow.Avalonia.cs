@@ -545,8 +545,10 @@ namespace Workspace1C
                 VerticalAlignment = VerticalAlignment.Center,
                 FontSize = 12.5
             };
-            if (secondary)
-                ThemeBrushes.Bind(block, TextBlock.ForegroundProperty, "TextSecondaryBrush");
+            // Issue #61: подписи полей формы — единая кисть FormLabelBrush; вторичные
+            // пояснения остаются на вторичной кисти (намеренно приглушённый текст).
+            ThemeBrushes.Bind(block, TextBlock.ForegroundProperty,
+                secondary ? "TextSecondaryBrush" : "FormLabelBrush");
             return block;
         }
 

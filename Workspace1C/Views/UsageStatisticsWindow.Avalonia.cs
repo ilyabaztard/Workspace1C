@@ -102,9 +102,10 @@ namespace Workspace1C
                 Text = LocalizationManager.T("Stats.WeekdayDistribution"),
                 FontSize = 12,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(Color.Parse("#94A3B8")),
                 Margin = new Thickness(0, 0, 0, 6)
             };
+            // Issue #61: заголовок секции — кисть темы, а не фиксированный серый.
+            ThemeBrushes.Bind(barsTitle, TextBlock.ForegroundProperty, "FormLabelBrush");
             var barsHost = new ItemsControl { ItemsSource = _vm.DayOfWeekBars };
             barsHost.ItemTemplate = new FuncDataTemplate<string>((text, _) => new TextBlock
             {

@@ -189,12 +189,16 @@ namespace Workspace1C
             var panel = new StackPanel { Spacing = 8 };
 
             var nameRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            nameRow.Children.Add(new TextBlock { Text = LocalizationManager.T("Profiles.Name"), VerticalAlignment = VerticalAlignment.Center, Width = 100 });
+            var nameLabel = new TextBlock { Text = LocalizationManager.T("Profiles.Name"), VerticalAlignment = VerticalAlignment.Center, Width = 100 };
+            ThemeBrushes.Bind(nameLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
+            nameRow.Children.Add(nameLabel);
             nameRow.Children.Add(_nameBox);
             panel.Children.Add(nameRow);
 
             var passRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            passRow.Children.Add(new TextBlock { Text = LocalizationManager.T("Profiles.Password"), VerticalAlignment = VerticalAlignment.Center, Width = 100 });
+            var passLabel = new TextBlock { Text = LocalizationManager.T("Profiles.Password"), VerticalAlignment = VerticalAlignment.Center, Width = 100 };
+            ThemeBrushes.Bind(passLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
+            passRow.Children.Add(passLabel);
             passRow.Children.Add(_passwordInput);
             panel.Children.Add(passRow);
 

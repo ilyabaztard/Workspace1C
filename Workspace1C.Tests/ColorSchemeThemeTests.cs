@@ -146,6 +146,62 @@ public sealed class ColorSchemeThemeTests
     }
 
     [Fact]
+    public void BuiltInSchemes_IncludeFormLabelBrushInBothPalettes()
+    {
+        // Issue #61: все встроенные схемы несут ключ FormLabelBrush (подпись поля формы)
+        // в обеих палитрах — ThemeManager пересоздаёт кисть по палитре для каждой схемы.
+        foreach (var scheme in new[]
+        {
+            ColorScheme.CreateLight(),
+            ColorScheme.CreateDark(),
+            ColorScheme.CreateBlue(),
+            ColorScheme.CreateGreen(),
+            ColorScheme.CreateMaterial(),
+            ColorScheme.CreateMacOS()
+        })
+        {
+            Assert.True(scheme.LightColors.ContainsKey("FormLabelBrush"),
+                $"Схема «{scheme.Name}» не содержит FormLabelBrush в светлой палитре");
+            Assert.True(scheme.DarkColors.ContainsKey("FormLabelBrush"),
+                $"Схема «{scheme.Name}» не содержит FormLabelBrush в тёмной палитре");
+        }
+    }
+
+    [Fact]
+    public void GenerateFromColor_IncludesFormLabelBrushMatchingTextPrimary()
+    {
+        var scheme = ColorScheme.GenerateFromColor("#2563EB");
+
+        Assert.Equal(scheme.LightColors["TextPrimaryColor"], scheme.LightColors["FormLabelBrush"]);
+        Assert.Equal(scheme.DarkColors["TextPrimaryColor"], scheme.DarkColors["FormLabelBrush"]);
+    }
+
+    [Fact]
+    public void FromJson_NormalizedScheme_IncludesFormLabelBrushFollowsTextPrimary()
+    {
+        // Старая пользовательская схема без ключа FormLabelBrush: после Normalize()
+        // кисть появляется и повторяет собственный TextPrimaryColor схемы (issue #61).
+        const string legacyJson = """
+        {
+          "Name": "Фирменная",
+          "LightColors": {
+            "TextPrimaryColor": "#121212",
+            "CardBackgroundColor": "#FFFFFF"
+          },
+          "DarkColors": {
+            "TextPrimaryColor": "#EEEEEE",
+            "CardBackgroundColor": "#222222"
+          }
+        }
+        """;
+
+        var scheme = ColorScheme.FromJson(legacyJson);
+        Assert.NotNull(scheme);
+        Assert.Equal("#121212", scheme!.LightColors["FormLabelBrush"]);
+        Assert.Equal("#EEEEEE", scheme.DarkColors["FormLabelBrush"]);
+    }
+
+    [Fact]
     public void FromJson_ReadsLegacyFileWithoutAccentColor()
     {
         // Старый формат: имя и (частичная) палитра без поля AccentColor.

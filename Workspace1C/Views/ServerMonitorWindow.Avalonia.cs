@@ -341,7 +341,7 @@ namespace Workspace1C
                 Margin = new Thickness(0, 0, 0, 10),
                 Children =
                 {
-                    new TextBlock { Text = LocalizationManager.T("ServerMonitor.Cluster"), VerticalAlignment = VerticalAlignment.Center },
+                    ClusterLabel(),
                     _clusterCombo,
                     // Автообновление + интервал (issue #324): рядом с выбором кластера.
                     autoRefreshCheck,
@@ -829,6 +829,19 @@ namespace Workspace1C
             ThemeBrushes.Bind(button, Button.BackgroundProperty, "ItemHoverBrush");
             button.Click += (_, _) => onClick();
             return button;
+        }
+
+        /// <summary>Подпись поля «Кластер» (issue #61): единая кисть FormLabelBrush —
+        /// читаема в обеих темах и пользовательских схемах.</summary>
+        private static TextBlock ClusterLabel()
+        {
+            var block = new TextBlock
+            {
+                Text = LocalizationManager.T("ServerMonitor.Cluster"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ThemeBrushes.Bind(block, TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
         }
 
         /// <summary>Узкая кнопка-иконка (для строки управления базами, issue #3): только

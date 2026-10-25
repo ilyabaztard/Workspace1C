@@ -234,12 +234,14 @@ namespace Workspace1C
         private static void Place(Grid grid, int row, string labelKey, Control control,
             string? visibilityPath = null, VerticalAlignment labelAlignment = VerticalAlignment.Center)
         {
+            // Issue #61: подпись поля формы — единая кисть FormLabelBrush.
             var label = new TextBlock
             {
                 Text = LocalizationManager.T(labelKey),
                 VerticalAlignment = labelAlignment,
                 Margin = new Thickness(0, 3)
             };
+            Themes.ThemeBrushes.Bind(label, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetRow(label, row);
             Grid.SetColumn(label, 0);
             grid.Children.Add(label);
@@ -552,6 +554,8 @@ namespace Workspace1C
                 FontSize = 18,
                 FontWeight = FontWeight.SemiBold
             };
+            // Issue #61: заголовок окна — первичный текст темы (FormLabelBrush).
+            Themes.ThemeBrushes.Bind(title, TextBlock.ForegroundProperty, "FormLabelBrush");
             var subtitle = new TextBlock
             {
                 Text = LocalizationManager.T("Connection.HeaderSubtitle"),

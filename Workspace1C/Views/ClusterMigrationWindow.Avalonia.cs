@@ -129,7 +129,7 @@ namespace Workspace1C
                 Orientation = Orientation.Horizontal,
                 Spacing = 6,
                 Margin = new Thickness(0, 0, 0, 6),
-                Children = { new TextBlock { Text = LocalizationManager.T("ClusterMigration.SourceServer"), VerticalAlignment = VerticalAlignment.Center }, _sourceServerCombo }
+                Children = { FieldLabel("ClusterMigration.SourceServer"), _sourceServerCombo }
             };
             sourceServerRow.Children.Add(_sourceConnectHost);
             Grid.SetRow(sourceServerRow, 0);
@@ -140,7 +140,7 @@ namespace Workspace1C
                 Orientation = Orientation.Horizontal,
                 Spacing = 6,
                 Margin = new Thickness(0, 0, 0, 6),
-                Children = { new TextBlock { Text = LocalizationManager.T("ClusterMigration.SourceCluster"), VerticalAlignment = VerticalAlignment.Center }, _sourceClusterCombo }
+                Children = { FieldLabel("ClusterMigration.SourceCluster"), _sourceClusterCombo }
             };
             sourceClusterRow.Children.Add(_sourceLoadHost);
             Grid.SetRow(sourceClusterRow, 1);
@@ -200,7 +200,7 @@ namespace Workspace1C
                 Orientation = Orientation.Horizontal,
                 Spacing = 6,
                 Margin = new Thickness(0, 0, 0, 6),
-                Children = { new TextBlock { Text = LocalizationManager.T("ClusterMigration.TargetServer"), VerticalAlignment = VerticalAlignment.Center }, _targetServerCombo }
+                Children = { FieldLabel("ClusterMigration.TargetServer"), _targetServerCombo }
             };
             targetServerRow.Children.Add(_targetConnectHost);
             Grid.SetRow(targetServerRow, 0);
@@ -211,7 +211,7 @@ namespace Workspace1C
                 Orientation = Orientation.Horizontal,
                 Spacing = 6,
                 Margin = new Thickness(0, 0, 0, 6),
-                Children = { new TextBlock { Text = LocalizationManager.T("ClusterMigration.TargetCluster"), VerticalAlignment = VerticalAlignment.Center }, _targetClusterCombo }
+                Children = { FieldLabel("ClusterMigration.TargetCluster"), _targetClusterCombo }
             };
             targetClusterRow.Children.Add(_targetStatusesHost);
             Grid.SetRow(targetClusterRow, 1);
@@ -382,6 +382,19 @@ namespace Workspace1C
         }
 
         private void OnMigrateClick() => _vm.MigrateCommand.Execute(null);
+
+        /// <summary>Подпись поля формы по ключу локализации (issue #61): единая кисть
+        /// FormLabelBrush — читаема в обеих темах и пользовательских схемах.</summary>
+        private static TextBlock FieldLabel(string textKey)
+        {
+            var block = new TextBlock
+            {
+                Text = LocalizationManager.T(textKey),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ThemeBrushes.Bind(block, TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
+        }
 
         private Button BuildPrimaryButton(string text, string icon, Action onClick)
         {

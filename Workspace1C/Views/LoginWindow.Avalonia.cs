@@ -127,7 +127,9 @@ namespace Workspace1C
                 Margin = new Thickness(0, 0, 0, 12),
                 IsVisible = false
             };
-            _passwordPanel.Children.Add(new TextBlock { Text = LocalizationManager.T("Auth.Password") });
+            var passwordLabel = new TextBlock { Text = LocalizationManager.T("Auth.Password") };
+            ThemeBrushes.Bind(passwordLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
+            _passwordPanel.Children.Add(passwordLabel);
             _passwordInput = new PasswordBox();
             _passwordInput.Styled(ControlThemes.ModernPasswordBox);
             // Отступ из разметки (LoginWindow.xaml), общая тема даёт 10,6.

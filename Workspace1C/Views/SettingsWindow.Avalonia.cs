@@ -432,7 +432,9 @@ namespace Workspace1C
 
 
             // Параметры текущей сессии
-            settings.Children.Add(new TextBlock { Text = LocalizationManager.T("Settings.DefaultClientLabel"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 8, 0, 0) });
+            var defaultClientLabel = new TextBlock { Text = LocalizationManager.T("Settings.DefaultClientLabel"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 8, 0, 0) };
+            ThemeBrushes.Bind(defaultClientLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
+            settings.Children.Add(defaultClientLabel);
             // Пять вариантов клиента в строку не помещаются в окно, поэтому переносятся.
             var clientPanel = new WrapPanel { Orientation = Orientation.Horizontal };
             clientPanel.Children.Add(Radio("SessionClient", "IsSessionClientAuto", LocalizationManager.T("Main.SessionClientAuto")));
@@ -441,7 +443,9 @@ namespace Workspace1C
             clientPanel.Children.Add(Radio("SessionClient", "IsSessionClientOrdinary", LocalizationManager.T("Main.SessionClientOrdinary")));
             settings.Children.Add(clientPanel);
 
-            settings.Children.Add(new TextBlock { Text = LocalizationManager.T("Settings.DefaultArch"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 8, 0, 0) });
+            var defaultArchLabel = new TextBlock { Text = LocalizationManager.T("Settings.DefaultArch"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 8, 0, 0) };
+            ThemeBrushes.Bind(defaultArchLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
+            settings.Children.Add(defaultArchLabel);
             var archPanel = new WrapPanel { Orientation = Orientation.Horizontal };
             archPanel.Children.Add(Radio("SessionArch", "IsSessionArchAuto", LocalizationManager.T("Main.SessionClientAuto")));
             archPanel.Children.Add(Radio("SessionArch", "IsSessionArch32", "32"));
@@ -2839,10 +2843,12 @@ namespace Workspace1C
             // с полями (SettingsWindow.Sync.cs, SyncIntervalLabel и SyncScheduleLabel),
             // иначе рядом с погашенным полем стоит подпись в полную яркость.
             var intervalLabel = new TextBlock { Text = LocalizationManager.T("Settings.Ibases.Interval"), VerticalAlignment = VerticalAlignment.Center };
+            ThemeBrushes.Bind(intervalLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
             intervalRow.Children.Add(intervalLabel);
             var intervalBox = new TextBox { Text = _viewModel.IbasesSyncIntervalMinutes.ToString(), Width = 80 }.Styled(ControlThemes.ModernTextBox);
             intervalRow.Children.Add(intervalBox);
             var scheduleLabel = new TextBlock { Text = LocalizationManager.T("Settings.Ibases.ScheduleTime"), VerticalAlignment = VerticalAlignment.Center };
+            ThemeBrushes.Bind(scheduleLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
             intervalRow.Children.Add(scheduleLabel);
             var scheduleBox = new TextBox { Text = _viewModel.IbasesSyncScheduleTime, Width = 80 }.Styled(ControlThemes.ModernTextBox);
             intervalRow.Children.Add(scheduleBox);
@@ -2928,7 +2934,9 @@ namespace Workspace1C
             bases.Children.Add(saveAfterEditCheck);
 
             var keepRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            keepRow.Children.Add(new TextBlock { Text = LocalizationManager.T("Settings.Ibases.BackupKeepCount"), VerticalAlignment = VerticalAlignment.Center });
+            var keepLabel = new TextBlock { Text = LocalizationManager.T("Settings.Ibases.BackupKeepCount"), VerticalAlignment = VerticalAlignment.Center };
+            ThemeBrushes.Bind(keepLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
+            keepRow.Children.Add(keepLabel);
             var keepBox = new TextBox { Text = _viewModel.IbasesBackupKeepCount.ToString(), Width = 80 }.Styled(ControlThemes.ModernTextBox);
             keepRow.Children.Add(keepBox);
             bases.Children.Add(keepRow);
@@ -4608,14 +4616,19 @@ namespace Workspace1C
             return panel;
         }
 
-        /// <summary>Заголовок раздела вкладки «Правка меню» (вторичный цвет, как GroupBox-заголовки).</summary>
-        private static TextBlock GroupSectionHeader(string textKey) => new()
+        /// <summary>Заголовок раздела вкладки «Правка меню». Issue #61: вместо фиксированного
+        /// серого используется единая кисть FormLabelBrush — читаем в обеих темах.</summary>
+        private static TextBlock GroupSectionHeader(string textKey)
         {
-            Text = LocalizationManager.T(textKey),
-            Margin = new Thickness(0, 8, 0, 0),
-            FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.Parse("#94A3B8"))
-        };
+            var header = new TextBlock
+            {
+                Text = LocalizationManager.T(textKey),
+                Margin = new Thickness(0, 8, 0, 0),
+                FontWeight = FontWeight.SemiBold
+            };
+            ThemeBrushes.Bind(header, TextBlock.ForegroundProperty, "FormLabelBrush");
+            return header;
+        }
 
         /// <summary>Открывает редактор структуры меню «Утилиты» (issue #374).</summary>
         private void OpenUtilitiesMenuEditor()

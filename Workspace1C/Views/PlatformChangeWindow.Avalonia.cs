@@ -117,7 +117,7 @@ namespace Workspace1C
                         Spacing = 6,
                         Children =
                         {
-                            new TextBlock { Text = LocalizationManager.T("PlatformChange.PlatformLabel"), VerticalAlignment = VerticalAlignment.Center },
+                            FieldLabel("PlatformChange.PlatformLabel"),
                             platformCombo
                         }
                     },
@@ -134,6 +134,19 @@ namespace Workspace1C
             _vm.ApplyCommand.Execute(null);
             DialogResult = true;
             Close();
+        }
+
+        /// <summary>Подпись поля формы по ключу локализации (issue #61): единая кисть
+        /// FormLabelBrush — читаема в обеих темах и пользовательских схемах.</summary>
+        private static TextBlock FieldLabel(string textKey)
+        {
+            var block = new TextBlock
+            {
+                Text = LocalizationManager.T(textKey),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ThemeBrushes.Bind(block, TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
         }
     }
 }

@@ -161,7 +161,10 @@ namespace Workspace1C
             var createDbRow = new Grid();
             createDbRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(150)));
             createDbRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+            // Issue #61: подписи в форме привязываются к FormLabelBrush — не зависят от
+            // глобального стиля TextBlock, который может не дойти до программного дерева.
             var cdLabel = new TextBlock { Text = LocalizationManager.T("CreateInfobase.CreateDatabase"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+            Themes.ThemeBrushes.Bind(cdLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetColumn(cdLabel, 1);
             createDbRow.Children.Add(cdLabel);
             _createDbCheck.VerticalAlignment = VerticalAlignment.Center;
@@ -173,6 +176,7 @@ namespace Workspace1C
             blockJobsRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(150)));
             blockJobsRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             var bjLabel = new TextBlock { Text = LocalizationManager.T("CreateInfobase.BlockScheduledJobs"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+            Themes.ThemeBrushes.Bind(bjLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetColumn(bjLabel, 1);
             blockJobsRow.Children.Add(bjLabel);
             _blockJobsCheck.VerticalAlignment = VerticalAlignment.Center;
@@ -188,6 +192,7 @@ namespace Workspace1C
             groupRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             groupRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
             var gl = new TextBlock { Text = LocalizationManager.T("CreateInfobase.GroupLabel"), VerticalAlignment = VerticalAlignment.Center };
+            Themes.ThemeBrushes.Bind(gl, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetColumn(gl, 0);
             groupRow.Children.Add(gl);
             Grid.SetColumn(_groupPathBox, 1);
@@ -247,7 +252,9 @@ namespace Workspace1C
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(150)));
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
 
+            // Issue #61: подпись поля формы — единая кисть FormLabelBrush.
             var labelBlock = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center };
+            Themes.ThemeBrushes.Bind(labelBlock, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetColumn(labelBlock, 0);
             grid.Children.Add(labelBlock);
 

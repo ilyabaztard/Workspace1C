@@ -50,6 +50,17 @@ namespace Workspace1C
             return block;
         }
 
+        /// <summary>Подпись поля формы по строке (не по ключу локализации). Кисть —
+        /// <c>FormLabelBrush</c> (issue #61): единая точка для подписей полей, собранных
+        /// кодом (Field/Place/MakeLabel в окнах), чтобы они не остались чёрными в тёмной
+        /// теме и пользовательских схемах.</summary>
+        public static TextBlock FieldLabel(string text, double fontSize = 12)
+        {
+            var block = Text(text, fontSize, secondary: false);
+            ThemeBrushes.Bind(block, TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
+        }
+
         public static TextBlock BoundText(string path, double fontSize = 12, bool secondary = true)
         {
             var block = Text(string.Empty, fontSize, secondary: secondary);
@@ -216,7 +227,14 @@ namespace Workspace1C
             return box;
         }
 
-        public static TextBlock Section(string key) => Text(LocalizationManager.T(key), 13, bold: true);
+        public static TextBlock Section(string key)
+        {
+            // Issue #61: заголовки секций, как и подписи полей, привязываются к
+            // FormLabelBrush — читаемы в обеих темах и пользовательских схемах.
+            var block = Text(LocalizationManager.T(key), 13, bold: true);
+            ThemeBrushes.Bind(block, TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
+        }
 
         public static Border Card(Control child)
         {

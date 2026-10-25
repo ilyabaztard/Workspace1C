@@ -163,15 +163,20 @@ namespace Workspace1C
             return panel;
         }
 
-        /// <summary>Подпись секции окна предпросмотра.</summary>
-        private static TextBlock GroupLabel(string text) => new()
+        /// <summary>Подпись секции окна предпросмотра. Issue #61: вместо фиксированного
+        /// серого — единая кисть FormLabelBrush (читаема в обеих темах).</summary>
+        private static TextBlock GroupLabel(string text)
         {
-            Text = text,
-            FontSize = 12,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Brushes.Gray,
-            Margin = new Thickness(0, 0, 0, 4)
-        };
+            var block = new TextBlock
+            {
+                Text = text,
+                FontSize = 12,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            ThemeBrushes.Bind(block, TextBlock.ForegroundProperty, "FormLabelBrush");
+            return block;
+        }
 
         /// <summary>Крупная кнопка управления окном в стиле темы (увеличенный BuildMiniWindowButton).</summary>
         private Control BuildLargeWindowButton(string glyphKey, ThemeFeatureMap.ThemePreviewColors colors)
