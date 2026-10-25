@@ -149,6 +149,18 @@ public static partial class ApacheInstanceDetector
         }
         instance.IncludeFiles = files;
         instance.IncludeDirs = dirs;
+
+        // Точный DocumentRoot и порты Listen (issue #63): каталог публикации по умолчанию
+        // (может включать подкаталог сайта — «ServerRoot\htdocs\27») и порт URL.
+        if (string.IsNullOrWhiteSpace(instance.DocumentRoot))
+        {
+            instance.DocumentRoot = ApacheConfIncludeParser.ParseDocumentRoot(
+                confText ?? string.Empty, confDirectory ?? instance.ServerRoot) ?? string.Empty;
+        }
+        if (instance.ListenPorts is null || instance.ListenPorts.Count == 0)
+        {
+            instance.ListenPorts = ApacheConfIncludeParser.ParseListenPorts(confText ?? string.Empty);
+        }
     }
 
     private static string? ExtractSwitch(string commandLine, string key)

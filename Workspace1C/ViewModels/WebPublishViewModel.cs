@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Workspace1C.Localization;
 using Workspace1C.Models;
@@ -144,7 +145,11 @@ public sealed class WebPublishViewModel : ViewModelBase
 
     public string ConnectionString { get => _connectionString; set => SetProperty(ref _connectionString, value ?? string.Empty); }
 
-    public string Url => WebPublishService.LocalUrl(VirtualDirectory);
+    /// <summary>Порт слушателя выбранного инстанса Apache (LISTEN); null — 80.</summary>
+    private int? ListenPort => _selectedInstance?.ListenPorts.FirstOrDefault();
+
+    /// <summary>Адрес опубликованной базы (для Apache учитывается порт LISTEN — issue #63).</summary>
+    public string Url => WebPublishService.LocalUrl(VirtualDirectory, ListenPort);
 
     public bool IsBusy
     {
@@ -234,6 +239,7 @@ public sealed class WebPublishViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsApache));
         OnPropertyChanged(nameof(PhysicalDirectory));
         OnPropertyChanged(nameof(ApacheConfPath));
+        OnPropertyChanged(nameof(Url));
 
         _ = initial;
     }
@@ -271,8 +277,16 @@ public sealed class WebPublishViewModel : ViewModelBase
         if (_servers.Count == 0)
             return;
         var option = _servers[_serverIndex];
-        if (option.Instance is { } instance && !string.IsNullOrWhiteSpace(instance.Htdocs))
-            PhysicalDirectory = Path.Combine(instance.Htdocs, VirtualDirectory);
+        if (option.Instance is { } instance)
+        {
+            // DocumentRoot из конфига (issue #63): точный каталог публикации инстанса
+            // (включает подкаталог сайта — «ServerRoot\htdocs\27»); fallback — Htdocs.
+            var root = !string.IsNullOrWhiteSpace(instance.DocumentRoot) ? instance.DocumentRoot : instance.Htdocs;
+            if (!string.IsNullOrWhiteSpace(root))
+                PhysicalDirectory = Path.Combine(root, VirtualDirectory);
+            else
+                PhysicalDirectory = WebPublishService.SuggestPhysicalDirectory(VirtualDirectory, option.Kind);
+        }
         else
             PhysicalDirectory = WebPublishService.SuggestPhysicalDirectory(VirtualDirectory, option.Kind);
     }

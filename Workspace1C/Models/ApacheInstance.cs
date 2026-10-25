@@ -28,6 +28,16 @@ public sealed class ApacheInstance
     /// <summary>Каталог публикации по умолчанию (htdocs / DocumentRoot).</summary>
     public string Htdocs { get; set; } = string.Empty;
 
+    /// <summary>
+    /// DocumentRoot из конфигурации (issue #63): точный каталог публикации по умолчанию
+    /// (может включать подкаталог — например «ServerRoot\htdocs\27»). Пусто — используется
+    /// <see cref="Htdocs"/>. Заполняется детектором из директивы DocumentRoot.
+    /// </summary>
+    public string DocumentRoot { get; set; } = string.Empty;
+
+    /// <summary>Порты директив Listen конфига (issue #63); пусто — порт 80.</summary>
+    public IReadOnlyList<int> ListenPorts { get; set; } = System.Array.Empty<int>();
+
     /// <summary>Вид инстанса (Apache 2.4 / Apache 2.2) для webinst.</summary>
     public WebServerKind Kind { get; set; } = WebServerKind.Apache24;
 

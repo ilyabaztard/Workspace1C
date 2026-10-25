@@ -176,6 +176,14 @@ public static class WebPublishService
             TimeSpan.FromMinutes(5), null, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Адрес опубликованной базы на локальном веб-сервере.</summary>
-    public static string LocalUrl(string virtualDirectory) => "http://localhost/" + virtualDirectory.Trim() + "/";
+    /// <summary>
+    /// Адрес опубликованной базы на локальном веб-сервере (issue #63): при явном порте
+    /// <paramref name="listenPort"/>, отличном от 80, добавляется «:порт» (слушатель
+    /// Apache в конфиге — LISTEN 8027 → http://localhost:8027/имя/).
+    /// </summary>
+    public static string LocalUrl(string virtualDirectory, int? listenPort = null)
+    {
+        var portPart = listenPort is > 0 and not 80 ? ":" + listenPort : string.Empty;
+        return "http://localhost" + portPart + "/" + (virtualDirectory ?? string.Empty).Trim() + "/";
+    }
 }

@@ -68,6 +68,80 @@ public static class ApacheConfIncludeParser
         return Path.GetFullPath(Path.Combine(basePath, relative));
     }
 
+    /// <summary>
+    /// Первая валидная директива <c>DocumentRoot</c> из текста конфига (issue #63):
+    /// каталог публикации по умолчанию. Относительный путь резолвится против
+    /// <paramref name="resolveBase"/> (обычно ServerRoot или каталог конфига);
+    /// <c>null</c> — директива не найдена.
+    /// </summary>
+    public static string? ParseDocumentRoot(string? confText, string? resolveBase)
+    {
+        if (string.IsNullOrWhiteSpace(confText))
+            return null;
+
+        foreach (var raw in SplitLines(confText))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line[0] == '#')
+                continue;
+            var separator = line.IndexOfAny(new[] { ' ', '\t' });
+            if (separator <= 0)
+                continue;
+            var directive = line.Substring(0, separator);
+            if (!string.Equals(directive, "DocumentRoot", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var target = TrimQuotes(line.Substring(separator).Trim());
+            if (string.IsNullOrWhiteSpace(target))
+                continue;
+            return string.IsNullOrWhiteSpace(resolveBase) ? target : Resolve(target, resolveBase);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Порты директив <c>Listen</c> из текста конфига (по порядку, без дублей; issue #63):
+    /// «Listen 80», «Listen 0.0.0.0:80», «Listen [::]:8080». Пустой результат — конфиг без
+    /// Listen (порт 80 по умолчанию).
+    /// </summary>
+    public static IReadOnlyList<int> ParseListenPorts(string? confText)
+    {
+        var result = new List<int>();
+        if (string.IsNullOrWhiteSpace(confText))
+            return result;
+
+        var seen = new HashSet<int>();
+        foreach (var raw in SplitLines(confText))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line[0] == '#')
+                continue;
+            var separator = line.IndexOfAny(new[] { ' ', '\t' });
+            if (separator <= 0)
+                continue;
+            var directive = line.Substring(0, separator);
+            if (!string.Equals(directive, "Listen", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var value = TrimQuotes(line.Substring(separator).Trim());
+            if (string.IsNullOrEmpty(value))
+                continue;
+
+            var portPart = value;
+            var colon = value.LastIndexOf(':');
+            if (colon >= 0)
+                portPart = value[(colon + 1)..];
+            if (!int.TryParse(portPart.Trim(), out var port) || port is < 1 or > 65535)
+                continue;
+            if (seen.Add(port))
+                result.Add(port);
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<string> SplitLines(string confText)
+        => confText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
     private static string Resolve(string target, string confDirectory)
     {
         // POSIX-абсолютный путь (Linux): сохраняем слэши как есть и на Windows.
