@@ -154,4 +154,30 @@ IncludeOptional built_in.conf
 
         Assert.Equal(new[] { 80 }, ports);
     }
+
+    [Fact]
+    public void MergeDefines_CombinesTexts_LaterOverridesEarlier()
+    {
+        // Двухпроходный разбор (issue #63): Define из главного конфига + включаемых файлов
+        // объединяются в один словарь; поздние файлы переопределяют ранние (как Apache).
+        var merged = ApacheConfIncludeParser.MergeDefines(new[]
+        {
+            "Define SRVROOT \"c:/Apache/Apache24\"\nDefine OneCPort 8027",
+            "Define OneCPort 8028\nDefine Extra \"x\""
+        });
+
+        Assert.Equal("c:/Apache/Apache24", merged["SRVROOT"]);
+        Assert.Equal("8028", merged["OneCPort"]);   // поздний файл переопределяет
+        Assert.Equal("x", merged["extra"]);          // ключи регистронезависимы
+        Assert.Equal(3, merged.Count);
+    }
+
+    [Fact]
+    public void MergeDefines_EmptyAndNullTexts_AreSkipped()
+    {
+        var merged = ApacheConfIncludeParser.MergeDefines(new[] { string.Empty, "Define A 1", null! });
+
+        Assert.Single(merged);
+        Assert.Equal("1", merged["A"]);
+    }
 }

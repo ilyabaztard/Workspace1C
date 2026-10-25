@@ -108,6 +108,30 @@ public static class ApacheConfIncludeParser
     }
 
     /// <summary>
+    /// Объединяет словари <c>Define</c> нескольких текстов конфигов (главный + включаемые
+    /// файлы): поздние переопределяют ранние — семантика Apache по порядку подключения
+    /// <c>Include</c> (issue #63, «переменные могут быть объявлены до include»). Возвращает
+    /// новый словарь; пустые тексты пропускаются. Раскрытие <c>${VAR}</c> затем выполняется
+    /// одним глобальным словарём по ВСЕМ файлам (двухпроходный разбор).
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> MergeDefines(IReadOnlyCollection<string> confTexts)
+    {
+        var defines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (confTexts is null)
+            return defines;
+
+        foreach (var confText in confTexts)
+        {
+            if (string.IsNullOrWhiteSpace(confText))
+                continue;
+            foreach (var pair in ParseDefines(confText))
+                defines[pair.Key] = pair.Value;
+        }
+
+        return defines;
+    }
+
+    /// <summary>
     /// Раскрывает переменные <c>${Name}</c> в тексте по словарю <see cref="ParseDefines"/>
     /// (issue #63). Имя переменной ищется регистронезависимо. Неизвестная переменная
     /// остаётся в строке как есть (не роняем разбор); без словаря/переменных текст

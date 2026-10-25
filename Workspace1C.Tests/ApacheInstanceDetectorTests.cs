@@ -149,4 +149,47 @@ Main DocumentRoot: ""/var/www/html""
         Assert.Equal(Path.GetFullPath(@"C:\apache\htdocs"), instance.DocumentRoot);
         Assert.Equal(new[] { 80 }, instance.ListenPorts);
     }
+
+    [Fact]
+    public void ApacheInstanceDetector_PopulateIncludes_TwoPass_DefinesBeforeInclude_Issue63()
+    {
+        // issue #63, комментарий 7OH: «Переменные могут быть объявлены до include» — Define
+        // живут в главном httpd.conf, а DocumentRoot/Listen — во включаемом файле. Двухпроходный
+        // разбор: Define главного конфига видны внутри include-файла → путь и порт раскрыты.
+        const string mainConf = """
+        Define SRVROOT "c:/Apache/Apache24"
+        Define OneCPort 8027
+        Include conf/extra/publish.conf
+        """;
+        const string includeConf = """
+        DocumentRoot "${SRVROOT}/htdocs/${OneCPort}/demo_27_file"
+        Listen 0.0.0.0:${OneCPort}
+        """;
+
+        var instance = new ApacheInstance { ServerRoot = @"C:\apache", ConfPath = @"C:\apache\httpd.conf" };
+        ApacheInstanceDetector.PopulateIncludes(instance, mainConf, @"C:\apache\conf",
+            _ => includeConf);
+
+        Assert.Equal(Path.GetFullPath(@"c:\Apache\Apache24\htdocs\8027\demo_27_file"), instance.DocumentRoot);
+        Assert.Contains(8027, instance.ListenPorts);
+
+        // Include-файл попал в IncludeFiles (маршрутизация ВТОРОГО прохода).
+        Assert.Contains(@"C:\apache\conf\conf\extra\publish.conf", instance.IncludeFiles);
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_PopulateIncludes_MissingIncludeFile_DoesNotFail()
+    {
+        // Включаемый файл отсутствует (нет на диске / readFileText вернул null) — разбор
+        // главного конфига не падает, DocumentRoot/порты главного файла заполняются.
+        var instance = new ApacheInstance { ServerRoot = @"C:\apache", ConfPath = @"C:\apache\httpd.conf" };
+        ApacheInstanceDetector.PopulateIncludes(instance,
+            "Include extra/httpd-vhosts.conf\nDocumentRoot \"C:/apache/htdocs\"\nListen 80\n",
+            @"C:\apache\conf",
+            _ => null);
+
+        Assert.Equal(Path.GetFullPath(@"C:\apache\htdocs"), instance.DocumentRoot);
+        Assert.Equal(new[] { 80 }, instance.ListenPorts);
+        Assert.Single(instance.IncludeFiles);
+    }
 }

@@ -134,40 +134,104 @@ public static partial class ApacheInstanceDetector
     /// Читает include-директивы конфига и заполняет <see cref="ApacheInstance.IncludeFiles"/>/
     /// <see cref="ApacheInstance.IncludeDirs"/> инстанса (разбор по <see cref="ApacheConfIncludeParser"/>),
     /// а также точный <see cref="ApacheInstance.DocumentRoot"/> и порты
-    /// <see cref="ApacheInstance.ListenPorts"/>. Директивы <c>Define</c> конфига учитываются
-    /// при раскрытии <c>${VAR}</c> в значениях (issue #63: «а переменные из файла кто
-    /// подставлять будет сейчас?» — иначе DocumentRoot/порт оставались бы с литералами).
+    /// <see cref="ApacheInstance.ListenPorts"/>. Директивы <c>Define</c> учитываются при
+    /// раскрытии <c>${VAR}</c> в значениях (issue #63: «а переменные из файла кто подставлять
+    /// будет сейчас?» — иначе DocumentRoot/порт оставались бы с литералами).
+    /// <para>
+    /// С 1.0.0.74 разбор ДВУХПРОХОДНЫЙ (issue #63, «переменные могут быть объявлены до
+    /// include»): сначала читается главный конфиг и все включаемые файлы, затем по их
+    /// ОБЩЕМУ словарю <c>Define</c> (<see cref="ApacheConfIncludeParser.MergeDefines"/>)
+    /// раскрываются <c>Include</c>/<c>DocumentRoot</c>/<c>Listen</c> — Define из главного
+    /// конфига видны внутри include-файлов, каталог публикации и порт подставляются
+    /// правильно. <paramref name="readFileText"/> — чтение текста файла (в тестах — словарь).
+    /// </para>
     /// </summary>
-    public static void PopulateIncludes(ApacheInstance instance, string? confText, string? confDirectory)
+    public static void PopulateIncludes(ApacheInstance instance, string? confText, string? confDirectory,
+        Func<string, string?>? readFileText = null)
     {
         if (instance is null)
             return;
 
+        readFileText ??= File.ReadAllText;
+
         var text = confText ?? string.Empty;
-        var defines = ApacheConfIncludeParser.ParseDefines(text);
+        var baseRoot = confDirectory ?? instance.ServerRoot ?? string.Empty;
+
+        // 1-й проход: Include-цели по Define главного конфига; тексты включаемых файлов
+        // читаются для сборки общего словаря Define.
+        var allTexts = new List<(string Text, string BaseDir)> { (text, baseRoot) };
+        var firstPassFiles = new List<string>();
+        var firstPassDirs = new List<string>();
+        foreach (var target in ApacheConfIncludeParser.ParseIncludeTargets(text, baseRoot, ApacheConfIncludeParser.ParseDefines(text)))
+        {
+            if (target.Contains('*') || target.Contains('?'))
+            {
+                firstPassDirs.Add(target);
+                continue;
+            }
+            firstPassFiles.Add(target);
+            try
+            {
+                var fileText = readFileText(target);
+                if (!string.IsNullOrWhiteSpace(fileText))
+                {
+                    var fileDir = Path.GetDirectoryName(target)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? string.Empty;
+                    allTexts.Add((fileText, fileDir));
+                }
+            }
+            catch
+            {
+                // Файл отсутствует/недоступен — не роняем разбор.
+            }
+        }
+
+        // 2-й проход: ОБЩИЙ Define по всем файлам (поздние переопределяют ранние), затем
+        // полная маршрутизация Include и раскрытие DocumentRoot/Listen с глобальным словарём.
+        var defines = ApacheConfIncludeParser.MergeDefines(allTexts.Select(t => t.Text).ToList());
 
         var files = new List<string>();
         var dirs = new List<string>();
-        foreach (var target in ApacheConfIncludeParser.ParseIncludeTargets(text, confDirectory ?? string.Empty, defines))
+        foreach (var target in ApacheConfIncludeParser.ParseIncludeTargets(text, baseRoot, defines))
         {
             if (target.Contains('*') || target.Contains('?'))
                 dirs.Add(target);
             else
                 files.Add(target);
         }
-        instance.IncludeFiles = files;
-        instance.IncludeDirs = dirs;
+        instance.IncludeFiles = files.Count > 0 ? files : firstPassFiles;
+        instance.IncludeDirs = dirs.Count > 0 ? dirs : firstPassDirs;
 
         // Точный DocumentRoot и порты Listen (issue #63): каталог публикации по умолчанию
-        // (может включать подкаталог сайта — «ServerRoot\htdocs\27») и порт URL.
+        // (может включать подкаталог сайта — «ServerRoot\htdocs\27») и порт URL. DocumentRoot
+        // и Listen могут находиться ВО ВКЛЮЧАЕМЫХ файлах — ищем по всем текстам.
         if (string.IsNullOrWhiteSpace(instance.DocumentRoot))
         {
-            instance.DocumentRoot = ApacheConfIncludeParser.ParseDocumentRoot(
-                text, confDirectory ?? instance.ServerRoot, defines) ?? string.Empty;
+            foreach (var (fileText, fileBase) in allTexts)
+            {
+                var root = ApacheConfIncludeParser.ParseDocumentRoot(
+                    fileText, string.IsNullOrWhiteSpace(fileBase) ? baseRoot : fileBase, defines);
+                if (!string.IsNullOrWhiteSpace(root))
+                {
+                    instance.DocumentRoot = root;
+                    break;
+                }
+            }
+            instance.DocumentRoot ??= string.Empty;
         }
+
         if (instance.ListenPorts is null || instance.ListenPorts.Count == 0)
         {
-            instance.ListenPorts = ApacheConfIncludeParser.ParseListenPorts(text, defines);
+            var ports = new List<int>();
+            var seen = new HashSet<int>();
+            foreach (var (fileText, _) in allTexts)
+            {
+                foreach (var port in ApacheConfIncludeParser.ParseListenPorts(fileText, defines))
+                {
+                    if (seen.Add(port))
+                        ports.Add(port);
+                }
+            }
+            instance.ListenPorts = ports;
         }
     }
 
