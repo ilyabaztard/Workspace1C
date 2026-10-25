@@ -17,6 +17,13 @@ public static class OneCPlatformLocator
     /// Разрешает каталог <c>bin</c> установленной платформы нужной разрядности:
     /// при выбранной базе — по её настройкам (точная версия, затем новейшая
     /// установленная), без базы — новейшая установленная версия (issue #295).
+    /// <para>
+    /// Если у базы указана версия платформы (например «8.3.3»), но в разрешённой
+    /// разрядности она не найдена — дополнительно ищем в другой разрядности
+    /// (issue #67: дефолт разрешения разрядности X64 давал для базы с 8.3.3 путь
+    /// к новейшей 64-битной платформе 8.5.4.1878, хотя сама 8.3.3 установлена x86).
+    /// И только затем — запасной вариант «новейшая установленная».
+    /// </para>
     /// </summary>
     public static string? ResolveBinDirectory(Infobase? infobase)
     {
@@ -27,7 +34,8 @@ public static class OneCPlatformLocator
             out var cleanVersion, out _);
         if (!string.IsNullOrWhiteSpace(cleanVersion))
         {
-            var dir = PlatformVersionService.ResolveVersionBinDirectory(cleanVersion, archKey);
+            var dir = PlatformVersionService.ResolveVersionBinDirectory(cleanVersion, archKey)
+                   ?? PlatformVersionService.ResolveVersionBinDirectory(cleanVersion, archKey == "64" ? "32" : "64");
             if (dir is not null && Directory.Exists(dir))
                 return dir;
         }

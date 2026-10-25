@@ -1,4 +1,5 @@
 #if WINDOWS
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -21,21 +22,42 @@ public partial class ScriptScenarioEditWindow : Window
     private readonly IDialogService _dialogs;
     private readonly List<Infobase> _infobases = new();
 
+    /// <summary>Контекст запуска платформы для «Базы для примера» (issue #67, производительность):
+    /// вычисляется один раз на выбранную базу и переиспользуется в пересчётах превью —
+    /// резолвер платформ больше не вызывается на каждое нажатие клавиши.</summary>
+    private Services.ScriptLaunchContext? _exampleLaunchContext;
+
+    /// <summary>Дебаунс пересчёта превью (issue #67): короткая пауза после ввода в поле —
+    /// сборка командной строки не выполняется на каждый символ.</summary>
+    private readonly DispatcherTimer _previewDebounceTimer = new() { Interval = TimeSpan.FromMilliseconds(300) };
+
     /// <summary>
     /// Редактируемый сценарий (issue #308): при подтверждении поля применяются к нему же,
     /// чтобы Store.Save по тому же Id перезаписал файл, а не создавал копию. null — новый.
     /// </summary>
     private readonly ScriptScenario? _sourceScenario;
 
+    /// <summary>База, из которой запущен сценарий (issue #67): становится «Базой для примера
+    /// подстановок» в редакторе; null — первая в списке (запуск из «Утилит»/без выделения).</summary>
+    private readonly Infobase? _initialBase;
+
     /// <summary>Готовый сценарий при подтверждении, иначе <c>null</c>.</summary>
     public ScriptScenario? Result { get; private set; }
 
     /// <param name="scenario">Редактируемый сценарий или <c>null</c> для нового.</param>
-    public ScriptScenarioEditWindow(ScriptScenario? scenario = null)
+    /// <param name="initialBase">База запуска сценария — «База для примера подстановок»
+    /// по умолчанию (issue #67, п.4); <c>null</c> — первая в списке.</param>
+    public ScriptScenarioEditWindow(ScriptScenario? scenario = null, Infobase? initialBase = null)
     {
         InitializeComponent();
         _dialogs = AppServices.GetRequiredService<IDialogService>();
+        _previewDebounceTimer.Tick += (_, _) =>
+        {
+            _previewDebounceTimer.Stop();
+            UpdatePreview();
+        };
         _sourceScenario = scenario;
+        _initialBase = initialBase;
         _vm = new ScriptScenarioEditViewModel(scenario);
         DataContext = _vm;
 
@@ -104,7 +126,15 @@ public partial class ScriptScenarioEditWindow : Window
             // показать ToString() (имя типа); повторный SelectedIndex пересоздаёт контейнер
             // с применённым ItemTemplate, и элемент отображается именем базы.
             if (_infobases.Count > 0)
-                ExampleBaseCombo.SelectedIndex = 0;
+            {
+                // Issue #67 (п.4): «База для примера» по умолчанию — база, из которой
+                // запущен сценарий (её Id передан в окно); при запуске из «Утилит» или
+                // при отсутствии совпадения — первая в списке (прежнее поведение).
+                var preset = _initialBase is { } ib
+                    ? _infobases.FirstOrDefault(b => string.Equals(b.Id, ib.Id, StringComparison.OrdinalIgnoreCase))
+                    : null;
+                ExampleBaseCombo.SelectedIndex = preset is not null ? _infobases.IndexOf(preset) : 0;
+            }
 
             UpdatePreview();
             // Высота окна редактора (issue #308): чуть выше, чтобы всё влезало без
@@ -224,9 +254,22 @@ public partial class ScriptScenarioEditWindow : Window
         UpdatePreview();
     }
 
-    private void OnTextChanged(object sender, TextChangedEventArgs e) => UpdatePreview();
+    private void OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        // Issue #67: пересчёт превью с задержкой — на каждый символ только перепланируем
+        // таймер, сама сборка (резолвер платформы, экранирование) выполняется после паузы.
+        _previewDebounceTimer.Stop();
+        _previewDebounceTimer.Start();
+    }
 
-    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e) => UpdatePreview();
+    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Сменился интерпретатор — превью сразу; сменилась «База для примера» —
+        // дополнительно сбросить закэшированный контекст платформы (issue #67).
+        if (ReferenceEquals(sender, ExampleBaseCombo))
+            _exampleLaunchContext = null;
+        UpdatePreview();
+    }
 
     private Infobase? SelectedExampleBase =>
         ExampleBaseCombo.SelectedItem is Infobase ib ? ib
@@ -248,7 +291,10 @@ public partial class ScriptScenarioEditWindow : Window
             // виден в командной строке окна редактора.
             KeepOpen = KeepOpenCheckBox.IsChecked ?? false
         };
-        var preview = ScriptScenarioEditViewModel.BuildExampleCommandLine(draft, SelectedExampleBase);
+        // Issue #67: контекст платформы для выбранной «Базы для примера» вычисляется один
+        // раз и переиспользуется во всех пересчётах превью (инвалидация — при смене базы).
+        _exampleLaunchContext ??= Services.ScriptLaunchContextResolver.Resolve(SelectedExampleBase);
+        var preview = ScriptScenarioEditViewModel.BuildExampleCommandLine(draft, SelectedExampleBase, null, _exampleLaunchContext);
         PreviewBox.Text = string.IsNullOrWhiteSpace(preview) ? "—" : preview;
     }
 

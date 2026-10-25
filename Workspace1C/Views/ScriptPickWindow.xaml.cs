@@ -121,7 +121,9 @@ public partial class ScriptPickWindow : Window
     {
         if (Selected is not { } item)
             return;
-        var edit = new ScriptScenarioEditWindow(item.Scenario);
+        // Issue #67 (п.4): «База для примера» в редакторе — база, из которой запущен
+        // сценарий (InternalBase), а не всегда первая в списке.
+        var edit = new ScriptScenarioEditWindow(item.Scenario, _infobase);
         edit.Owner = this;
         if (edit.ShowDialog() == true && edit.Result is { } updated)
         {

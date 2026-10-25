@@ -150,16 +150,35 @@ public static class ScriptParameterResolver
         map["сервер"] = conn.Server ?? "";
         map["имянасервере"] = conn.DatabaseName ?? "";
         map["имягруппы"] = infobase.Group ?? "";
+        // Алиас «группа» — синоним полного пути группы (issue #67, полнота структуры).
+        map["группа"] = infobase.Group ?? "";
         map["пользователь"] = conn.User ?? "";
         map["пароль"] = conn.Password ?? "";
         map["вебurl"] = conn.WebUrl ?? "";
         map["порт"] = conn.Port.ToString();
 
+        // Теги и «Произвольные поля» (issue #6/#67): нескалярные коллекции базы дают
+        // производные плоские ключи «тэги»/«tags» и «дополнительныеполя»/«extrafields»
+        // (поименованные значения через запятую/точку с запятой) — «список доступных
+        // полей = структура базы 1-в-1».
+        if (infobase.Tags is { Count: > 0 })
+        {
+            var tagsText = string.Join(", ", infobase.Tags);
+            map["тэги"] = tagsText;
+            map["tags"] = tagsText;
+        }
+        var additional = infobase.AdditionalFields;
+        if (additional is { Count: > 0 })
+        {
+            var extraText = string.Join("; ", additional);
+            map["дополнительныеполя"] = extraText;
+            map["extrafields"] = extraText;
+        }
+
         // Произвольные поля базы (issue #6): ключи additional_1..N по номеру строки
         // таблицы «Произвольные поля» (вкладка «Идентификатор»). Токен %Additional_N%
         // регистронезависим (словарь OrdinalIgnoreCase); номер за пределами списка
         // остаётся в строке как есть (leaveUnknown) — корректность на откуп пользователя.
-        var additional = infobase.AdditionalFields;
         if (additional is { Count: > 0 })
         {
             for (var i = 0; i < additional.Count; i++)

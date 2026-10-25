@@ -1,4 +1,5 @@
 using Workspace1C.Models;
+using Workspace1C.Services;
 using Workspace1C.ViewModels;
 using Xunit;
 
@@ -261,5 +262,40 @@ public sealed class ScriptScenarioEditViewModelTests
         // значение первой строки таблицы «Произвольные поля» вкладки «Идентификатор».
         Assert.Contains(ScriptScenarioEditViewModel.AvailableTokens,
             t => t.Token == "%Additional_1%");
+    }
+
+    [Fact]
+    public void BuildExampleCommandLine_PassedLaunchContext_DoesNotCallResolver()
+    {
+        // Issue #67 (производительность): окно редактора вычисляет контекст платформы один
+        // раз на выбранную «Базу для примера» и передаёт его в каждый пересчёт превью —
+        // резолвер НЕ вызывается на каждое нажатие клавиши (здесь он запрещён тестом).
+        var scenario = new ScriptScenario
+        {
+            Name = "Имя",
+            FilePath = "tool.bat",
+            Parameters = new List<string> { "%full_exe_name%" }
+        };
+        var infobase = new Infobase { Name = "База", Id = "id" };
+        var context = new ScriptLaunchContext(
+            ExePath: @"C:\1cv8\8.3.3.1\bin\1cv8.exe",
+            PlatformVersion: "8.3.3.1",
+            EnterpriseCommandLine: "ENTERPRISE",
+            ConfiguratorCommandLine: "DESIGNER");
+
+        var previous = ScriptLaunchContextResolver.ResolverOverride;
+        ScriptLaunchContextResolver.ResolverOverride = _ =>
+            throw new InvalidOperationException("Резолвер не должен вызываться при переданном контексте (кэш окна, issue #67).");
+        try
+        {
+            var result = ScriptScenarioEditViewModel.BuildExampleCommandLine(scenario, infobase, launchContext: context);
+
+            Assert.Contains(@"C:\1cv8\8.3.3.1\bin\1cv8.exe", result);
+            Assert.DoesNotContain("%full_exe_name%", result);
+        }
+        finally
+        {
+            ScriptLaunchContextResolver.ResolverOverride = previous;
+        }
     }
 }

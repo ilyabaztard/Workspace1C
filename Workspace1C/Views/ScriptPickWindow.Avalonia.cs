@@ -173,7 +173,9 @@ public sealed class ScriptPickWindow : ModalWindowBase
     {
         if (Selected is not { } item)
             return;
-        var edit = new ScriptScenarioEditWindow(item.Scenario);
+        // Issue #67 (п.4): «База для примера» в редакторе — база, из которой запущен
+        // сценарий (_infobase), а не всегда первая в списке.
+        var edit = new ScriptScenarioEditWindow(item.Scenario, _infobase);
         if (edit.ShowDialogSync(this) && edit.Result is { } updated)
         {
             _store.Save(updated);

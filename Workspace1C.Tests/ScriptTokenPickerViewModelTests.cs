@@ -160,4 +160,92 @@ public sealed class ScriptTokenPickerViewModelTests
             ScriptLaunchContextResolver.ResolverOverride = null;
         }
     }
+
+    [Fact]
+    public void TokenPicker_BuildOptions_CoversEveryMapKey_OneToOne()
+    {
+        // «Не должно быть отличия в списке доступных полей и в полях структуры базы»
+        // (issue #67): для КАЖДОГО ключа карты подстановок в диалоге есть соответствующая
+        // строка «%ключ%» — структура базы 1-в-1.
+        var infobase = BuildBase();
+        infobase.Tags = new List<string> { "оперативка", "бэкап" };
+        infobase.AdditionalFields = new List<string> { "Поле1" };
+
+        ScriptLaunchContextResolver.ResolverOverride = _ => null;
+        try
+        {
+            var map = ScriptParameterResolver.BuildValueMap(infobase, null, null);
+            var options = ScriptTokenPickerViewModel.BuildOptions(infobase);
+            var tokens = options.Select(o => o.Token).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var key in map.Keys)
+                Assert.True(tokens.Contains("%" + key + "%"), $"Ключ структуры базы отсутствует в диалоге: %{key}%");
+        }
+        finally
+        {
+            ScriptLaunchContextResolver.ResolverOverride = null;
+        }
+    }
+
+    [Fact]
+    public void TokenPicker_BuildOptions_GroupedBySections_WithSingleStartPerSection()
+    {
+        // Issue #67: список сгруппирован по секциям (Основные/Подключение/Платформа/Дата)
+        // — перед каждой секцией ровно одна строка-«заголовок» (SectionStart).
+        var infobase = BuildBase();
+        ScriptLaunchContextResolver.ResolverOverride = _ => null;
+        try
+        {
+            var options = ScriptTokenPickerViewModel.BuildOptions(infobase);
+
+            Assert.All(options, o => Assert.False(string.IsNullOrEmpty(o.SectionKey)));
+            Assert.True(options[0].SectionStart);
+            Assert.Equal(
+                options.Select(o => o.SectionKey).Distinct().Count(),
+                options.Count(o => o.SectionStart));
+        }
+        finally
+        {
+            ScriptLaunchContextResolver.ResolverOverride = null;
+        }
+    }
+
+    [Fact]
+    public void TokenPicker_FilterOptions_RecomputesSectionStarts()
+    {
+        // После фильтрации флаги начала секций пересчитываются — секции не «висят» в воздухе.
+        var infobase = BuildBase();
+        ScriptLaunchContextResolver.ResolverOverride = _ => null;
+        try
+        {
+            var all = ScriptTokenPickerViewModel.BuildOptions(infobase);
+            var filtered = ScriptTokenPickerViewModel.FilterOptions(all, "connection");
+
+            Assert.NotEmpty(filtered);
+            Assert.Equal(
+                filtered.Select(o => o.SectionKey).Distinct().Count(),
+                filtered.Count(o => o.SectionStart));
+        }
+        finally
+        {
+            ScriptLaunchContextResolver.ResolverOverride = null;
+        }
+    }
+
+    [Fact]
+    public void BuildValueMap_IncludesDerivedStructureKeys()
+    {
+        // Производные ключи «структуры базы» (issue #67): группа, теги и произвольные поля.
+        var infobase = BuildBase();
+        infobase.Tags = new List<string> { "оперативка" };
+        infobase.AdditionalFields = new List<string> { "Поле1", "Поле2" };
+
+        var map = ScriptParameterResolver.BuildValueMap(infobase, null, null);
+
+        Assert.Equal("Бухгалтерия", map["группа"]);
+        Assert.Equal("оперативка", map["тэги"]);
+        Assert.Equal("оперативка", map["tags"]);
+        Assert.Equal("Поле1; Поле2", map["дополнительныеполя"]);
+        Assert.Equal("Поле1; Поле2", map["extrafields"]);
+    }
 }

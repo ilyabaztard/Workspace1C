@@ -20,6 +20,30 @@ namespace Workspace1C.Services
         private static readonly object _extraRootsLock = new();
         private static List<string> _additionalPaths = new();
 
+        // TTL-кэши результатов поиска каталогов платформ (issue #67, зеркально Windows-версии:
+        // резолвер контекста запуска сценариев вызывался на каждое обновление превью, а
+        // сканирование каталогов установки занимало время). Пересчёт раз в 5 минут; сброс —
+        // InvalidateSearchCache (смена дополнительных путей, установка платформы).
+        private const int SearchCacheTtlSeconds = 300;
+
+        private static readonly object _searchCacheLock = new();
+        private static readonly Dictionary<string, (DateTime At, List<(string Version, string BinDir)> Entries)> _platformVersionDirsCache = new();
+        private static readonly Dictionary<(string Version, string Arch), (DateTime At, string? Result)> _resolvedVersionBinCache = new();
+
+        /// <summary>
+        /// Сбрасывает TTL-кэши поиска каталогов платформ (issue #67). Вызывается при смене
+        /// дополнительных путей поиска; без вызова кэш истекает сам за
+        /// <see cref="SearchCacheTtlSeconds"/> секунд.
+        /// </summary>
+        public static void InvalidateSearchCache()
+        {
+            lock (_searchCacheLock)
+            {
+                _platformVersionDirsCache.Clear();
+                _resolvedVersionBinCache.Clear();
+            }
+        }
+
         /// <summary>Имена исполняемых файлов платформы 1С на Linux (без .exe).</summary>
         public static readonly string[] OneCBinaryNames =
         {
@@ -47,6 +71,8 @@ namespace Workspace1C.Services
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList() ?? new List<string>();
             }
+            // Корни поиска изменились — сбросить кэши (иначе новые пути станут видны через TTL).
+            InvalidateSearchCache();
         }
 
         public static IReadOnlyList<string> GetAdditionalSearchPaths()
@@ -133,6 +159,25 @@ namespace Workspace1C.Services
         public static List<(string Version, string BinDir)> FindPlatformVersionDirs(string architecture)
         {
             var archKey = architecture == "64" ? "64" : "32";
+
+            lock (_searchCacheLock)
+            {
+                if (_platformVersionDirsCache.TryGetValue(archKey, out var cached)
+                    && DateTime.UtcNow - cached.At < TimeSpan.FromSeconds(SearchCacheTtlSeconds))
+                    return cached.Entries;
+            }
+
+            var computed = ComputePlatformVersionDirs(archKey);
+            lock (_searchCacheLock)
+            {
+                _platformVersionDirsCache[archKey] = (DateTime.UtcNow, computed);
+            }
+
+            return computed;
+        }
+
+        private static List<(string Version, string BinDir)> ComputePlatformVersionDirs(string archKey)
+        {
             var results = new List<(string Version, string BinDir)>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -167,7 +212,26 @@ namespace Workspace1C.Services
                 return null;
 
             var archKey = architecture == "64" ? "64" : "32";
+            var cacheKey = (cleanVersion, archKey);
 
+            lock (_searchCacheLock)
+            {
+                if (_resolvedVersionBinCache.TryGetValue(cacheKey, out var cached)
+                    && DateTime.UtcNow - cached.At < TimeSpan.FromSeconds(SearchCacheTtlSeconds))
+                    return cached.Result;
+            }
+
+            var result = ResolveVersionBinDirectoryCore(cleanVersion, archKey);
+            lock (_searchCacheLock)
+            {
+                _resolvedVersionBinCache[cacheKey] = (DateTime.UtcNow, result);
+            }
+
+            return result;
+        }
+
+        private static string? ResolveVersionBinDirectoryCore(string cleanVersion, string archKey)
+        {
             // Полная версия — точное разрешение каталога (обратная совместимость).
             if (CountVersionSegments(cleanVersion) >= 4)
             {

@@ -53,7 +53,23 @@ namespace Workspace1C
                 if (item is null)
                     return new Control();
 
-                var panel = new Grid { Margin = new Thickness(2, 3) };
+                // Заголовок секции (Основные/Подключение/…): виден только у первой строки
+                // секции (SectionStart=true), issue #67 — группировка полей структуры базы.
+                var root = new StackPanel { Margin = new Thickness(2, 3) };
+                if (item.SectionStart && !string.IsNullOrEmpty(item.SectionDisplay))
+                {
+                    var header = new TextBlock
+                    {
+                        Text = item.SectionDisplay,
+                        FontSize = 12,
+                        FontWeight = FontWeight.SemiBold,
+                        Margin = new Thickness(0, 6, 0, 2)
+                    };
+                    Themes.ThemeBrushes.Bind(header, TextBlock.ForegroundProperty, "TextSecondaryBrush");
+                    root.Children.Add(header);
+                }
+
+                var panel = new Grid { Margin = new Thickness(0, 3, 0, 3) };
                 panel.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(240)));
                 panel.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
 
@@ -78,7 +94,8 @@ namespace Workspace1C
                 Themes.ThemeBrushes.Bind(value, TextBlock.ForegroundProperty, "TextSecondaryBrush");
                 Grid.SetColumn(value, 1);
                 panel.Children.Add(value);
-                return panel;
+                root.Children.Add(panel);
+                return root;
             });
             _list.DoubleTapped += (_, e) =>
             {

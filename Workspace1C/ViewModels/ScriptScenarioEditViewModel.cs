@@ -186,14 +186,22 @@ public class ScriptScenarioEditViewModel : ViewModelBase
     /// обёртку выбранного интерпретатора (issue #308, п.9): превью отражает шелл
     /// сценария, включая разделитель «cd …» — «;» для PowerShell, «&&» для
     /// cmd/sh (issue #308, замечание @7OH).
+    /// <para>
+    /// <paramref name="launchContext"/> — уже собранный контекст платформы (issue #67,
+    /// производительность): окно редактора вычисляет его ОДИН раз на выбранную «базу
+    /// для примера» и передаёт в каждый пересчёт превью (не на каждое нажатие клавиши).
+    /// null — контекст резолвится здесь (прежнее поведение).
+    /// </para>
     /// </summary>
-    public static string BuildExampleCommandLine(ScriptScenario scenario, Infobase? infobase, DateTime? now = null)
+    public static string BuildExampleCommandLine(ScriptScenario scenario, Infobase? infobase, DateTime? now = null,
+        Services.ScriptLaunchContext? launchContext = null)
     {
         // Решённая авторизация (логин при общей авторизации, issue #57) — превью
         // соответствует фактическому запуску; контекст платформы (полные строки запуска,
         // exe, версия) — токены %full_launch_*%, %full_exe_name%, %platform_version% (issue #67).
         var values = ScriptParameterResolver.BuildValueMap(
-            infobase, ResolvePreviewCredentials(infobase), Services.ScriptLaunchContextResolver.Resolve(infobase));
+            infobase, ResolvePreviewCredentials(infobase),
+            launchContext ?? Services.ScriptLaunchContextResolver.Resolve(infobase));
         // Сборка использует scenario.Shell: разделитель и обёртка соответствуют
         // выбранному интерпретатору; платформа — текущая (для режима «Авто»).
         return ScriptParameterResolver.BuildShellCommandLine(scenario, values, now, OperatingSystem.IsWindows());
