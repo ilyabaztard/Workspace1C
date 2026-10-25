@@ -373,6 +373,52 @@ public sealed class ClusterMigrationServiceTests
         Assert.Equal("ru", request.Locale);
     }
 
+    // ---------- BuildGroupName (issue #41) ----------
+
+    [Fact]
+    public void BuildGroupName_NonStandardPort_AddsHostAndPort()
+    {
+        // «Платформа 27 - Локальный кластер (27541)» — пример пользователя из issue #41:
+        // имя кластера + хост сервера + порт в скобках, когда порт НЕ стандартный (≠ 1541).
+        var name = ClusterMigrationService.BuildGroupName("srv-01", "Локальный кластер", 27541);
+
+        Assert.Equal("srv-01 - Локальный кластер (27541)", name);
+    }
+
+    [Fact]
+    public void BuildGroupName_StandardPort_OmitsPortSuffix()
+    {
+        // Стандартный порт кластера 1541 — в имени группы не дублируется (без «(1541)»).
+        var name = ClusterMigrationService.BuildGroupName("srv-01", "Локальный кластер", IRacClient.DefaultPort);
+
+        Assert.Equal("srv-01 - Локальный кластер", name);
+    }
+
+    [Fact]
+    public void BuildGroupName_EmptyHost_StandardPort_UsesClusterNameOnly()
+    {
+        // Пустой хост и стандартный порт — прежнее поведение: только имя кластера.
+        var name = ClusterMigrationService.BuildGroupName("", "Локальный кластер", IRacClient.DefaultPort);
+
+        Assert.Equal("Локальный кластер", name);
+    }
+
+    [Fact]
+    public void BuildGroupName_EmptyHost_NonStandardPort_KeepsPortSuffix()
+    {
+        // Порт различает кластеры даже без хоста — суффикс «(порт)» сохраняется.
+        var name = ClusterMigrationService.BuildGroupName("", "Локальный кластер", 27541);
+
+        Assert.Equal("Локальный кластер (27541)", name);
+    }
+
+    [Fact]
+    public void BuildGroupName_ClusterEmpty_ReturnsEmpty()
+    {
+        Assert.Equal(string.Empty, ClusterMigrationService.BuildGroupName("srv-01", "   ", 1542));
+        Assert.Equal(string.Empty, ClusterMigrationService.BuildGroupName(null, null, 0));
+    }
+
     // ---------- Хелперы ----------
 
     /// <summary>Запись справочника «Серверы 1С» для тестов.</summary>

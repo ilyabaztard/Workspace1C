@@ -988,6 +988,9 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         if (!TryEnterBusy())
             return;
 
+        // Признак ошибки переноса (видим в finally для автообновления статусов, issue #41).
+        var failed = false;
+
         try
         {
             ErrorMessage = string.Empty;
@@ -1063,7 +1066,11 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
 
             var newServer = ClusterMigrationService.ResolveClusterHost(targetServer.Address, info?.HostName);
             var newPort = targetCluster.Port > 0 ? targetCluster.Port : IRacClient.DefaultPort;
-            var groupName = UseClusterGrouping ? (targetCluster.Name ?? string.Empty).Trim() : string.Empty;
+            // Имя группы приёмника: кластер + хост сервера и порт (если НЕ стандартный 1541) —
+            // иначе «Локальный кластер» разных серверов сливались бы в одну папку (issue #41).
+            var groupName = UseClusterGrouping
+                ? ClusterMigrationService.BuildGroupName(newServer, targetCluster.Name, newPort)
+                : string.Empty;
 
             var migrated = new List<string>(rows.Count);
             var addedInfobases = new List<Infobase>(rows.Count);
@@ -1100,6 +1107,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                 var created = await _rac.CreateInfobaseAsync(targetParams, targetClusterId, request).ConfigureAwait(false);
                 if (!created)
                 {
+                    failed = true;
                     ErrorMessage = string.Format(
                         LocalizationManager.T("ClusterMigration.Error.CreateFailedFormat"), row.Name, _rac.LastActionError);
                     return;
@@ -1113,6 +1121,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                         sourceParams, sourceClusterId, row.Source!.InfobaseId, dropDatabase: false).ConfigureAwait(false);
                     if (!dropped)
                     {
+                        failed = true;
                         ErrorMessage = string.Format(
                             LocalizationManager.T("ClusterMigration.Error.DropFailedFormat"), row.Name, _rac.LastActionError);
                         return;
@@ -1148,6 +1157,11 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         finally
         {
             ExitBusy();
+            // Issue #41: после ошибки переноса автоматически обновляем статусы приёмника —
+            // пользователь сразу видит, какие базы уже оказались в новом кластере (вручную
+            // «Получить статусы» было неочевидно). fire-and-forget: статусы идут фоном.
+            if (failed && SelectedTargetClusterId is not null && SelectedTargetServer is not null)
+                _ = GetTargetStatusesAsync();
         }
     }
 

@@ -113,11 +113,13 @@
 
         <!-- Прогресс «N из M: база» + сообщение об ошибке, затем «Мигрировать»/«Отмена». -->
         <StackPanel Grid.Row="6" Margin="0,10,0,0" Spacing="6">
-            <Grid ColumnDefinitions="*,Auto">
+            <Grid RowDefinitions="Auto,Auto">
                 <TextBlock x:Name="ProgressText" FontSize="12" Opacity="0.65"
                            VerticalAlignment="Center"/>
-                <ProgressBar x:Name="BusyProgress" Grid.Column="1" Width="120" Height="4"
-                             IsIndeterminate="True" Foreground="#06B6D4"
+                <!-- Полоса прогресса на всю ширину окна (issue #41: «сделать побольше
+                     по ширине, а не только под локалью») — отдельной строкой, растянутой. -->
+                <ProgressBar x:Name="BusyProgress" Grid.Row="1" Height="4" MinWidth="200"
+                             Margin="0,5,0,0" IsIndeterminate="True" Foreground="#06B6D4"
                              VerticalAlignment="Center" IsVisible="False"/>
             </Grid>
             <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#DC2626"

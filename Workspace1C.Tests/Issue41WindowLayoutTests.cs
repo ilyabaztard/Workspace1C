@@ -210,4 +210,34 @@ public sealed class Issue41WindowLayoutTests
         Assert.Contains("\"ClusterMigration.Locale\"", ru, StringComparison.Ordinal);
         Assert.Contains("\"ClusterMigration.Locale\"", en, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ClusterMigrationWindow_ProgressBar_SpansFullWidth()
+    {
+        // issue #41, комментарий 7OH: «Просьба сделать полосу прогресса побольше по ширине» —
+        // у BusyProgress НЕ должно быть фиксированной узкой ширины (было Width="120"),
+        // только растяжение по ширине окна.
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.xaml"));
+        var axaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.axaml"));
+
+        foreach (var layout in new[] { xaml, axaml })
+            Assert.Contains("BusyProgress", layout, StringComparison.Ordinal);
+
+        // WPF: полоса в собственной строке и растянута (HorizontalAlignment=Stretch).
+        Assert.Contains("HorizontalAlignment=\"Stretch\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClusterMigrationWindow_ProgressBar_NoFixedWidth120()
+    {
+        // Простая стража: в разметке обеих платформ отсутствует устаревшая ширина 120px
+        // у полосы прогресса (была причиной «прогресс только под локалью»).
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.xaml"));
+        var axaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.axaml"));
+
+        Assert.DoesNotContain("BusyProgress\" Width=\"120\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("BusyProgress\" Width=\"120\"", axaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"120\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"120\"", axaml, StringComparison.Ordinal);
+    }
 }

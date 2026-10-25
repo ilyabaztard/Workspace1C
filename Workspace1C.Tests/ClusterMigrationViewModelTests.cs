@@ -225,9 +225,11 @@ public sealed class ClusterMigrationViewModelTests
         Assert.Equal("srv-new-host", vm.Result.NewServer);   // hostName из «cluster info»
         Assert.Equal(1542, vm.Result.NewPort);               // порт кластера приёмника
 
-        // Базы добавляются в новую группу (имя кластера — приёмник), как в импорте.
+        // Базы добавляются в новую группу с именем «хост - кластер (порт)», когда порт
+        // приёмника НЕ стандартный (issue #41: 1542 ≠ 1541 → «(1542)»; иначе папки «Новый
+        // кластер» разных серверов сливались бы в одну).
         Assert.Equal(2, vm.Result.AddedInfobases.Count);
-        Assert.All(vm.Result.AddedInfobases, b => Assert.Equal("Новый кластер", b.Group));
+        Assert.All(vm.Result.AddedInfobases, b => Assert.Equal("srv-new-host - Новый кластер (1542)", b.Group));
         Assert.All(vm.Result.AddedInfobases, b => Assert.Equal("srv-new-host", b.Connection!.Server));
 
         // Каждая база: create в приёмнике + drop из источника (dropDatabase=false).
@@ -329,6 +331,31 @@ public sealed class ClusterMigrationViewModelTests
         Assert.False(vm.IsBusy);
         Assert.Empty(client.Dropped);
         Assert.Single(client.Created);
+    }
+
+    [Fact]
+    public async Task Migrate_CreateFailure_RefreshesTargetStatusesAutomatically()
+    {
+        // Issue #41: «Если произошла ошибка - стоит обновить статусы в приёмнике автоматически».
+        var client = new FakeRacClient(failCreate: true);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+        var callsBefore = client.GetInfobasesCalls;
+
+        await vm.MigrateAsync();
+
+        Assert.NotEmpty(vm.ErrorMessage);
+        // После ошибки переноса статусы приёмника запрашиваются повторно автоматически.
+        Assert.True(client.GetInfobasesCalls > callsBefore,
+            "После ошибки миграции статусы приёмника должны обновляться автоматически (issue #41)");
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]
@@ -857,6 +884,9 @@ public sealed class ClusterMigrationViewModelTests
         public List<(Guid ClusterId, RacInfobaseCreateRequest Request)> Created { get; } = new();
         public List<(Guid ClusterId, Guid InfobaseId, bool DropDatabase)> Dropped { get; } = new();
 
+        /// <summary>Число вызовов «infobase summary list» (счётчик автообновления статусов, issue #41).</summary>
+        public int GetInfobasesCalls { get; private set; }
+
         public string LastActionError { get; private set; } = string.Empty;
 
         public Task<IReadOnlyList<RacCluster>> GetClustersAsync(
@@ -888,6 +918,7 @@ public sealed class ClusterMigrationViewModelTests
         public Task<IReadOnlyList<RacInfobaseSummary>> GetInfobasesAsync(
             RacConnectionParams parameters, Guid clusterId, CancellationToken cancellationToken = default)
         {
+            GetInfobasesCalls++;
             // Источник: две базы; приёмник: заданные имена (по умолчанию — пусто).
             if (clusterId == SourceClusterId)
             {

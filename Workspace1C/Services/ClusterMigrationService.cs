@@ -202,6 +202,26 @@ public static class ClusterMigrationService
     }
 
     /// <summary>
+    /// Имя создаваемой при миграции группы (issue #41, комментарий 7OH: «Создало папку
+    /// "Локальный кластер"… Надо или имя сервера из списка добавлять или порт, если не
+    /// стандартный. Пример: "Платформа 27 - Локальный кластер (27541)"»): имя кластера
+    /// приёмника с префиксом хоста сервера и суффиксом порта, когда порт НЕ стандартный
+    /// (1541). Пустой хост — только имя кластера (прежнее поведение, обратная совместимость).
+    /// </summary>
+    public static string BuildGroupName(string? serverHost, string? clusterName, int newPort, int defaultPort = IRacClient.DefaultPort)
+    {
+        var cluster = (clusterName ?? string.Empty).Trim();
+        if (cluster.Length == 0)
+            return string.Empty;
+
+        var host = (serverHost ?? string.Empty).Trim();
+        var name = host.Length > 0 ? host + " - " + cluster : cluster;
+        if (newPort > 0 && newPort != defaultPort)
+            name += " (" + newPort + ")";
+        return name;
+    }
+
+    /// <summary>
     /// Хост строки подключения после миграции (issue #41): приоритет у имени кластера из
     /// «cluster info» (<paramref name="clusterHostName"/> — корректен для удалённого RAS,
     /// как в <see cref="RacInfobaseMapper"/>); иначе — host-часть адреса сервера назначения

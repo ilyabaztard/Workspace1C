@@ -325,13 +325,16 @@
         <!-- Прогресс «N из M: база» + сообщение об ошибке, затем «Мигрировать»/«Отмена». -->
         <StackPanel Grid.Row="6" Margin="0,10,0,0">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <TextBlock x:Name="ProgressText" FontSize="12" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}"/>
-                <ProgressBar Grid.Column="1" x:Name="BusyProgress" Width="120" Height="4"
+                <!-- Полоса прогресса на всю ширину окна (issue #41: «сделать побольше по
+                     ширине, а не только под локалью») — отдельной строкой, растянутой. -->
+                <ProgressBar Grid.Row="1" x:Name="BusyProgress" Height="4" MinWidth="200"
+                             HorizontalAlignment="Stretch" Margin="0,5,0,0"
                              IsIndeterminate="True" Visibility="Collapsed" Foreground="#06B6D4"
                              VerticalAlignment="Center"/>
             </Grid>
