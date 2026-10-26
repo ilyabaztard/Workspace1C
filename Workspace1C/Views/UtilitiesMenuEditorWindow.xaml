@@ -89,6 +89,7 @@
                                Margin="4,4,4,8" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     <TreeView x:Name="MenuTree" ItemsSource="{Binding Roots}"
                               ItemTemplate="{StaticResource MenuNodeTemplate}"
+                              ItemContainerStyle="{StaticResource ModernTreeViewItem}"
                               SelectedItemChanged="OnTree_SelectedItemChanged"
                               BorderThickness="0" Background="Transparent"/>
                 </DockPanel>

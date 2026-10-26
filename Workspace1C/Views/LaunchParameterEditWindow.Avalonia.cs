@@ -112,7 +112,9 @@ namespace Workspace1C
                 FontWeight = FontWeight.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            Themes.ThemeBrushes.Bind(caption, TextBlock.ForegroundProperty, "TextPrimaryBrush");
+            // Issue #61: подпись поля формы — единая кисть FormLabelBrush (не вторичная
+            // и не фиксированный тёмный цвет), читаема в обеих темах и схемах.
+            Themes.ThemeBrushes.Bind(caption, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetColumn(caption, 0);
             grid.Children.Add(caption);
 

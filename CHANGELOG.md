@@ -11,6 +11,84 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.76] — 2026-10-26
+
+### Добавлено
+
+- **Удаление информационной базы из кластера: классификатор типовых ошибок rac и
+  кнопка «Завершить сеансы и повторить» (issue #69, Windows и Linux)** — текст ошибки
+  «infobase drop» распознаётся ([`ServerMonitorViewModel.ClassifyDropError`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)):
+  защищённая ИБ/права (нужны креды администратора ИБ или кластера) / активные сеансы
+  и соединения (включая HTTP-сервисы) / сервер СУБД / неизвестно; диалог повтора по типу
+  ошибки показывает локализованную подсказку (`Drop.HintAuth`/`HintSessions`/`HintDatabase`).
+  При занятой базе появляется кнопка **«Завершить сеансы и повторить»**: перед повторным
+  удалением завершаются соединения и сеансы именно этой базы (`connection disconnect` +
+  `session terminate`, учётные данные администратора кластера), затем «infobase drop»
+  повторяется с кредами администратора ИБ (креды ИБ применяются к самому удалению)
+  ([`DropRetryResult.cs`](Workspace1C/ViewModels/DropRetryResult.cs),
+  [`ServerMonitorViewModel.TerminateInfobaseActivityAsync`](Workspace1C/ViewModels/ServerMonitorViewModel.cs),
+  [`RacInfobaseDropRetryWindow.xaml`](Workspace1C/Views/RacInfobaseDropRetryWindow.xaml)). Повторные
+  неудачи помечаются **«Повторная попытка удаления не удалась: …»** в заголовке диалога и
+  статус-строке. Локализация ru/en. Покрыто тестами `ServerMonitorViewModelTests`,
+  `Issue69DropRetryWindowLayoutTests`.
+
+### Изменено
+
+- **Парсер конфигов Apache: доработка по реальным конфигам пользователя (issue #63,
+  Windows и Linux)** — относительный `-f conf\httpd27.conf` резолвится от `ServerRoot`
+  (выводится из каталога исполняемого файла при отсутствии `-d`); Include-граф
+  раскрывается итеративно по всему дереву: общий словарь `Define` пересобирается из
+  всех уже известных файлов на каждом проходе, пока не перестанут появляться новые, —
+  `Define` из любого файла графа видны независимо от порядка объявления;
+  `DocumentRoot`/`Listen` ищутся в любом файле графа; неразрешённые `${...}` в UI не
+  попадают ([`ApacheInstanceDetector.cs`](Workspace1C/Services/ApacheInstanceDetector.cs)).
+  Регресс-тесты на реальных конфигах `Apache27ConfRegressionTests`
+  (+ `TestData/Apache27Conf`), обновлены `ApacheInstanceDetectorTests`.
+
+- **Миграция баз: имя группы без «стандартного» порта и без дублей (issue #41, Windows
+  и Linux)** — в имени группы приёмника «Хост - Кластер (порт)» порт добавляется только
+  при нестандартном значении (не 1540 — порт ragent/RAS — и не 1541 — порт кластера по
+  умолчанию; [`ClusterMigrationService.BuildGroupName`](Workspace1C/Services/ClusterMigrationService.cs));
+  имя детерминировано — повторная миграция в тот же кластер-приёмник не создаёт
+  группу-дубликат; при исключении миграции (частичный перенос) статусы приёмника
+  обновляются автоматически ([`ClusterMigrationViewModel.cs`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs));
+  полоса прогресса Avalonia-окна миграции растянута на всю доступную ширину
+  ([`ClusterMigrationWindow.axaml`](Workspace1C/Views/ClusterMigrationWindow.axaml)). Покрыто
+  тестами `ClusterMigrationServiceTests`, `ClusterMigrationViewModelTests`,
+  `Issue41WindowLayoutTests`.
+
+### Исправлено
+
+- **Меню трея: иконка пользовательской группы больше не обрезается справа (issue #62,
+  Windows и Linux)** — новый [`TrayMenuIconFitter.cs`](Workspace1C/Services/TrayMenuIconFitter.cs)
+  вписывает границы геометрии иконки (viewBox ~24×24 со смещением от начала координат)
+  в ячейку 20×20 меню трея: масштаб + сдвиг к началу + центрирование, глиф ~90% ячейки;
+  правый/нижний край глифа больше не уходит за границы битмапа, а превью редактора
+  совпадает с применением ([`MainWindow.Tray.cs`](Workspace1C/Views/MainWindow.Tray.cs)).
+  Покрыто тестами `TrayMenuIconFitTests`.
+
+- **Тёмная тема: подписи полей форм в конкретных окнах и раскрыватели деревьев
+  (issue #61, Windows и Linux)** — явный стиль `FieldLabel` задаёт `Foreground =
+  {DynamicResource FormLabelBrush}` в окнах «Новый сервер», «Свойства информационной
+  базы», «Изменение параметра запуска» и «Создание ИБ» (WPF: [`ServerEditWindow.xaml`](Workspace1C/Views/ServerEditWindow.xaml),
+  [`RacInfobasePropertiesWindow.xaml`](Workspace1C/Views/RacInfobasePropertiesWindow.xaml),
+  [`LaunchParameterEditWindow.xaml`](Workspace1C/Views/LaunchParameterEditWindow.xaml),
+  [`RacInfobaseCreateWindow.xaml`](Workspace1C/Views/RacInfobaseCreateWindow.xaml)) — у явного
+  стиля кисть не наследовалась от неявного стиля окна, и подписи в тёмной теме оставались
+  чёрными; подписи «Командная строка»/итоговое поле в окнах выбора и правки скрипта
+  переведены на `FormLabelBrush` и стиль `ModernTextBox` ([`ScriptPickWindow.xaml`](Workspace1C/Views/ScriptPickWindow.xaml),
+  [`ScriptScenarioEditWindow.xaml`](Workspace1C/Views/ScriptScenarioEditWindow.xaml)); деревья
+  редакторов структуры меню переведены на `ModernTreeViewItem` (темизированные
+  раскрыватели: [`ContextMenuEditorWindow.xaml`](Workspace1C/Views/ContextMenuEditorWindow.xaml),
+  [`TrayMenuEditorWindow.xaml`](Workspace1C/Views/TrayMenuEditorWindow.xaml),
+  [`UtilitiesMenuEditorWindow.xaml`](Workspace1C/Views/UtilitiesMenuEditorWindow.xaml));
+  Avalonia-подписи полей привязаны к `FormLabelBrush` (`ServerEditWindow.Avalonia.cs`,
+  `LaunchParameterEditWindow.Avalonia.cs`, `ScriptPickWindow.Avalonia.cs`,
+  `ScriptScenarioEditWindow.Avalonia.cs`). Расширены тесты-стражи `ThemeFormLabelTests`,
+  `Issue61TitleColorsTests`, `Issue61DarkPaletteAuditTests`.
+
+---
+
 ## [1.0.0.75] — 2026-10-25
 
 ### Добавлено

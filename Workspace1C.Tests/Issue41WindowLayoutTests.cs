@@ -216,15 +216,19 @@ public sealed class Issue41WindowLayoutTests
     {
         // issue #41, комментарий 7OH: «Просьба сделать полосу прогресса побольше по ширине» —
         // у BusyProgress НЕ должно быть фиксированной узкой ширины (было Width="120"),
-        // только растяжение по ширине окна.
+        // только растяжение по ширине окна. Элемент растянут в ОБЕИХ платформах
+        // (WPF — в xaml, Avalonia — в axaml): HorizontalAlignment=Stretch на самом элементе.
         var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.xaml"));
         var axaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.axaml"));
 
         foreach (var layout in new[] { xaml, axaml })
-            Assert.Contains("BusyProgress", layout, StringComparison.Ordinal);
-
-        // WPF: полоса в собственной строке и растянута (HorizontalAlignment=Stretch).
-        Assert.Contains("HorizontalAlignment=\"Stretch\"", xaml, StringComparison.Ordinal);
+        {
+            var idx = layout.IndexOf("BusyProgress", StringComparison.Ordinal);
+            Assert.True(idx >= 0, "Полоса прогресса BusyProgress не найдена в разметке.");
+            var start = Math.Max(0, idx - 200);
+            var region = layout.Substring(start, Math.Min(400, layout.Length - start));
+            Assert.Contains("HorizontalAlignment=\"Stretch\"", region, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

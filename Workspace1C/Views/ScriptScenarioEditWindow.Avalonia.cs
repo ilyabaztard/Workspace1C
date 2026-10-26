@@ -179,8 +179,9 @@ public sealed class ScriptScenarioEditWindow : ModalWindowBase
             Text = text,
             FontWeight = Avalonia.Media.FontWeight.SemiBold
         };
-        // Цвет подписи из темы (issue #291), как в остальных окнах Avalonia.
-        ThemeBrushes.Bind(label, TextBlock.ForegroundProperty, "TextPrimaryColorBrush");
+        // Issue #61: подпись поля формы — единая кисть FormLabelBrush (не вторичная
+        // и не фиксированный тёмный цвет), читаема в обеих темах и схемах.
+        ThemeBrushes.Bind(label, TextBlock.ForegroundProperty, "FormLabelBrush");
         return label;
     }
 

@@ -150,7 +150,14 @@ public sealed class Issue61DarkPaletteAuditTests
         "ContextMenuEditorWindow.Avalonia.cs",
         "TrayMenuEditorWindow.Avalonia.cs",
         "UtilitiesMenuEditorWindow.Avalonia.cs",
-        "ThemePreviewWindow.Avalonia.cs"
+        "ThemePreviewWindow.Avalonia.cs",
+        // Окна из последнего замечания 7OH (2026-10-25): «Новый сервер», «Конфигуратор
+        // параметров запуска», «Выбор скрипта» — подписи переведены на единую кисть
+        // FormLabelBrush (раньше висели на TextPrimary/TextSecondaryColorBrush).
+        "ServerEditWindow.Avalonia.cs",
+        "LaunchParameterEditWindow.Avalonia.cs",
+        "ScriptPickWindow.Avalonia.cs",
+        "ScriptScenarioEditWindow.Avalonia.cs"
     };
 
     [Theory]

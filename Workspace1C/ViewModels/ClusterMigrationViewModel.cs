@@ -1066,8 +1066,9 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
 
             var newServer = ClusterMigrationService.ResolveClusterHost(targetServer.Address, info?.HostName);
             var newPort = targetCluster.Port > 0 ? targetCluster.Port : IRacClient.DefaultPort;
-            // Имя группы приёмника: кластер + хост сервера и порт (если НЕ стандартный 1541) —
-            // иначе «Локальный кластер» разных серверов сливались бы в одну папку (issue #41).
+            // Имя группы приёмника: кластер + хост сервера и порт (если НЕстандартный —
+            // не 1540/1541 по умолчанию для 1С) — иначе «Локальный кластер» разных серверов
+            // сливались бы в одну папку (issue #41; см. BuildGroupName).
             var groupName = UseClusterGrouping
                 ? ClusterMigrationService.BuildGroupName(newServer, targetCluster.Name, newPort)
                 : string.Empty;
@@ -1150,6 +1151,9 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Частичный перенос (исключение после части созданий): статусы приёмника должны
+            // обновиться автоматически — см. finally (issue #41).
+            failed = true;
             ErrorMessage = ex.Message;
             StatusText = LocalizationManager.T("ClusterMigration.Status.Failed");
             _logger?.Error("Ошибка миграции баз между кластерами 1С", ex);

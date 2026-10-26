@@ -89,6 +89,23 @@ public sealed class ThemeFormLabelTests
     }
 
     [Theory]
+    [InlineData("ServerEditWindow.xaml")]
+    [InlineData("LaunchParameterEditWindow.xaml")]
+    [InlineData("RacInfobasePropertiesWindow.xaml")]
+    [InlineData("RacInfobaseCreateWindow.xaml")]
+    public void WpfWindow_FieldLabelStyle_BindsFormLabelBrush(string fileName)
+    {
+        // Issue #61 (последнее замечание 7OH): у явного стиля FieldLabel (x:Key)
+        // Foreground не наследуется от неявного стиля окна — без явной кисти подписи
+        // остаются чёрными в тёмной теме. Стиль обязан задавать FormLabelBrush
+        // (в XAML-сеттере кисть пишется через Value=, не через прямой атрибут).
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", fileName));
+        Assert.Contains("x:Key=\"FieldLabel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Property=\"Foreground\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Value=\"{DynamicResource FormLabelBrush}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("#3B82F6")]
     [InlineData("#F59E0B")]
     [InlineData("#10B981")]

@@ -723,12 +723,23 @@ namespace Workspace1C
             var visual = new DrawingVisual();
             using (var dc = visual.RenderOpen())
             {
+                // issue #62 (7OH: «Иконка не влазит — справа обрезана»): геометрия иконок
+                // Material/Fluent лежит в viewBox ~24×24 со смещением от начала координат
+                // (например у «лупы» контур x∈[3; 20,5]). Прежний код только масштабировал
+                // геометрию и рисовал её в собственных координатах — при bounds меньше ячейки
+                // scale > 1 и правый/нижний край глифа уходил за границы битмапа size×size,
+                // а превью редактора (Path + Stretch.Uniform) вписывало глиф целиком — отсюда
+                // расхождение превью и трея. Теперь <see cref="TrayMenuIconFitter"/> вписывает
+                // границы геометрии в ячейку (масштаб + сдвиг к началу + центрирование, глиф
+                // ~90% ячейки — как у стандартных иконок трея и превью).
                 var bounds = geometry.Bounds;
-                var scale = Math.Min(
-                    size / Math.Max(bounds.Width, 1d),
-                    size / Math.Max(bounds.Height, 1d));
-                if (scale > 0 && scale != 1d)
-                    dc.PushTransform(new ScaleTransform(scale, scale));
+                var fit = Workspace1C.Services.TrayMenuIconFitter.Fit(
+                    bounds.X, bounds.Y, bounds.Width, bounds.Height, size);
+                // Сдвиг пушится ДО масштаба: последний пушнутый трансформ применяется
+                // первым, поэтому точка p → p*Scale + (OffsetX, OffsetY).
+                dc.PushTransform(new TranslateTransform(fit.OffsetX, fit.OffsetY));
+                if (fit.Scale != 1d)
+                    dc.PushTransform(new ScaleTransform(fit.Scale, fit.Scale));
                 dc.DrawGeometry(brush, null, geometry);
             }
 

@@ -165,8 +165,9 @@ namespace Workspace1C
                 VerticalAlignment = VerticalAlignment.Center
             };
             // Подписи полей в тёмной теме (issue #61): фиксированный «чёрный» текст
-            // нечитаем — привязываем кисть темы.
-            Themes.ThemeBrushes.Bind(caption, TextBlock.ForegroundProperty, "TextPrimaryBrush");
+            // нечитаем — привязываем единую кисть подписи формы (FormLabelBrush),
+            // как в остальных окнах Avalonia (RacInfobasePropertiesWindow и др.).
+            Themes.ThemeBrushes.Bind(caption, TextBlock.ForegroundProperty, "FormLabelBrush");
             Grid.SetColumn(caption, 0);
             grid.Children.Add(caption);
 

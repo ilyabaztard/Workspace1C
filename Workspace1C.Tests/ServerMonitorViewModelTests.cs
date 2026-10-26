@@ -1289,6 +1289,106 @@ public sealed class ServerMonitorViewModelTests
     }
 
     [Fact]
+    public async Task DropSelectedInfobase_SecondAttemptFailure_MarksDialogAsRetryFailed()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: после ввода логина/пароля rac может
+        // снова вернуть ошибку. Второй показ диалога обязан отличать «Повторная попытка
+        // удаления не удалась: <детали rac>» от исходного «Не удалось удалить
+        // информационную базу.» — пользователь видит, что креды применены, но rac
+        // по-прежнему не удаляет базу. (В тестовой среде LocalizationManager не
+        // инициализирован — T() возвращает ключ, по нему и проверяем.)
+        var client = new FakeRacClient { DropInfobaseFailuresLeft = 2 };
+        var dialogs = new RecordingDialogs();
+        var errors = new List<string>();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login) =>
+            {
+                errors.Add(error);
+                return new DropRetryResult(true, "ИБ-админ", "пароль");
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // 1 исходная неудача + 2 повтора (успех на третьем). Диалог показан дважды.
+        Assert.Equal(3, client.DropInfobaseCalls.Count);
+        Assert.Equal(2, errors.Count);
+        Assert.Contains("ServerMonitor.Infobase.DropFailed", errors[0]);
+        Assert.Contains("ServerMonitor.Infobase.Drop.RetryFailedFormat", errors[1]);
+        Assert.DoesNotContain("ServerMonitor.Infobase.Drop.RetryFailedFormat", errors[0]);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_SessionsError_TerminateSessionsOption_TerminatesAndRetries()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: диалог повтора с кредами может не
+        // помочь, если базу занимают активные сеансы/соединения — rac не удаляет занятую
+        // базу. Кнопка «Завершить сеансы и повторить» сначала разрывает соединения и
+        // завершает сеансы ИМЕННО этой базы (учётные данные уровня кластера — из
+        // BuildParams, как у всех действий), затем выполняет повторный «infobase drop»
+        // с кредами администратора ИБ из диалога.
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 1,
+            DropInfobaseFailureError = "rac: информационная база используется активными сеансами"
+        };
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login) =>
+                new DropRetryResult(true, "ИБ-админ", "секрет", TerminateSessions: true));
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Списки соединений и сеансов запрошены С фильтром по удаляемой базе
+        // (автообновление в finally запрашивает их целиком, с null — не в счёт).
+        Assert.Equal(1, client.FilteredConnectionsListCalls);
+        Assert.Equal(1, client.FilteredSessionsListCalls);
+        // Фикстура возвращает одно соединение и один сеанс — оба разорваны/завершены.
+        var connection = Assert.Single(client.DisconnectCalls);
+        Assert.Equal(FakeRacClient.FirstClusterId, connection.clusterId);
+        var session = Assert.Single(client.TerminateCalls);
+        Assert.Equal(FakeRacClient.FirstSessionId, session.sessionId);
+        // Первый «infobase drop» без кредов упал (активные сеансы), второй — с кредами
+        // администратора ИБ → успех.
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+        Assert.Null(client.DropInfobaseCallsWithCredentials[0].infobaseUser);
+        Assert.Equal("ИБ-админ", client.DropInfobaseCallsWithCredentials[1].infobaseUser);
+        Assert.Equal("секрет", client.DropInfobaseCallsWithCredentials[1].infobasePassword);
+        // Никаких «левых» предупреждений: завершение сеансов выполнилось без ошибок.
+        Assert.Empty(dialogs.Warnings);
+    }
+
+    [Theory]
+    [InlineData("rac: требуется аутентификация администратора информационной базы", ServerMonitorViewModel.RacDropErrorKind.Authentication)]
+    [InlineData("Access denied to infobase", ServerMonitorViewModel.RacDropErrorKind.Authentication)]
+    [InlineData("нет прав доступа для удаления базы", ServerMonitorViewModel.RacDropErrorKind.Authentication)]
+    [InlineData("infobase is used by active sessions", ServerMonitorViewModel.RacDropErrorKind.Sessions)]
+    [InlineData("активные сеансы не позволяют удалить базу", ServerMonitorViewModel.RacDropErrorKind.Sessions)]
+    [InlineData("есть соединения к базе", ServerMonitorViewModel.RacDropErrorKind.Sessions)]
+    [InlineData("не удалось удалить базу данных на сервере СУБД", ServerMonitorViewModel.RacDropErrorKind.Database)]
+    [InlineData("db user 'sa' has no privileges", ServerMonitorViewModel.RacDropErrorKind.Database)]
+    [InlineData("неизвестная ошибка rac", ServerMonitorViewModel.RacDropErrorKind.Unknown)]
+    [InlineData("", ServerMonitorViewModel.RacDropErrorKind.Unknown)]
+    [InlineData(null, ServerMonitorViewModel.RacDropErrorKind.Unknown)]
+    public void ClassifyDropError_RecognizesTypicalRacErrors(
+        string? detail, ServerMonitorViewModel.RacDropErrorKind expected)
+    {
+        // issue #69: классификация типовой ошибки rac при «infobase drop» — от неё
+        // зависят подсказка в диалоге повтора и кнопка «Завершить сеансы и повторить».
+        var kind = ServerMonitorViewModel.ClassifyDropError(detail);
+        Assert.Equal(expected, kind);
+        // Hint для Unknown пустой; для распознанных — непустой (в тестах T() возвращает ключ).
+        Assert.Equal(
+            kind == ServerMonitorViewModel.RacDropErrorKind.Unknown,
+            string.IsNullOrEmpty(ServerMonitorViewModel.BuildDropRetryHint(kind)));
+    }
+
+    [Fact]
     public void CanDropDatabaseOnServer_OnlyKnownClientServerTypes_True()
     {
         // Вариант «с удалением на сервере СУБД» доступен только клиент-серверным базам
@@ -1648,6 +1748,15 @@ public sealed class ServerMonitorViewModelTests
         /// <summary>infobaseId, переданный в последний вызов «connection list» (фильтр по базе, issue #3).</summary>
         public System.Guid? LastConnectionsInfobaseId { get; private set; }
 
+        /// <summary>Сколько вызовов «session list» выполнено С фильтром по базе (issue #69 —
+        /// завершение сеансов именно удаляемой базы; автообновление запрашивает сеансы
+        /// целиком, с null-фильтром).</summary>
+        public int FilteredSessionsListCalls { get; private set; }
+
+        /// <summary>Сколько вызовов «connection list» выполнено с фильтром по базе (issue #69 —
+        /// разрыв соединений именно удаляемой базы).</summary>
+        public int FilteredConnectionsListCalls { get; private set; }
+
         /// <summary>infobaseId, переданный в последний вызов «lock list» (фильтр по базе, issue #3).</summary>
         public System.Guid? LastLocksInfobaseId { get; private set; }
 
@@ -1735,6 +1844,8 @@ public sealed class ServerMonitorViewModelTests
             if (_throwParseOnSessions)
                 throw new RacOutputParseException("тест: вывод session list не распознан");
 
+            if (infobaseId is not null)
+                FilteredSessionsListCalls++; // issue #69: заказы с фильтром по базе.
             LastSessionsInfobaseId = infobaseId;
             // issue #3: фильтр по базе — rac «--infobase=...»; сеансы другой базы не возвращаются.
             if (infobaseId is Guid filter && filter != FirstInfobaseId)
@@ -1763,6 +1874,8 @@ public sealed class ServerMonitorViewModelTests
             RacConnectionParams parameters, Guid clusterId, Guid? infobaseId = null,
             CancellationToken cancellationToken = default)
         {
+            if (infobaseId is not null)
+                FilteredConnectionsListCalls++; // issue #69: запрос с фильтром по базе.
             LastConnectionsInfobaseId = infobaseId;
             return Task.FromResult<IReadOnlyList<RacConnectionInfo>>(new[]
             {
@@ -1954,6 +2067,10 @@ public sealed class ServerMonitorViewModelTests
         /// сценарий «удаление защищённой базы → повтор с логином/паролем»).</summary>
         public int DropInfobaseFailuresLeft { get; set; }
 
+        /// <summary>Текст ошибки rac для неудач «infobase drop» (issue #69): по умолчанию —
+        /// аутентификация администратора ИБ; тест занятой базы задаёт «активные сеансы».</summary>
+        public string? DropInfobaseFailureError { get; set; }
+
         /// <summary>«infobase drop»: фиксирует вызов (в т.ч. учётные данные администратора ИБ,
         /// issue #69); «неудача» настраивается, как у остальных действий.</summary>
         public Task<bool> DropInfobaseAsync(
@@ -1968,9 +2085,11 @@ public sealed class ServerMonitorViewModelTests
             if (DropInfobaseFailuresLeft > 0)
             {
                 // Описание пользователя #69: удаление защищённой базы без учётных данных
-                // администратора ИБ возвращает ошибку rac.
+                // администратора ИБ возвращает ошибку rac; тест «занятой базы» задаёт
+                // собственный текст через DropInfobaseFailureError.
                 DropInfobaseFailuresLeft--;
-                LastActionError = "rac: требуется аутентификация администратора информационной базы";
+                LastActionError = DropInfobaseFailureError
+                    ?? "rac: требуется аутентификация администратора информационной базы";
                 return Task.FromResult(false);
             }
             if (_actionFails)

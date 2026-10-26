@@ -359,6 +359,62 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
+    public async Task Migrate_PartialFailure_RefreshesTargetStatuses_ShowsCreatedBaseInTarget()
+    {
+        // Issue #41: ошибка на ВТОРОЙ базе — первая уже создана в приёмнике. Автообновление
+        // статусов после ошибки помечает «База1» как «Есть в кластере» и снимает галочку:
+        // сразу видно, какие базы реально перенесены, а какие — нет.
+        var client = new FakeRacClient(failCreateOnIndex: 2);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        await vm.MigrateAsync();
+
+        Assert.NotEmpty(vm.ErrorMessage);
+        // fire-and-forget обновление статусов в тестах (dispatch = null) выполняется синхронно.
+        var created = vm.SourceRows.First(r => r.Name == "База1");
+        Assert.Equal(LocalizationManager.T("ClusterMigration.Status.InTarget"), created.TargetStatus);
+        Assert.False(created.IsChecked);
+        var pending = vm.SourceRows.First(r => r.Name == "База2");
+        Assert.Equal(string.Empty, pending.TargetStatus);
+        Assert.True(pending.IsChecked);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Migrate_CreateThrows_RefreshesTargetStatusesAutomatically()
+    {
+        // Issue #41: общее исключение в середине переноса (сбой соединения с rac вместо
+        // возврата «false») — частичный перенос, статусы приёмника обновляются автоматически
+        // и в этом пути (failed выставляется в общем catch MigrateAsync).
+        var client = new FakeRacClient(throwOnCreate: true);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+        var callsBefore = client.GetInfobasesCalls;
+
+        await vm.MigrateAsync();
+
+        Assert.NotEmpty(vm.ErrorMessage);
+        Assert.True(client.GetInfobasesCalls > callsBefore,
+            "После исключения миграции статусы приёмника должны обновляться автоматически (issue #41)");
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
     public async Task Migrate_DropFailure_SetsError()
     {
         var client = new FakeRacClient(failDrop: true);
@@ -855,7 +911,13 @@ public sealed class ClusterMigrationViewModelTests
         public static readonly Guid TargetCluster2Id = Guid.Parse("77000000-0000-0000-0000-000000000003");
 
         private readonly bool _singleCluster;
-        private readonly bool _failCreate;
+        // 1-based индекс создаваемой базы, на котором имитируется отказ rac («infobase create»
+        // возвращает false); null — без отказа. failCreate: true в конструкторе равнозначен
+        // failCreateOnIndex: 1.
+        private readonly int? _failCreateOnIndex;
+        // true — «infobase create» бросает исключение (сбой соединения) вместо false:
+        // частичный перенос идёт через общий catch MigrateAsync (issue #41).
+        private readonly bool _throwOnCreate;
         private readonly bool _failDrop;
         private readonly string[] _targetBaseNames;
         private readonly string _sourceDbms;
@@ -868,10 +930,11 @@ public sealed class ClusterMigrationViewModelTests
 
         public FakeRacClient(bool singleCluster = true, bool failCreate = false, bool failDrop = false,
             string[]? targetBaseNames = null, string? sourceDbms = null, string? sourceDbName = null,
-            string? sourceLocale = null)
+            string? sourceLocale = null, int? failCreateOnIndex = null, bool throwOnCreate = false)
         {
             _singleCluster = singleCluster;
-            _failCreate = failCreate;
+            _failCreateOnIndex = failCreate ? 1 : failCreateOnIndex;
+            _throwOnCreate = throwOnCreate;
             _failDrop = failDrop;
             _targetBaseNames = targetBaseNames ?? Array.Empty<string>();
             _sourceDbms = sourceDbms ?? "MSSQLServer";
@@ -882,6 +945,9 @@ public sealed class ClusterMigrationViewModelTests
         public RacConnectionParams? LastParams { get; private set; }
 
         public List<(Guid ClusterId, RacInfobaseCreateRequest Request)> Created { get; } = new();
+        // Имена ТОЛЬКО успешно созданных баз (в «infobase summary list» приёмника они и
+        // попадают; неудачные попытки в Created есть, в статусах приёмника — нет).
+        public List<string> CreatedNames { get; } = new();
         public List<(Guid ClusterId, Guid InfobaseId, bool DropDatabase)> Dropped { get; } = new();
 
         /// <summary>Число вызовов «infobase summary list» (счётчик автообновления статусов, issue #41).</summary>
@@ -928,8 +994,12 @@ public sealed class ClusterMigrationViewModelTests
                     new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000002"), Name = "База2", Descr = "Описание", Dbms = _sourceDbms, DbServer = "sql-01", DbName = _sourceDbName ?? "база2", Locale = _sourceLocale ?? string.Empty }
                 });
             }
+            // Приёмник: заданные имена + базы, уже созданные в этом кластере миграцией
+            // (по ним автообновление статусов при ошибке показывает «Есть в кластере»).
+            var targetNames = new List<string>(_targetBaseNames);
+            targetNames.AddRange(CreatedNames.Where(n => n.Length > 0));
             return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(
-                _targetBaseNames.Select(name => new RacInfobaseSummary { Name = name }).ToList());
+                targetNames.Select(name => new RacInfobaseSummary { Name = name }).ToList());
         }
 
         public Task<bool> CreateInfobaseAsync(
@@ -937,12 +1007,15 @@ public sealed class ClusterMigrationViewModelTests
             CancellationToken cancellationToken = default)
         {
             Created.Add((clusterId, request));
-            if (_failCreate)
+            if (_throwOnCreate)
+                throw new InvalidOperationException("сбой соединения с RAS (имитация)");
+            if (_failCreateOnIndex is int failIndex && Created.Count == failIndex)
             {
                 LastActionError = "нет прав на создание базы (имитация)";
                 return Task.FromResult(false);
             }
             LastActionError = string.Empty;
+            CreatedNames.Add(request.Name ?? string.Empty);
             return Task.FromResult(true);
         }
 

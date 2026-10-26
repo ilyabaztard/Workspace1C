@@ -127,8 +127,10 @@ public sealed class ScriptPickWindow : ModalWindowBase
             }
         };
 
+        // Issue #61: подпись поля «Командная строка» — единая кисть подписи формы
+        // (FormLabelBrush), а не вторичная: читаема в обеих темах и схемах.
         var previewLabel = new TextBlock { Text = T("Script.CommandLinePreview"), FontSize = 11 };
-        ThemeBrushes.Bind(previewLabel, TextBlock.ForegroundProperty, "TextSecondaryColorBrush");
+        ThemeBrushes.Bind(previewLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
         _previewBox.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
 
         var preview = new StackPanel { Spacing = 2 };

@@ -21,6 +21,10 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <!-- Issue #61: у явного стиля FieldLabel Foreground не наследуется от неявного
+                 стиля окна — задаём кисть подписи формы явно, иначе в тёмной теме
+                 подписи полей остаются чёрными. -->
+            <Setter Property="Foreground" Value="{DynamicResource FormLabelBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
     </Window.Resources>

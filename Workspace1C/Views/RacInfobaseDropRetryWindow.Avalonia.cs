@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Workspace1C.Controls;
 using Workspace1C.Localization;
 using Workspace1C.Themes;
+using Workspace1C.ViewModels;
 
 namespace Workspace1C
 {
@@ -29,6 +30,10 @@ namespace Workspace1C
 
         /// <summary>True — пользователь нажал «Повторить попытку»; false — «Отмена».</summary>
         public bool Retry { get; private set; }
+
+        /// <summary>True — пользователь нажал «Завершить сеансы и повторить»: перед
+        /// повторным «infobase drop» завершить активные сеансы/соединения базы.</summary>
+        public bool TerminateSessions { get; private set; }
 
         /// <param name="errorText">Текст ошибки удаления («Не удалось удалить информационную
         /// базу.» + детали rac) — показывается в подписи окна.</param>
@@ -66,7 +71,14 @@ namespace Workspace1C
         {
             var root = new DockPanel { Margin = new Thickness(16), LastChildFill = true };
 
-            // Кнопки внизу: «Повторить попытку» (default) и «Отмена» (cancel).
+            // issue #69, комментарий 7OH от 2026-10-26: типовую ошибку rac классифицируем
+            // и по ней показываем подсказку; базу, занятую сеансами, можно освободить
+            // кнопкой «Завершить сеансы и повторить» (connection disconnect + session terminate).
+            var kind = ServerMonitorViewModel.ClassifyDropError(errorText);
+            var hint = ServerMonitorViewModel.BuildDropRetryHint(kind);
+
+            // Кнопки внизу: «Завершить сеансы и повторить» (только при занятой базе),
+            // «Повторить попытку» (default) и «Отмена» (cancel).
             var retry = new Button
             {
                 Content = T("ServerMonitor.Infobase.Drop.RetryButton"),
@@ -98,10 +110,24 @@ namespace Workspace1C
                 Margin = new Thickness(0, 12, 0, 0),
                 Children = { retry, cancel }
             };
+            if (kind == ServerMonitorViewModel.RacDropErrorKind.Sessions)
+            {
+                var terminate = new Button
+                {
+                    Content = T("ServerMonitor.Infobase.Drop.TerminateSessionsButton"),
+                    Height = 36,
+                    IsDefault = false
+                };
+                terminate.Styled(ControlThemes.ModernButton);
+                ThemeBrushes.Bind(terminate, Button.BackgroundProperty, "ItemHoverBrush");
+                terminate.Click += (_, _) => OnTerminateSessions();
+                buttons.Children.Insert(0, terminate);
+            }
             DockPanel.SetDock(buttons, Dock.Bottom);
             root.Children.Add(buttons);
 
-            // Подпись: «Не удалось удалить информационную базу. <детали ошибки rac>».
+            // Подпись: «Не удалось удалить информационную базу. <детали ошибки rac>» либо
+            // «Повторная попытка удаления не удалась: <детали rac>».
             var error = AvaloniaUi.Text(
                 string.IsNullOrWhiteSpace(errorText) ? "—" : errorText, fontSize: 14, bold: true);
             error.Margin = new Thickness(0, 0, 0, 6);
@@ -110,19 +136,37 @@ namespace Workspace1C
             var prompt = AvaloniaUi.Text(T("ServerMonitor.Infobase.Drop.RetryPrompt"), fontSize: 12, secondary: true);
             prompt.Margin = new Thickness(0, 0, 0, 4);
 
+            var form = new StackPanel { Children = { error, prompt } };
+            if (!string.IsNullOrEmpty(hint))
+            {
+                var suggestion = AvaloniaUi.Text(hint, fontSize: 12, secondary: true);
+                suggestion.Margin = new Thickness(0, 0, 0, 4);
+                form.Children.Add(suggestion);
+            }
+
             // Подписи полей — кисть FormLabelBrush (issue #61): всегда контрастны в обеих
             // темах, включая стенерированные схемы (аналог AvaloniaUi.Label).
             var loginLabel = AvaloniaUi.Label("ServerMonitor.Infobase.Drop.RetryLogin");
             loginLabel.Margin = new Thickness(0, 8, 0, 2);
             var passwordLabel = AvaloniaUi.Label("ServerMonitor.Infobase.Drop.RetryPassword");
             passwordLabel.Margin = new Thickness(0, 8, 0, 2);
+            form.Children.Add(loginLabel);
+            form.Children.Add(_loginBox);
+            form.Children.Add(passwordLabel);
+            form.Children.Add(_passwordBox);
 
-            var form = new StackPanel
-            {
-                Children = { error, prompt, loginLabel, _loginBox, passwordLabel, _passwordBox }
-            };
             root.Children.Add(form);
             return root;
+        }
+
+        private void OnTerminateSessions()
+        {
+            User = _loginBox.Text;
+            Password = _passwordBox.Password ?? string.Empty;
+            Retry = true;
+            TerminateSessions = true;
+            DialogResult = true;
+            Close();
         }
 
         private void OnRetry()

@@ -173,8 +173,10 @@ Main DocumentRoot: ""/var/www/html""
         Assert.Equal(Path.GetFullPath(@"c:\Apache\Apache24\htdocs\8027\demo_27_file"), instance.DocumentRoot);
         Assert.Contains(8027, instance.ListenPorts);
 
-        // Include-файл попал в IncludeFiles (маршрутизация ВТОРОГО прохода).
-        Assert.Contains(@"C:\apache\conf\conf\extra\publish.conf", instance.IncludeFiles);
+        // Include-файл попал в IncludeFiles. Относительный Include резолвится от ServerRoot
+        // (семантика Apache), а не от каталога включающего файла:
+        // «Include conf/extra/publish.conf» + ServerRoot C:\apache → C:\apache\conf\extra\publish.conf.
+        Assert.Contains(@"C:\apache\conf\extra\publish.conf", instance.IncludeFiles);
     }
 
     [Fact]
@@ -191,5 +193,27 @@ Main DocumentRoot: ""/var/www/html""
         Assert.Equal(Path.GetFullPath(@"C:\apache\htdocs"), instance.DocumentRoot);
         Assert.Equal(new[] { 80 }, instance.ListenPorts);
         Assert.Single(instance.IncludeFiles);
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_PopulateIncludes_UnresolvedVariables_DoNotLeakRawValues_Issue63()
+    {
+        // (г) Неразрешённая переменная (${...}) ни в одном файле графа не определена:
+        // «сырое» значение в IncludeFiles/DocumentRoot не появляется — каталог остаётся
+        // пустым (в окне fallback на Htdocs), include-цель с ${...} в список не попадает.
+        var instance = new ApacheInstance
+        {
+            ServerRoot = @"C:\apache",
+            ConfPath = @"C:\apache\httpd.conf",
+            Htdocs = @"C:\apache\htdocs"
+        };
+        ApacheInstanceDetector.PopulateIncludes(instance,
+            "Include ${UNKNOWN}/extra/sites.conf\nDocumentRoot \"${UNKNOWN}/htdocs\"\nListen 80\n",
+            @"C:\apache\conf",
+            _ => null);
+
+        Assert.Empty(instance.IncludeFiles);
+        Assert.Empty(instance.DocumentRoot);
+        Assert.Equal(new[] { 80 }, instance.ListenPorts);
     }
 }

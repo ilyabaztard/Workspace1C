@@ -697,8 +697,14 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// (защищённая база, issue #69) показывается диалог повтора с полями «Логин»/
     /// «Пароль» администратора ИБ: «Повторить попытку» выполняет ещё один
     /// «infobase drop» с этими учётными данными (при повторной ошибке — снова тот же
-    /// диалог: логин сохраняется, пароль вводится заново), «Отмена» — выход.
-    /// Без колбэка диалога (тесты) — прежнее поведение: предупреждение + статус-строка.
+    /// диалог: логин сохраняется, пароль вводится заново, а текст помечается
+    /// «Повторная попытка не удалась»), «Отмена» — выход. Типовая ошибка rac
+    /// распознаётся (<see cref="ClassifyDropError"/>): если базу занимают активные
+    /// сеансы/соединения, диалог предлагает «Завершить сеансы и повторить» — перед
+    /// повторным «infobase drop» выполняется «connection disconnect»/«session terminate»
+    /// (учётные данные администратора кластера из <see cref="BuildParams"/>, креды ИБ
+    /// применяются к самому удалению). Без колбэка диалога (тесты) — прежнее
+    /// поведение: предупреждение + статус-строка.
     /// </summary>
     public async Task DropSelectedInfobaseAsync(bool dropDatabase = false)
     {
@@ -710,6 +716,7 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         // первый вызов — без кредов; дальше — из ответа диалога повтора.
         string? infobaseUser = null;
         string? infobasePassword = null;
+        var attempts = 0;
         try
         {
             while (true)
@@ -723,11 +730,35 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                     return;
                 }
 
-                var answer = AskDropRetryOnUi(detail, infobaseUser);
+                attempts++;
+                var answer = AskDropRetryOnUi(detail, infobaseUser, attempts);
                 if (!answer.Retry)
                 {
-                    StatusText = detail;
+                    StatusText = attempts > 1
+                        ? string.Format(
+                            LocalizationManager.T("ServerMonitor.Infobase.Drop.RetryFailedFormat"), detail)
+                        : detail;
                     return;
+                }
+
+                if (answer.TerminateSessions)
+                {
+                    // issue #69: rac не удаляет базу, пока её занимают активные сеансы
+                    // (соединения, HTTP-сервисы). Кнопка диалога «Завершить сеансы и
+                    // повторить» — явное согласие пользователя на разрыв сеансов.
+                    var (termOk, termDetail) = await TerminateInfobaseActivityAsync(
+                        row.InfobaseId, clusterId).ConfigureAwait(false);
+                    if (!termOk)
+                    {
+                        ShowWarningOnUi(
+                            LocalizationManager.T("ServerMonitor.Infobase.Drop.TerminateFailed")
+                            + "\n" + termDetail,
+                            LocalizationManager.T("ServerMonitor.Infobase.DropTitle"));
+                        StatusText = termDetail;
+                        return;
+                    }
+
+                    StatusText = termDetail;
                 }
 
                 infobaseUser = answer.User;
@@ -764,16 +795,24 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Показ диалога повтора удаления (issue #69) в UI-потоке. Если колбэк диалога
-    /// не назначен (тесты/окно без поддержки) — прежнее поведение: предупреждение
-    /// с одной кнопкой OK, повтор не выполняется. Модальное окно открывается через
-    /// dispatch-маршалер (как <see cref="ShowWarningOnUi"/>), рабочий поток ждёт
-    /// результат диалога.
+    /// Показ диалога повтора удаления (issue #69) в UI-потоке. Первый показ (после
+    /// исходной неудачи) — заголовок «Не удалось удалить информационную базу.» +
+    /// детали rac; повторные показы помечаются «Повторная попытка удаления не
+    /// удалась: ...», чтобы пользователь видел, что креды применены, но rac снова
+    /// вернул ошибку (комментарий 7OH от 2026-10-26). Если колбэк диалога не назначен
+    /// (тесты/окно без поддержки) — прежнее поведение: предупреждение с одной кнопкой
+    /// OK, повтор не выполняется. Модальное окно открывается через dispatch-маршалер
+    /// (как <see cref="ShowWarningOnUi"/>), рабочий поток ждёт результат диалога.
     /// </summary>
-    private DropRetryResult AskDropRetryOnUi(string detail, string? login)
+    private DropRetryResult AskDropRetryOnUi(string detail, string? login, int attempts)
     {
-        // Заголовок диалога повтора: «Не удалось удалить информационную базу.» + детали rac.
-        var message = LocalizationManager.T("ServerMonitor.Infobase.DropFailed") + "\n" + detail;
+        // Заголовок диалога повтора: на исходной неудаче — «Не удалось удалить
+        // информационную базу.» + детали rac; на повторной — «Повторная попытка
+        // удаления не удалась: <детали rac>» (issue #69, комментарий 7OH).
+        var message = attempts > 1
+            ? string.Format(
+                LocalizationManager.T("ServerMonitor.Infobase.Drop.RetryFailedFormat"), detail)
+            : LocalizationManager.T("ServerMonitor.Infobase.DropFailed") + "\n" + detail;
         if (_dropRetryDialog is null)
         {
             ShowWarningOnUi(message, LocalizationManager.T("ServerMonitor.Infobase.DropTitle"));
@@ -798,6 +837,140 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         });
         gate.Wait();
         return result;
+    }
+
+    /// <summary>
+    /// Разрыв активных соединений и завершение сеансов информационной базы перед
+    /// повторным «infobase drop» (issue #69): rac не удаляет базу, пока её используют
+    /// сеансы/соединения (включая HTTP-сервисы). Порядок — сначала «connection
+    /// disconnect», затем «session terminate» (соединения указывают на сеансы).
+    /// Учётные данные администратора кластера берутся из <see cref="BuildParams"/>
+    /// (как у всех действий уровня кластера); креды администратора ИБ применяются
+    /// к самому удалению. Возвращает текст статуса об успехе либо текст ошибки.
+    /// </summary>
+    private async Task<(bool Ok, string Detail)> TerminateInfobaseActivityAsync(
+        Guid infobaseId, Guid clusterId)
+    {
+        try
+        {
+            var parameters = BuildParams();
+            var connections = await _rac.GetConnectionsAsync(parameters, clusterId, infobaseId)
+                .ConfigureAwait(false);
+            foreach (var connection in connections)
+            {
+                if (!await _rac.DisconnectConnectionAsync(parameters, clusterId, connection.Id)
+                        .ConfigureAwait(false))
+                    return (false, BuildActionError(_rac.LastActionError));
+            }
+
+            var sessions = await _rac.GetSessionsAsync(parameters, clusterId, infobaseId)
+                .ConfigureAwait(false);
+            foreach (var session in sessions)
+            {
+                if (!await _rac.TerminateSessionAsync(parameters, clusterId, session.Id)
+                        .ConfigureAwait(false))
+                    return (false, BuildActionError(_rac.LastActionError));
+            }
+
+            return (true, string.Format(
+                LocalizationManager.T("ServerMonitor.Infobase.Drop.TerminatedFormat"),
+                connections.Count, sessions.Count));
+        }
+        catch (Exception ex)
+        {
+            return (false, BuildErrorMessage(ex));
+        }
+    }
+
+    /// <summary>
+    /// Тип типовой ошибки rac при «infobase drop» (issue #69): от него зависят
+    /// подсказка в диалоге повтора и доступность кнопки «Завершить сеансы и
+    /// повторить» (базу занимают активные сеансы/соединения/HTTP-сервисы).
+    /// </summary>
+    public enum RacDropErrorKind
+    {
+        /// <summary>Ошибка не распознана — общий текст без подсказки.</summary>
+        Unknown,
+
+        /// <summary>Защищённая ИБ / недостаточно прав: нужны креды администратора ИБ
+        /// (или администратора кластера, если база не защищена).</summary>
+        Authentication,
+
+        /// <summary>Базу используют активные сеансы/соединения (включая HTTP-сервисы):
+        /// rac не удаляет занятую базу — перед повтором нужно их завершить.</summary>
+        Sessions,
+
+        /// <summary>Ошибка сервера СУБД при «--drop-database»: rac использует учётные
+        /// данные СУБД из настроек базы.</summary>
+        Database
+    }
+
+    /// <summary>
+    /// Классифицирует текст ошибки rac при «infobase drop» (issue #69): защищённая
+    /// ИБ/права (<see cref="RacDropErrorKind.Authentication"/>), активные сеансы и
+    /// соединения (<see cref="RacDropErrorKind.Sessions"/>), сервер СУБД
+    /// (<see cref="RacDropErrorKind.Database"/>), прочее — Unknown. Диалог повтора
+    /// использует результат для подсказки и кнопки «Завершить сеансы и повторить».
+    /// Internal — для юнит-тестов классификации без запуска rac.
+    /// </summary>
+    internal static RacDropErrorKind ClassifyDropError(string? detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return RacDropErrorKind.Unknown;
+
+        var text = detail.ToLowerInvariant();
+        if (ContainsAny(text, DropErrorSessionsMarkers))
+            return RacDropErrorKind.Sessions;
+        if (ContainsAny(text, DropErrorAuthMarkers))
+            return RacDropErrorKind.Authentication;
+        if (ContainsAny(text, DropErrorDatabaseMarkers))
+            return RacDropErrorKind.Database;
+        return RacDropErrorKind.Unknown;
+    }
+
+    /// <summary>
+    /// Локализованная подсказка для диалога повтора по типу ошибки
+    /// (<see cref="ClassifyDropError"/>): Unknown — пустая строка (подсказки нет).
+    /// Internal — для юнит-тестов читаемости текстов.
+    /// </summary>
+    internal static string BuildDropRetryHint(RacDropErrorKind kind) => kind switch
+    {
+        RacDropErrorKind.Authentication => LocalizationManager.T("ServerMonitor.Infobase.Drop.HintAuth"),
+        RacDropErrorKind.Sessions => LocalizationManager.T("ServerMonitor.Infobase.Drop.HintSessions"),
+        RacDropErrorKind.Database => LocalizationManager.T("ServerMonitor.Infobase.Drop.HintDatabase"),
+        _ => string.Empty
+    };
+
+    /// <summary>Маркеры занятости базы в тексте ошибки rac (регистронезависимо).</summary>
+    private static readonly string[] DropErrorSessionsMarkers =
+    {
+        "session", "connection", "сеанс", "соединени", "используется", "используют",
+        "used by", "busy", "занят", "http-сервис", "http service", "публикац"
+    };
+
+    /// <summary>Маркеры ошибки прав/аутентификации в тексте rac (регистронезависимо).</summary>
+    private static readonly string[] DropErrorAuthMarkers =
+    {
+        "access", "authentication", "auth", "denied", "permission", "rights",
+        "authoriz", "доступ", "аутентификац", "авториз", "защищен", "защищён",
+        "права", "прав на", "прав доступа", "no rights"
+    };
+
+    /// <summary>Маркеры ошибки сервера СУБД в тексте rac (регистронезависимо).</summary>
+    private static readonly string[] DropErrorDatabaseMarkers =
+    {
+        "database", "db user", "db-user", "db pwd", "db-pwd", "субд", "база данных",
+        "базаданных", "сервер субд"
+    };
+
+    private static bool ContainsAny(string text, IReadOnlyList<string> markers)
+    {
+        foreach (var marker in markers)
+        {
+            if (text.IndexOf(marker, StringComparison.Ordinal) >= 0)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

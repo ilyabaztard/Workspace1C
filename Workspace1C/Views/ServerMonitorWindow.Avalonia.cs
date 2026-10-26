@@ -110,7 +110,8 @@ namespace Workspace1C
                 {
                     var retry = new RacInfobaseDropRetryWindow(errorText, login);
                     return retry.ShowSync(this)
-                        ? new ViewModels.DropRetryResult(retry.Retry, retry.User, retry.Password)
+                        ? new ViewModels.DropRetryResult(
+                            retry.Retry, retry.User, retry.Password, retry.TerminateSessions)
                         : ViewModels.DropRetryResult.Cancel;
                 });
 

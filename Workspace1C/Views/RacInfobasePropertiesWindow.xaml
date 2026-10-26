@@ -21,6 +21,10 @@
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
         <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <!-- Issue #61: у явного стиля FieldLabel Foreground не наследуется от неявного
+                 стиля окна — задаём кисть подписи формы явно, иначе в тёмной теме
+                 подписи полей остаются чёрными. -->
+            <Setter Property="Foreground" Value="{DynamicResource FormLabelBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="12"/>
             <!-- Компактнее (issue #3, 1.0.0.14): часть полей не помещалась по высоте. -->

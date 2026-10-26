@@ -77,7 +77,8 @@ namespace Workspace1C
                 {
                     var retry = new RacInfobaseDropRetryWindow(errorText, login) { Owner = this };
                     return retry.ShowDialog() == true
-                        ? new ViewModels.DropRetryResult(retry.Retry, retry.User, retry.Password)
+                        ? new ViewModels.DropRetryResult(
+                            retry.Retry, retry.User, retry.Password, retry.TerminateSessions)
                         : ViewModels.DropRetryResult.Cancel;
                 });
 

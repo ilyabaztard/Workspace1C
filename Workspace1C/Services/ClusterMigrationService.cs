@@ -201,14 +201,22 @@ public static class ClusterMigrationService
         return replaced;
     }
 
+    /// <summary>Порт кластера сервера 1С по умолчанию (1541; порт агента ragent — 1540, см. <see cref="IRacClient.DefaultPort"/>).</summary>
+    public const int DefaultClusterPort = 1541;
+
     /// <summary>
     /// Имя создаваемой при миграции группы (issue #41, комментарий 7OH: «Создало папку
     /// "Локальный кластер"… Надо или имя сервера из списка добавлять или порт, если не
-    /// стандартный. Пример: "Платформа 27 - Локальный кластер (27541)"»): имя кластера
-    /// приёмника с префиксом хоста сервера и суффиксом порта, когда порт НЕ стандартный
-    /// (1541). Пустой хост — только имя кластера (прежнее поведение, обратная совместимость).
+    /// стандартный. А можно и то и другое. Пример: "Платформа 27 - Локальный кластер
+    /// (27541)"»): имя кластера приёмника с префиксом хоста сервера и суффиксом порта,
+    /// когда порт НЕ стандартный (не 1540 — порт ragent/RAS — и не 1541 — порт кластера
+    /// по умолчанию). Пустой хост — только имя кластера (прежнее поведение, обратная
+    /// совместимость). Имя детерминировано: повторная миграция в тот же кластер-приёмник
+    /// даёт ту же строку, и дубликаты групп при добавлении не создаются (сверка по имени в
+    /// <c>MainViewModel.ApplyClusterMigrationResult</c> — как в импорте).
     /// </summary>
-    public static string BuildGroupName(string? serverHost, string? clusterName, int newPort, int defaultPort = IRacClient.DefaultPort)
+    public static string BuildGroupName(
+        string? serverHost, string? clusterName, int newPort, int defaultPort = IRacClient.DefaultPort)
     {
         var cluster = (clusterName ?? string.Empty).Trim();
         if (cluster.Length == 0)
@@ -216,7 +224,11 @@ public static class ClusterMigrationService
 
         var host = (serverHost ?? string.Empty).Trim();
         var name = host.Length > 0 ? host + " - " + cluster : cluster;
-        if (newPort > 0 && newPort != defaultPort)
+        // Суффикс порта — только для НЕстандартного порта: 1540 и 1541 — значения по
+        // умолчанию 1С (порт ragent и порт кластера), они не должны попадать в имя —
+        // иначе стандартный кластер выглядел бы в группе как нестандартный.
+        var isStandardPort = newPort == defaultPort || newPort == DefaultClusterPort;
+        if (newPort > 0 && !isStandardPort)
             name += " (" + newPort + ")";
         return name;
     }

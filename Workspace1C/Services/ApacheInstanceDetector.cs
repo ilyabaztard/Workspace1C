@@ -56,14 +56,23 @@ public static partial class ApacheInstanceDetector
         var serverRoot = ExtractSwitch(imagePath, "d");
         var confPath = ExtractSwitch(imagePath, "f");
 
-        if (string.IsNullOrWhiteSpace(serverRoot) && string.IsNullOrWhiteSpace(confPath))
+        // ServerRoot нужен и для резолва относительного конфига (-f conf\httpd27.conf),
+        // поэтому выводим его из каталога исполняемого файла и при отсутствии ключа -d.
+        if (string.IsNullOrWhiteSpace(serverRoot))
             serverRoot = InferServerRoot(imagePath);
 
         if (string.IsNullOrWhiteSpace(serverRoot) && string.IsNullOrWhiteSpace(confPath))
             return null;
 
         serverRoot = NormalizePath(serverRoot);
-        if (string.IsNullOrWhiteSpace(confPath) && !string.IsNullOrWhiteSpace(serverRoot))
+        confPath = NormalizePath(confPath);
+
+        // Относительный путь конфига (-f conf\httpd27.conf) Apache трактует от ServerRoot —
+        // иначе File.Exists(ConfPath) ищет файл от каталога процесса и инстанс остаётся
+        // без DocumentRoot/портов (issue #63, «Пока не удалось»).
+        if (!string.IsNullOrWhiteSpace(confPath) && !string.IsNullOrWhiteSpace(serverRoot) && !IsRootedPath(confPath))
+            confPath = Path.Combine(serverRoot, confPath);
+        else if (string.IsNullOrWhiteSpace(confPath) && !string.IsNullOrWhiteSpace(serverRoot))
             confPath = Path.Combine(serverRoot, "conf", "httpd.conf");
         confPath = NormalizePath(confPath);
 
@@ -138,12 +147,16 @@ public static partial class ApacheInstanceDetector
     /// раскрытии <c>${VAR}</c> в значениях (issue #63: «а переменные из файла кто подставлять
     /// будет сейчас?» — иначе DocumentRoot/порт оставались бы с литералами).
     /// <para>
-    /// С 1.0.0.74 разбор ДВУХПРОХОДНЫЙ (issue #63, «переменные могут быть объявлены до
-    /// include»): сначала читается главный конфиг и все включаемые файлы, затем по их
-    /// ОБЩЕМУ словарю <c>Define</c> (<see cref="ApacheConfIncludeParser.MergeDefines"/>)
-    /// раскрываются <c>Include</c>/<c>DocumentRoot</c>/<c>Listen</c> — Define из главного
-    /// конфига видны внутри include-файлов, каталог публикации и порт подставляются
-    /// правильно. <paramref name="readFileText"/> — чтение текста файла (в тестах — словарь).
+    /// Include-граф раскрывается ИТЕРАТИВНО по всему дереву (не только 1-й уровень):
+    /// на каждом проходе все уже известные файлы заново раскрываются по ОБЩЕМУ словарю
+    /// <c>Define</c> (<see cref="ApacheConfIncludeParser.MergeDefines"/>), пока не перестанут
+    /// появляться новые файлы — Define из любого файла графа видны при раскрытии
+    /// <c>Include</c>/<c>DocumentRoot</c>/<c>Listen</c> независимо от порядка объявления
+    /// (issue #63, комментарий 7OH: «Переменные могут быть объявлены до include»,
+    /// главный файл запуска — не обязательно httpd.conf, а <c>-f conf\httpd27.conf</c>).
+    /// Относительные <c>Include</c>/<c>DocumentRoot</c> резолвятся от ServerRoot (семантика
+    /// Apache), fallback — каталог конфига. <paramref name="readFileText"/> — чтение текста
+    /// файла (в тестах — словарь).
     /// </para>
     /// </summary>
     public static void PopulateIncludes(ApacheInstance instance, string? confText, string? confDirectory,
@@ -155,66 +168,88 @@ public static partial class ApacheInstanceDetector
         readFileText ??= File.ReadAllText;
 
         var text = confText ?? string.Empty;
-        var baseRoot = confDirectory ?? instance.ServerRoot ?? string.Empty;
+        // Относительный Include/DocumentRoot Apache трактует от ServerRoot, а не от каталога
+        // включающего файла: «Include conf/httpd.conf» из conf\httpd27.conf → ServerRoot\conf\httpd.conf.
+        // Fallback (ServerRoot неизвестен) — каталог конфига.
+        var baseRoot = !string.IsNullOrWhiteSpace(instance.ServerRoot)
+            ? instance.ServerRoot
+            : (confDirectory ?? string.Empty);
 
-        // 1-й проход: Include-цели по Define главного конфига; тексты включаемых файлов
-        // читаются для сборки общего словаря Define.
-        var allTexts = new List<(string Text, string BaseDir)> { (text, baseRoot) };
-        var firstPassFiles = new List<string>();
-        var firstPassDirs = new List<string>();
-        foreach (var target in ApacheConfIncludeParser.ParseIncludeTargets(text, baseRoot, ApacheConfIncludeParser.ParseDefines(text)))
+        var defines = ApacheConfIncludeParser.ParseDefines(text);
+        var allTexts = new List<(string Path, string Text)> { (instance.ConfPath ?? string.Empty, text) };
+        var visitedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            if (target.Contains('*') || target.Contains('?'))
+            NormalizeVisitKey(instance.ConfPath)
+        };
+        var includeFiles = new List<string>();
+        var includeDirs = new List<string>();
+        var seenTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Раскрытие графа до стабилизации: копия списка на проход (список пополняется
+        // во время обхода, менять коллекцию в foreach нельзя).
+        while (true)
+        {
+            var added = false;
+            foreach (var (_, fileText) in allTexts.ToArray())
             {
-                firstPassDirs.Add(target);
-                continue;
-            }
-            firstPassFiles.Add(target);
-            try
-            {
-                var fileText = readFileText(target);
-                if (!string.IsNullOrWhiteSpace(fileText))
+                foreach (var target in ApacheConfIncludeParser.ParseIncludeTargets(fileText, baseRoot, defines))
                 {
-                    var fileDir = Path.GetDirectoryName(target)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? string.Empty;
-                    allTexts.Add((fileText, fileDir));
+                    if (!seenTargets.Add(target))
+                        continue;
+                    if (target.Contains('*') || target.Contains('?'))
+                    {
+                        includeDirs.Add(target);
+                        continue;
+                    }
+                    // Неразрешённая переменная (${...}) в Include-цели не попадает в список:
+                    // файл по такому пути всё равно не прочитается, а на следующем проходе
+                    // цель раскроется корректно (Define может быть в другом файле графа) —
+                    // «сырое» имя с ${...} в окне публикации не показываем (issue #63).
+                    if (target.IndexOf("${", StringComparison.Ordinal) >= 0)
+                        continue;
+                    includeFiles.Add(target);
+                    if (!visitedPaths.Add(NormalizeVisitKey(target)))
+                        continue;
+                    try
+                    {
+                        var includeText = readFileText(target);
+                        if (!string.IsNullOrWhiteSpace(includeText))
+                        {
+                            allTexts.Add((target, includeText));
+                            added = true;
+                        }
+                    }
+                    catch
+                    {
+                        // Файл отсутствует/недоступен — не роняем разбор.
+                    }
                 }
             }
-            catch
-            {
-                // Файл отсутствует/недоступен — не роняем разбор.
-            }
+
+            if (!added)
+                break;
+
+            // ОБЩИЙ Define по всем известным файлам графа (поздние переопределяют ранние).
+            defines = ApacheConfIncludeParser.MergeDefines(allTexts.Select(t => t.Text).ToList());
         }
 
-        // 2-й проход: ОБЩИЙ Define по всем файлам (поздние переопределяют ранние), затем
-        // полная маршрутизация Include и раскрытие DocumentRoot/Listen с глобальным словарём.
-        var defines = ApacheConfIncludeParser.MergeDefines(allTexts.Select(t => t.Text).ToList());
-
-        var files = new List<string>();
-        var dirs = new List<string>();
-        foreach (var target in ApacheConfIncludeParser.ParseIncludeTargets(text, baseRoot, defines))
-        {
-            if (target.Contains('*') || target.Contains('?'))
-                dirs.Add(target);
-            else
-                files.Add(target);
-        }
-        instance.IncludeFiles = files.Count > 0 ? files : firstPassFiles;
-        instance.IncludeDirs = dirs.Count > 0 ? dirs : firstPassDirs;
+        instance.IncludeFiles = includeFiles;
+        instance.IncludeDirs = includeDirs;
 
         // Точный DocumentRoot и порты Listen (issue #63): каталог публикации по умолчанию
         // (может включать подкаталог сайта — «ServerRoot\htdocs\27») и порт URL. DocumentRoot
-        // и Listen могут находиться ВО ВКЛЮЧАЕМЫХ файлах — ищем по всем текстам.
+        // и Listen могут находиться В ЛЮБОМ файле графа — ищем по всем текстам. Неразрешённую
+        // переменную (${...}) как DocumentRoot не берём — в окне остаётся «понятный» каталог
+        // (Htdocs/SuggestPhysicalDirectory), а не сырое значение (issue #63).
         if (string.IsNullOrWhiteSpace(instance.DocumentRoot))
         {
-            foreach (var (fileText, fileBase) in allTexts)
+            foreach (var (_, fileText) in allTexts)
             {
-                var root = ApacheConfIncludeParser.ParseDocumentRoot(
-                    fileText, string.IsNullOrWhiteSpace(fileBase) ? baseRoot : fileBase, defines);
-                if (!string.IsNullOrWhiteSpace(root))
-                {
-                    instance.DocumentRoot = root;
-                    break;
-                }
+                var root = ApacheConfIncludeParser.ParseDocumentRoot(fileText, baseRoot, defines);
+                if (string.IsNullOrWhiteSpace(root) || root.IndexOf("${", StringComparison.Ordinal) >= 0)
+                    continue;
+                instance.DocumentRoot = root;
+                break;
             }
             instance.DocumentRoot ??= string.Empty;
         }
@@ -223,7 +258,7 @@ public static partial class ApacheInstanceDetector
         {
             var ports = new List<int>();
             var seen = new HashSet<int>();
-            foreach (var (fileText, _) in allTexts)
+            foreach (var (_, fileText) in allTexts)
             {
                 foreach (var port in ApacheConfIncludeParser.ParseListenPorts(fileText, defines))
                 {
@@ -301,6 +336,31 @@ public static partial class ApacheInstanceDetector
             return null;
         var value = path.Trim().Trim('"').Trim();
         return value.Length == 0 ? null : value;
+    }
+
+    /// <summary>
+    /// Абсолютный ли путь: «C:\...» / «C:/...», UNC «\\...» или POSIX «/...». Нужен и при
+    /// кросс-сборке под Linux, где <see cref="Path.IsPathRooted"/> не распознаёт диск Windows.
+    /// </summary>
+    private static bool IsRootedPath(string path)
+    {
+        if (Path.IsPathRooted(path))
+            return true;
+        return path.Length >= 3
+               && char.IsLetter(path[0])
+               && path[1] == ':'
+               && (path[2] == '\\' || path[2] == '/');
+    }
+
+    /// <summary>Ключ посещённого файла графа Include: без учёта регистра и разделителей пути.</summary>
+    private static string NormalizeVisitKey(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return string.Empty;
+        return path.Trim()
+            .Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .ToUpperInvariant();
     }
 
     private static string? ExtractDirective(string output, string name)

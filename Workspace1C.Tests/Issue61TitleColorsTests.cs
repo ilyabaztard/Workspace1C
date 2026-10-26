@@ -161,10 +161,11 @@ public sealed class Issue61TitleColorsTests
     public void ServerEditWindow_Avalonia_FieldCaptionsAndTitle_BindThemeBrushes()
     {
         // Issue #61 (комментарий 7OH от 2026-10-25): «Заходим в первое окно (Изменение
-        // сервера) и заголовки полей по-прежнему чёрные» — подписи полей и заголовок
-        // окна, собранного кодом, привязаны к кисти темы (TextPrimaryBrush).
+        // сервера) и заголовки полей по-прежнему чёрные» — подписи полей собраны кодом
+        // и привязаны к единой кисти подписи формы FormLabelBrush (читаема в обеих
+        // темах и пользовательских схемах), заголовок окна — к первичному тексту темы.
         var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerEditWindow.Avalonia.cs"));
-        Assert.Contains("ThemeBrushes.Bind(caption, TextBlock.ForegroundProperty, \"TextPrimaryBrush\");",
+        Assert.Contains("ThemeBrushes.Bind(caption, TextBlock.ForegroundProperty, \"FormLabelBrush\");",
             code, System.StringComparison.Ordinal);
         Assert.Contains("ThemeBrushes.Bind(title, TextBlock.ForegroundProperty, \"TextPrimaryBrush\");",
             code, System.StringComparison.Ordinal);
@@ -178,5 +179,40 @@ public sealed class Issue61TitleColorsTests
         var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerEditWindow.xaml"));
         Assert.Contains("PasswordRevealTextBox", xaml, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource ModernTextBox}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ScriptWindows_Wpf_PreviewBoxThemed_AndLabelFormLabelBrush()
+    {
+        // Issue #61 (замечание 7OH): «Выбор скрипта — поле Командная строка» и итоговая
+        // строка запуска — по-прежнему тёмный текст на тёмном фоне. Подпись переведена
+        // на единую кисть FormLabelBrush, поле-предпросмотр — на темизированный
+        // ModernTextBox (фон/текст читаемы в обеих темах).
+        foreach (var fileName in new[] { "ScriptPickWindow.xaml", "ScriptScenarioEditWindow.xaml" })
+        {
+            var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", fileName));
+            Assert.Contains("Foreground=\"{DynamicResource FormLabelBrush}\"", xaml, System.StringComparison.Ordinal);
+            Assert.Contains("Style=\"{StaticResource ModernTextBox}\"", xaml, System.StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void MenuEditorWindows_Wpf_TreeViewUsesModernTreeViewItem()
+    {
+        // Issue #61 (замечание 7OH): тёмные пиктограммы переключения папки в списках
+        // редакторов структур меню. Третий редактор получил ItemContainerStyle
+        // ModernTreeViewItem — темизированные раскрыватели и выравнивание вместо
+        // дефолтных тёмных «+/-»; иконки каталога остаются пользовательскими цветами.
+        foreach (var fileName in new[]
+        {
+            "ContextMenuEditorWindow.xaml",
+            "TrayMenuEditorWindow.xaml",
+            "UtilitiesMenuEditorWindow.xaml"
+        })
+        {
+            var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", fileName));
+            Assert.Contains("ItemContainerStyle=\"{StaticResource ModernTreeViewItem}\"",
+                xaml, System.StringComparison.Ordinal);
+        }
     }
 }

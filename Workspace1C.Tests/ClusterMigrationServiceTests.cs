@@ -395,6 +395,17 @@ public sealed class ClusterMigrationServiceTests
     }
 
     [Fact]
+    public void BuildGroupName_ClusterDefaultPort1541_OmitsPortSuffix()
+    {
+        // Порт кластера 1С по умолчанию — 1541 (IRacClient.DefaultPort — 1540, порт ragent):
+        // «(1541)» в имя группы не попадает, иначе стандартный кластер выглядел бы как
+        // нестандартный (issue #41: суффикс порта — только когда порт НЕ стандартный).
+        var name = ClusterMigrationService.BuildGroupName("srv-01", "Локальный кластер", 1541);
+
+        Assert.Equal("srv-01 - Локальный кластер", name);
+    }
+
+    [Fact]
     public void BuildGroupName_EmptyHost_StandardPort_UsesClusterNameOnly()
     {
         // Пустой хост и стандартный порт — прежнее поведение: только имя кластера.
