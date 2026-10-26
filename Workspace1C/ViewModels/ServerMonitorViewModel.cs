@@ -705,8 +705,14 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// сеансы/соединения, диалог предлагает «Завершить сеансы и повторить» — перед
     /// повторным «infobase drop» выполняется «connection disconnect»/«session terminate»
     /// (учётные данные администратора кластера из <see cref="BuildParams"/>, креды ИБ
-    /// применяются к самому удалению). Без колбэка диалога (тесты) — прежнее
-    /// поведение: предупреждение + статус-строка.
+    /// применяются к самому удалению). Галочка «Установить блокировку регламентных
+    /// заданий» (<see cref="DropRetryResult.BlockScheduledJobs"/>, комментарий 7OH от
+    /// 2026-10-26) выполняет rac «infobase update --scheduled-jobs-deny=on» ДО завершения
+    /// сеансов. При неудачном завершении сеансов цикл НЕ прерывается (комментарий 7OH от
+    /// 2026-10-26: «Не выходить после первой попытки... иногда повторная попытка может
+    /// помочь») — снова показывается диалог с пометкой «Повторная попытка завершения
+    /// сеансов не удалась…». Без колбэка диалога (тесты) — прежнее поведение:
+    /// предупреждение + статус-строка.
     /// </summary>
     public async Task DropSelectedInfobaseAsync(bool dropDatabase = false)
     {
@@ -719,6 +725,10 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         string? infobaseUser = null;
         string? infobasePassword = null;
         var attempts = 0;
+        // Пометка для следующего показа диалога (issue #69, комментарий 7OH от
+        // 2026-10-26): «Повторная попытка завершения сеансов не удалась: <детали rac>» —
+        // видно, что завершение сеансов применено, но rac снова вернул ошибку.
+        string? retryNote = null;
         try
         {
             while (true)
@@ -733,7 +743,8 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                 }
 
                 attempts++;
-                var answer = AskDropRetryOnUi(detail, infobaseUser, infobasePassword, attempts);
+                var answer = AskDropRetryOnUi(detail, infobaseUser, infobasePassword, attempts, retryNote);
+                retryNote = null;
                 if (!answer.Retry)
                 {
                     StatusText = attempts > 1
@@ -743,6 +754,34 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                     return;
                 }
 
+                // Учётные данные администратора ИБ применяются к следующему
+                // «infobase drop»; сохраняются между попытками ДО подготовки, чтобы
+                // при неудачном завершении сеансов повторный диалог был предзаполнен
+                // (комментарий 7OH от 2026-10-26: «Пароль сохранять между попытками»).
+                infobaseUser = answer.User;
+                infobasePassword = answer.Password;
+
+                // issue #69, комментарий 7OH от 2026-10-26: «сначала ставить блокировку,
+                // а потом снимать сеансы» — rac «infobase update --scheduled-jobs-deny=on»
+                // перед завершением сеансов и повторным удалением занятой базы (галочка
+                // «Установить блокировку регламентных заданий» в диалоге повтора).
+                if (answer.BlockScheduledJobs)
+                {
+                    var (blockOk, blockDetail) = await SetScheduledJobsBlockAsync(row, clusterId)
+                        .ConfigureAwait(false);
+                    StatusText = blockDetail;
+                    if (!blockOk)
+                    {
+                        // Блокировка не удалась — цикл НЕ прерывается: предупреждение,
+                        // следующий диалог повтора позволит повторить либо отменить.
+                        ShowWarningOnUi(
+                            LocalizationManager.T("ServerMonitor.Infobase.Drop.BlockFailed")
+                            + "\n" + blockDetail,
+                            LocalizationManager.T("ServerMonitor.Infobase.DropTitle"));
+                        continue;
+                    }
+                }
+
                 if (answer.TerminateSessions)
                 {
                     // issue #69: rac не удаляет базу, пока её занимают активные сеансы
@@ -750,21 +789,19 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                     // повторить» — явное согласие пользователя на разрыв сеансов.
                     var (termOk, termDetail) = await TerminateInfobaseActivityAsync(
                         row.InfobaseId, clusterId).ConfigureAwait(false);
+                    StatusText = termDetail;
                     if (!termOk)
                     {
-                        ShowWarningOnUi(
-                            LocalizationManager.T("ServerMonitor.Infobase.Drop.TerminateFailed")
-                            + "\n" + termDetail,
-                            LocalizationManager.T("ServerMonitor.Infobase.DropTitle"));
-                        StatusText = termDetail;
-                        return;
+                        // issue #69, комментарий 7OH от 2026-10-26: НЕ выходить после
+                        // первой неудачной попытки завершения сеансов — иногда соединение
+                        // просто не успело закрыться. Снова диалог повтора с пометкой
+                        // «Повторная попытка завершения сеансов не удалась…»; пользователь
+                        // может нажать «Завершить сеансы и повторить» ещё раз, «Отмена»
+                        // прерывает удаление.
+                        retryNote = LocalizationManager.T("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat");
+                        continue;
                     }
-
-                    StatusText = termDetail;
                 }
-
-                infobaseUser = answer.User;
-                infobasePassword = answer.Password;
             }
         }
         finally
@@ -801,22 +838,31 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// исходной неудачи) — заголовок «Не удалось удалить информационную базу.» +
     /// детали rac; повторные показы помечаются «Повторная попытка удаления не
     /// удалась: ...», чтобы пользователь видел, что креды применены, но rac снова
-    /// вернул ошибку (комментарий 7OH от 2026-10-26). Логин и пароль с прошлой
-    /// попытки передаются в диалог предзаполненными (пароль сохраняется между
-    /// попытками — комментарий 7OH от 2026-10-26). Если колбэк диалога не назначен
-    /// (тесты/окно без поддержки) — прежнее поведение: предупреждение с одной кнопкой
-    /// OK, повтор не выполняется. Модальное окно открывается через dispatch-маршалер
-    /// (как <see cref="ShowWarningOnUi"/>), рабочий поток ждёт результат диалога.
+    /// вернул ошибку (комментарий 7OH от 2026-10-26). После неудачного завершения
+    /// сеансов — подготовленная пометка <paramref name="retryNote"/> («Повторная
+    /// попытка завершения сеансов не удалась: ...», комментарий 7OH от 2026-10-26).
+    /// Логин и пароль с прошлой попытки передаются в диалог предзаполненными (пароль
+    /// сохраняется между попытками — комментарий 7OH от 2026-10-26). Если колбэк
+    /// диалога не назначен (тесты/окно без поддержки) — прежнее поведение:
+    /// предупреждение с одной кнопкой OK, повтор не выполняется. Модальное окно
+    /// открывается через dispatch-маршалер (как <see cref="ShowWarningOnUi"/>),
+    /// рабочий поток ждёт результат диалога.
     /// </summary>
-    private DropRetryResult AskDropRetryOnUi(string detail, string? login, string? password, int attempts)
+    private DropRetryResult AskDropRetryOnUi(
+        string detail, string? login, string? password, int attempts, string? retryNote = null)
     {
         // Заголовок диалога повтора: на исходной неудаче — «Не удалось удалить
         // информационную базу.» + детали rac; на повторной — «Повторная попытка
-        // удаления не удалась: <детали rac>» (issue #69, комментарий 7OH).
-        var message = attempts > 1
-            ? string.Format(
-                LocalizationManager.T("ServerMonitor.Infobase.Drop.RetryFailedFormat"), detail)
-            : LocalizationManager.T("ServerMonitor.Infobase.DropFailed") + "\n" + detail;
+        // удаления не удалась: <детали rac>» (issue #69, комментарий 7OH). После
+        // неудачного завершения сеансов — «Повторная попытка завершения сеансов не
+        // удалась: <детали rac>» (комментарий 7OH от 2026-10-26: не выходить после
+        // первой попытки, дать нажать «Завершить сеансы и повторить» ещё раз).
+        var message = retryNote is not null
+            ? string.Format(retryNote, detail)
+            : attempts > 1
+                ? string.Format(
+                    LocalizationManager.T("ServerMonitor.Infobase.Drop.RetryFailedFormat"), detail)
+                : LocalizationManager.T("ServerMonitor.Infobase.DropFailed") + "\n" + detail;
         if (_dropRetryDialog is null)
         {
             ShowWarningOnUi(message, LocalizationManager.T("ServerMonitor.Infobase.DropTitle"));
@@ -896,6 +942,39 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
             return (true, string.Format(
                 LocalizationManager.T("ServerMonitor.Infobase.Drop.TerminatedFormat"),
                 connections.Count, sessions.Count));
+        }
+        catch (Exception ex)
+        {
+            return (false, BuildErrorMessage(ex));
+        }
+    }
+
+    /// <summary>
+    /// Блокировка регламентных заданий информационной базы перед повторным удалением
+    /// занятой базы (issue #69, комментарий 7OH от 2026-10-26): rac «infobase update
+    /// --scheduled-jobs-deny=on». Выполняется ДО завершения сеансов — «сначала ставить
+    /// блокировку, а потом снимать сеансы». Учётные данные администратора кластера —
+    /// из <see cref="BuildParams"/> (как у всех действий уровня кластера); параметры
+    /// СУБД берутся из строки summary базы (команда «infobase update» их требует).
+    /// Возвращает текст статуса об успехе либо текст ошибки.
+    /// </summary>
+    private async Task<(bool Ok, string Detail)> SetScheduledJobsBlockAsync(
+        RacInfobaseRow row, Guid clusterId)
+    {
+        try
+        {
+            var request = new RacInfobaseUpdateRequest
+            {
+                Dbms = row.Dbms,
+                DbServer = row.DbServer,
+                DbName = row.DbName,
+                ScheduledJobsDeny = true
+            };
+            var ok = await _rac.UpdateInfobaseAsync(
+                BuildParams(), clusterId, row.InfobaseId, request).ConfigureAwait(false);
+            return ok
+                ? (true, LocalizationManager.T("ServerMonitor.Infobase.Drop.BlockedFormat"))
+                : (false, BuildActionError(_rac.LastActionError));
         }
         catch (Exception ex)
         {

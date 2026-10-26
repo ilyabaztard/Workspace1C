@@ -29,6 +29,11 @@ namespace Workspace1C
         /// повторным «infobase drop» завершить активные сеансы/соединения базы.</summary>
         public bool TerminateSessions { get; private set; }
 
+        /// <summary>True — пользователь поставил галочку «Установить блокировку регламентных
+        /// заданий» (issue #69, комментарий 7OH от 2026-10-26): перед завершением сеансов
+        /// сначала выполняется rac «infobase update --scheduled-jobs-deny=on».</summary>
+        public bool BlockScheduledJobs { get; private set; }
+
         /// <param name="errorText">Текст ошибки удаления («Не удалось удалить информационную
         /// базу.» + детали rac либо «Повторная попытка... не удалась: ...») — показывается
         /// в подписи окна.</param>
@@ -62,7 +67,14 @@ namespace Workspace1C
                 SuggestionText.Visibility = Visibility.Visible;
             }
             if (kind == ServerMonitorViewModel.RacDropErrorKind.Sessions)
+            {
                 TerminateSessionsButton.Visibility = Visibility.Visible;
+                // issue #69, комментарий 7OH от 2026-10-26: вместе с кнопкой «Завершить
+                // сеансы и повторить» предлагается галочка «Установить блокировку
+                // регламентных заданий» — при повторном «Завершить сеансы и повторить»
+                // сначала ставится блокировка, потом снимаются сеансы.
+                BlockScheduledJobsCheckBox.Visibility = Visibility.Visible;
+            }
         }
 
         private void OnTerminateSessions_Click(object sender, RoutedEventArgs e)
@@ -71,6 +83,7 @@ namespace Workspace1C
             Password = PasswordBox.Password;
             Retry = true;
             TerminateSessions = true;
+            BlockScheduledJobs = BlockScheduledJobsCheckBox.IsChecked == true;
             DialogResult = true;
             Close();
         }
@@ -80,6 +93,7 @@ namespace Workspace1C
             User = LoginBox.Text;
             Password = PasswordBox.Password;
             Retry = true;
+            BlockScheduledJobs = BlockScheduledJobsCheckBox.IsChecked == true;
             DialogResult = true;
             Close();
         }

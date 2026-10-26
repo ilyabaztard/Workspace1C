@@ -180,4 +180,21 @@ IncludeOptional built_in.conf
         Assert.Single(merged);
         Assert.Equal("1", merged["A"]);
     }
+
+    [Fact]
+    public void ParseIncludeTargets_ExpandsDefinesInIncludeTarget_AndResolvesFromConfDir()
+    {
+        // Include-цель с ${VAR} (типовой способ подключения файла алиасов 1С):
+        // Define из того же текста раскрывается, относительный путь резолвится
+        // от каталога конфигурации (issue #63).
+        const string confText = """
+        Define SRVROOT "C:/Apache/Apache24"
+        IncludeOptional "${SRVROOT}/conf/1c8Aliases27.conf"
+        """;
+
+        var targets = ApacheConfIncludeParser.ParseIncludeTargets(confText, @"C:\Apache\Apache24\conf");
+
+        Assert.Contains(Path.GetFullPath(@"C:\Apache\Apache24\conf\1c8Aliases27.conf"), targets);
+        Assert.DoesNotContain("${", targets, System.StringComparer.Ordinal);
+    }
 }

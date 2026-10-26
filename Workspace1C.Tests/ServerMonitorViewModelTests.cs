@@ -1375,6 +1375,147 @@ public sealed class ServerMonitorViewModelTests
         Assert.Empty(dialogs.Warnings);
     }
 
+    [Fact]
+    public async Task DropSelectedInfobase_BlockScheduledJobs_BlocksFirst_ThenTerminates_ThenDrops()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «при повторном нажатии "Завершить
+        // сеансы и повторить" — сначала ставить блокировку, а потом снимать сеансы».
+        // Галочка «Установить блокировку регламентных заданий» → rac «infobase update
+        // --scheduled-jobs-deny=on» ПЕРВЫМ, затем разрыв соединений/завершение сеансов,
+        // затем повторный «infobase drop» с кредами администратора ИБ.
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 1,
+            DropInfobaseFailureError = "rac: информационная база используется активными сеансами"
+        };
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login, password) =>
+                new DropRetryResult(true, "ИБ-админ", "секрет",
+                    TerminateSessions: true, BlockScheduledJobs: true));
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Блокировка регламентных заданий выполнена ровно один раз, с флагом
+        // ScheduledJobsDeny=true и параметрами СУБД из строки summary базы.
+        var blockCall = Assert.Single(client.UpdateInfobaseCalls);
+        Assert.Equal(FakeRacClient.FirstClusterId, blockCall.clusterId);
+        Assert.Equal(FakeRacClient.FirstInfobaseId, blockCall.infobaseId);
+        Assert.True(blockCall.request.ScheduledJobsDeny);
+        Assert.Equal("MSSQLServer", blockCall.request.Dbms);
+        Assert.Equal("sql-01", blockCall.request.DbServer);
+        Assert.Equal("buho", blockCall.request.DbName);
+        // Соединения и сеансы сняты после блокировки (порядок «блокировка → сеансы»).
+        Assert.Equal(1, client.FilteredConnectionsListCalls);
+        Assert.Equal(1, client.FilteredSessionsListCalls);
+        Assert.Single(client.DisconnectCalls);
+        Assert.Single(client.TerminateCalls);
+        // Первый «infobase drop» без кредов упал (активные сеансы), второй — с кредами
+        // администратора ИБ → успех.
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+        Assert.Null(client.DropInfobaseCallsWithCredentials[0].infobaseUser);
+        Assert.Equal("ИБ-админ", client.DropInfobaseCallsWithCredentials[1].infobaseUser);
+        Assert.Empty(dialogs.Warnings);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_TerminateFails_ShowsDialogAgain_WithRetryNote_ThenSucceeds()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «Не выходить после первой попытки
+        // с завершением... иногда повторная попытка может помочь, просто соединение не
+        // успело закрыться». Первый «connection disconnect» падает → цикл НЕ прерывается:
+        // снова диалог (с пометкой «Повторная попытка завершения сеансов не удалась…»),
+        // пользователь снова жмёт «Завершить сеансы и повторить» → разрыв/завершение
+        // успешны → повторный drop с кредами → успех.
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 2,
+            DropInfobaseFailureError = "rac: информационная база используется активными сеансами",
+            DisconnectFailuresLeft = 1
+        };
+        var dialogs = new RecordingDialogs();
+        var errors = new List<string>();
+        var retryShown = new List<(string? login, string? password)>();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login, password) =>
+            {
+                errors.Add(error);
+                retryShown.Add((login, password));
+                return new DropRetryResult(true, "ИБ-админ", "секрет", TerminateSessions: true);
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // «infobase drop»: исходный — fail; после неудачного завершения сеансов — снова
+        // fail (уже с кредами из первого диалога); третий — успех.
+        Assert.Equal(3, client.DropInfobaseCalls.Count);
+        // Диалог показан дважды; логин и пароль из первого ответа предзаполнены во втором.
+        Assert.Equal(2, errors.Count);
+        Assert.Equal(2, retryShown.Count);
+        Assert.Null(retryShown[0].login);
+        Assert.Equal("ИБ-админ", retryShown[1].login);
+        Assert.Equal("секрет", retryShown[1].password);
+        // Второй показ помечен «Повторная попытка завершения сеансов не удалась…».
+        Assert.DoesNotContain("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat", errors[0]);
+        Assert.Contains("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat", errors[1]);
+        // Разрыв соединений пробовался дважды (первый — неудача, второй — успех);
+        // завершение сеансов — один раз (после успешного разрыва).
+        Assert.Equal(2, client.DisconnectCalls.Count);
+        Assert.Single(client.TerminateCalls);
+        // Никаких лишних предупреждений: вместо окна-предупреждения пометка
+        // показывается самим диалогом повтора.
+        Assert.Empty(dialogs.Warnings);
+        // Креды администратора ИБ не теряются между попытками (сохраняются ДО подготовки).
+        Assert.Equal("ИБ-админ", client.DropInfobaseCallsWithCredentials[1].infobaseUser);
+        Assert.Equal("ИБ-админ", client.DropInfobaseCallsWithCredentials[2].infobaseUser);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_TerminateFails_ThenCancel_Aborts()
+    {
+        // issue #69: после неудачного завершения сеансов цикл повторяет диалог, но
+        // «Отмена» в нём ПО-ПРЕЖНЕМУ прерывает удаление — бесконечного повтора нет.
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 2,
+            DropInfobaseFailureError = "rac: информационная база используется активными сеансами",
+            DisconnectFailuresLeft = 1
+        };
+        var dialogs = new RecordingDialogs();
+        var shown = 0;
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login, password) =>
+            {
+                shown++;
+                return shown == 1
+                    ? new DropRetryResult(true, "ИБ-админ", "секрет", TerminateSessions: true)
+                    : DropRetryResult.Cancel;
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Первый drop — исходная неудача; второй — после неудачного завершения сеансов
+        // (уже с кредами); «Отмена» во втором диалоге прерывает — третьего drop нет.
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+        Assert.Equal(2, shown);
+        Assert.Single(client.DisconnectCalls);
+        Assert.Empty(client.TerminateCalls);
+        Assert.Empty(dialogs.Warnings);
+        // Статус-строка после finally → Refresh() переустановлена на «загружено» — проверяем
+        // лишь, что она непустая (как в остальных drop-тестах); прерывание подтверждено
+        // количеством вызовов rac выше.
+        Assert.NotEmpty(vm.StatusText);
+    }
+
     [Theory]
     [InlineData("rac: требуется аутентификация администратора информационной базы", ServerMonitorViewModel.RacDropErrorKind.Authentication)]
     [InlineData("Access denied to infobase", ServerMonitorViewModel.RacDropErrorKind.Authentication)]
@@ -1952,9 +2093,19 @@ public sealed class ServerMonitorViewModelTests
         public Task<IReadOnlyList<RacInfobaseSummary>> GetInfobasesAsync(
             RacConnectionParams parameters, Guid clusterId, CancellationToken cancellationToken = default)
         {
+            // issue #69: для блокировки регламентных заданий («infobase update
+            // --scheduled-jobs-deny=on») команда требует параметры СУБД — в фикстуре
+            // возвращаем их, как это делает реальный вывод «infobase summary list».
             return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(new[]
             {
-                new RacInfobaseSummary { InfobaseId = FirstInfobaseId, Name = "Бухгалтерия" }
+                new RacInfobaseSummary
+                {
+                    InfobaseId = FirstInfobaseId,
+                    Name = "Бухгалтерия",
+                    Dbms = "MSSQLServer",
+                    DbServer = "sql-01",
+                    DbName = "buho"
+                }
             });
         }
 
@@ -2032,6 +2183,12 @@ public sealed class ServerMonitorViewModelTests
             TerminateCalls.Add((clusterId, sessionId, processId));
             if (_throwOnAction)
                 throw new RacClientException("нет прав администратора");
+            if (TerminateFailuresLeft > 0)
+            {
+                TerminateFailuresLeft--;
+                LastActionError = "rac: не удалось завершить сеанс (занят)";
+                return Task.FromResult(false);
+            }
             if (_actionFails)
             {
                 LastActionError = "rac: у пользователя нет прав на завершение сеанса";
@@ -2047,6 +2204,12 @@ public sealed class ServerMonitorViewModelTests
             DisconnectCalls.Add((clusterId, connectionId, processId));
             if (_throwOnAction)
                 throw new RacClientException("нет прав администратора");
+            if (DisconnectFailuresLeft > 0)
+            {
+                DisconnectFailuresLeft--;
+                LastActionError = "rac: соединение не успело закрыться";
+                return Task.FromResult(false);
+            }
             if (_actionFails)
             {
                 LastActionError = "rac: у пользователя нет прав на разрыв соединения";
@@ -2099,6 +2262,14 @@ public sealed class ServerMonitorViewModelTests
         /// <summary>Текст ошибки rac для неудач «infobase drop» (issue #69): по умолчанию —
         /// аутентификация администратора ИБ; тест занятой базы задаёт «активные сеансы».</summary>
         public string? DropInfobaseFailureError { get; set; }
+
+        /// <summary>Сколько ближайших вызовов «connection disconnect» завершаются неудачей
+        /// (issue #69, комментарий 7OH от 2026-10-26: «не выходить после первой попытки» —
+        /// повторная попытка завершения сеансов может помочь).</summary>
+        public int DisconnectFailuresLeft { get; set; }
+
+        /// <summary>Сколько ближайших вызовов «session terminate» завершаются неудачей.</summary>
+        public int TerminateFailuresLeft { get; set; }
 
         /// <summary>«infobase drop»: фиксирует вызов (в т.ч. учётные данные администратора ИБ,
         /// issue #69); «неудача» настраивается, как у остальных действий.</summary>

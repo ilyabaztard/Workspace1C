@@ -310,9 +310,122 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
-    public async Task Migrate_CreateFailure_SetsError_Stops()
+    public async Task Migrate_CreateFailure_ContinuesWithNextBase_MarksErrorRow_KeepsCheckmark()
     {
-        var client = new FakeRacClient(failCreate: true);
+        // Issue #41 (continue-on-error): ошибка создания ПЕРВОЙ базы не прерывает перенос —
+        // вторая база обрабатывается; проблемная строка помечается ошибкой и сохраняет
+        // галочку, успешная — попадает в результат (в список приложения).
+        var client = new FakeRacClient(failCreate: true); // «infobase create» падает на 1-й базе
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        await vm.MigrateAsync();
+
+        // Обе базы попробованы: первая — ошибка создания, вторая — перенесена.
+        Assert.Equal(2, client.Created.Count);
+        Assert.Single(client.Dropped); // drop только для успешно созданной второй
+        Assert.NotEmpty(vm.ErrorMessage);
+
+        var broken = vm.SourceRows.First(r => r.Name == "База1");
+        Assert.NotEmpty(broken.MigrationStatus);   // маркер ошибки на строке
+        Assert.True(broken.IsChecked);             // галочка сохранена (база не в приёмнике)
+        Assert.Empty(broken.TargetStatus);         // автообновление статусов её не затирало
+
+        var ok = vm.SourceRows.First(r => r.Name == "База2");
+        Assert.Empty(ok.MigrationStatus);
+        Assert.False(ok.IsChecked);                // перенесена — галочка снята
+
+        // Результат — по фактически успешному списку («в кластере, но не в списке» не бывает).
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(new[] { "База2" }, vm.Result!.MigratedBaseNames);
+        Assert.Single(vm.Result.AddedInfobases);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Migrate_ThreeBases_ErrorInMiddle_DoesNotStopOthers()
+    {
+        // Пример пользователя из issue #41: 3 базы — без ошибки, ошибка («в кластере есть,
+        // но нет в сервере БД» — create), без ошибки. Ошибка ВТОРОЙ не прерывает: третья
+        // обрабатывается; успешные попадают в результат, проблемная остаётся с галочкой.
+        var client = new FakeRacClient(sourceBaseCount: 3, failCreateOnIndex: 2);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        await vm.MigrateAsync();
+
+        Assert.Equal(3, vm.SourceRows.Count);
+        Assert.Equal(3, client.Created.Count); // все три базы попробованы
+        Assert.Equal(2, client.Dropped.Count); // drop для 1-й и 3-й (вторая не создана)
+        Assert.NotEmpty(vm.ErrorMessage);
+
+        var broken = vm.SourceRows.First(r => r.Name == "База2");
+        Assert.NotEmpty(broken.MigrationStatus);
+        Assert.True(broken.IsChecked);
+        Assert.Empty(broken.TargetStatus);
+
+        // Успешные добавлены в результат — «в кластере, но не в списке» больше не бывает.
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(new[] { "База1", "База3" }, vm.Result!.MigratedBaseNames);
+        Assert.Equal(2, vm.Result.AddedInfobases.Count);
+
+        // Сводка «Перенесено: 2 · Ошибок: 1».
+        Assert.Equal(
+            string.Format(LocalizationManager.T("ClusterMigration.Summary.ResultFormat"), 2, 1),
+            vm.StatusText);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Migrate_ProgressIndex_IsFullListPosition_NotShiftedByUncheckedRow()
+    {
+        // Issue #41 «починить индексы»: ProgressIndex — позиция в ПОЛНОМ списке (1-based),
+        // не смещается при снятии галочек. Снята первая из трёх — третья обрабатывается
+        // как «3 из 3», а не «2 из 3»; ProgressTotal — строки видимого списка; ProcessedCount
+        // — число фактически обработанных.
+        var client = new FakeRacClient(sourceBaseCount: 3);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        vm.SourceRows[0].IsChecked = false; // первая из трёх снята
+
+        await vm.MigrateAsync();
+
+        Assert.Equal(3, vm.ProgressTotal);       // стабильное «из N» по видимому списку
+        Assert.Equal(3, vm.ProgressIndex);       // последняя обработанная — ТРЕТЬЯ строка
+        Assert.Equal("База3", vm.CurrentBaseName);
+        Assert.Equal(2, vm.ProcessedCount);      // обработано две отмеченные базы
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(new[] { "База2", "База3" }, vm.Result!.MigratedBaseNames);
+    }
+
+    [Fact]
+    public async Task Migrate_AllRowsFailed_NotCompleted_ErrorsMarked()
+    {
+        // Issue #41: если не перенеслась НИ ОДНА база — результат не формируется, окно
+        // остаётся открытым; строка помечена ошибкой и сохраняет галочку; сводка «0 · Ошибок».
+        var client = new FakeRacClient(sourceBaseCount: 1, throwOnCreate: true); // сбой на всех create
         var vm = new ClusterMigrationViewModel(
             client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
         vm.SelectedSourceServer = vm.AvailableSourceServers[0];
@@ -328,9 +441,12 @@ public sealed class ClusterMigrationViewModelTests
         Assert.False(vm.MigrationCompleted);
         Assert.Null(vm.Result);
         Assert.NotEmpty(vm.ErrorMessage);
+        Assert.NotEmpty(vm.SourceRows[0].MigrationStatus);
+        Assert.True(vm.SourceRows[0].IsChecked);
+        Assert.Equal(
+            string.Format(LocalizationManager.T("ClusterMigration.Summary.ResultFormat"), 0, 1),
+            vm.StatusText);
         Assert.False(vm.IsBusy);
-        Assert.Empty(client.Dropped);
-        Assert.Single(client.Created);
     }
 
     [Fact]
@@ -415,8 +531,12 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
-    public async Task Migrate_DropFailure_SetsError()
+    public async Task Migrate_DropFailure_Continues_MarksErrorRows_MigratedInResult()
     {
+        // Issue #41 (continue-on-error): ошибка удаления из старого кластера НЕ прерывает
+        // перенос — строки помечаются ошибкой, но базы УЖЕ созданы в приёмнике и попадают
+        // в результат (в список приложения); галочки снимает автообновление статусов
+        // («Есть в кластере»).
         var client = new FakeRacClient(failDrop: true);
         var vm = new ClusterMigrationViewModel(
             client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
@@ -430,10 +550,19 @@ public sealed class ClusterMigrationViewModelTests
 
         await vm.MigrateAsync();
 
-        Assert.False(vm.MigrationCompleted);
+        Assert.Equal(2, client.Created.Count); // обе базы добавлены в приёмник
+        Assert.Equal(2, client.Dropped.Count); // обе попытки удаления из источника
         Assert.NotEmpty(vm.ErrorMessage);
-        Assert.Single(client.Created);
-        Assert.Single(client.Dropped);
+
+        // Обе строки помечены ошибкой (drop), но базы перенесены — «Есть в кластере»
+        // проставлено автообновлением статусов приёмника.
+        Assert.All(vm.SourceRows, r => Assert.NotEmpty(r.MigrationStatus));
+        Assert.All(vm.SourceRows, r => Assert.Equal(
+            LocalizationManager.T("ClusterMigration.Status.InTarget"), r.TargetStatus));
+
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(new[] { "База1", "База2" }, vm.Result!.MigratedBaseNames);
+        Assert.Equal(2, vm.Result.AddedInfobases.Count);
         Assert.False(vm.IsBusy);
     }
 
@@ -927,10 +1056,14 @@ public sealed class ClusterMigrationViewModelTests
         // Локаль источника (issue #41): rac может вернуть «ru_RU» (нормализуется) или не
         // вернуть ничего (пусто → «ru» по умолчанию, как при добавлении базы).
         private readonly string? _sourceLocale;
+        // Число баз источника («База1»…«БазаN»; по умолчанию 2 — совместимость с прежними
+        // тестами; для сценария «3 базы» из комментария 7OH issue #41 передаётся 3).
+        private readonly int _sourceBaseCount;
 
         public FakeRacClient(bool singleCluster = true, bool failCreate = false, bool failDrop = false,
             string[]? targetBaseNames = null, string? sourceDbms = null, string? sourceDbName = null,
-            string? sourceLocale = null, int? failCreateOnIndex = null, bool throwOnCreate = false)
+            string? sourceLocale = null, int? failCreateOnIndex = null, bool throwOnCreate = false,
+            int sourceBaseCount = 2)
         {
             _singleCluster = singleCluster;
             _failCreateOnIndex = failCreate ? 1 : failCreateOnIndex;
@@ -940,6 +1073,7 @@ public sealed class ClusterMigrationViewModelTests
             _sourceDbms = sourceDbms ?? "MSSQLServer";
             _sourceDbName = sourceDbName;
             _sourceLocale = sourceLocale;
+            _sourceBaseCount = sourceBaseCount;
         }
 
         public RacConnectionParams? LastParams { get; private set; }
@@ -988,11 +1122,22 @@ public sealed class ClusterMigrationViewModelTests
             // Источник: две базы; приёмник: заданные имена (по умолчанию — пусто).
             if (clusterId == SourceClusterId)
             {
-                return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(new RacInfobaseSummary[]
+                var source = new RacInfobaseSummary[_sourceBaseCount];
+                for (var i = 0; i < _sourceBaseCount; i++)
                 {
-                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000001"), Name = "База1", Descr = "Описание", Dbms = _sourceDbms, DbServer = "sql-01", DbName = _sourceDbName ?? "база1", Locale = _sourceLocale ?? string.Empty },
-                    new() { InfobaseId = Guid.Parse("66000000-0000-0000-0000-000000000002"), Name = "База2", Descr = "Описание", Dbms = _sourceDbms, DbServer = "sql-01", DbName = _sourceDbName ?? "база2", Locale = _sourceLocale ?? string.Empty }
-                });
+                    var n = i + 1;
+                    source[i] = new RacInfobaseSummary
+                    {
+                        InfobaseId = Guid.Parse($"66000000-0000-0000-0000-{n:D12}"),
+                        Name = "База" + n,
+                        Descr = "Описание",
+                        Dbms = _sourceDbms,
+                        DbServer = "sql-01",
+                        DbName = _sourceDbName ?? "база" + n,
+                        Locale = _sourceLocale ?? string.Empty
+                    };
+                }
+                return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(source);
             }
             // Приёмник: заданные имена + базы, уже созданные в этом кластере миграцией
             // (по ним автообновление статусов при ошибке показывает «Есть в кластере»).

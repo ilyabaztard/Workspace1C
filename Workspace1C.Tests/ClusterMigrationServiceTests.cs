@@ -196,6 +196,38 @@ public sealed class ClusterMigrationServiceTests
         Assert.Equal(string.Empty, request.DbName);
     }
 
+    // ---------- По-базовые результаты (issue #41, continue-on-error) ----------
+
+    [Fact]
+    public void BuildCreateRequest_PerBase_IndependentRequests()
+    {
+        // Issue #41 (по-базовые результаты): BuildCreateRequest детерминированно строит
+        // запрос ДЛЯ КАЖДОЙ базы отдельно — имя ИБ, имя БД в СУБД и тип СУБД переносятся
+        // из своей записи источника; «соседние» базы в цикле миграции не влияют друг на друга.
+        var first = new RacInfobaseSummary { Name = "Зарплата", Dbms = "MSSQLServer", DbServer = "sql-01", DbName = "zp" };
+        var second = new RacInfobaseSummary { Name = "Кадры", Dbms = "PostgreSQL", DbServer = "pg-01", DbName = "hr" };
+
+        var request1 = ClusterMigrationService.BuildCreateRequest(first, "user", "pass");
+        var request2 = ClusterMigrationService.BuildCreateRequest(second, "user", "pass");
+
+        Assert.Equal("Зарплата", request1.Name);
+        Assert.Equal("zp", request1.DbName);
+        Assert.Equal("MSSQLServer", request1.Dbms);
+
+        Assert.Equal("Кадры", request2.Name);
+        Assert.Equal("hr", request2.DbName);
+        Assert.Equal("PostgreSQL", request2.Dbms);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_NullSource_Throws()
+    {
+        // Стража: источник обязателен — запрос создания строится ТОЛЬКО по записи rac;
+        // null у баз без записи в цикле миграции отфильтрован ещё до вызова.
+        Assert.Throws<ArgumentNullException>(() =>
+            ClusterMigrationService.BuildCreateRequest(null!, "user", "pass"));
+    }
+
     // ---------- ExcludeSourceServer ----------
 
     [Fact]

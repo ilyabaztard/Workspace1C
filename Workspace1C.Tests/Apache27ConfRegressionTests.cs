@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using Workspace1C.Models;
@@ -179,6 +180,66 @@ public sealed class Apache27ConfRegressionTests
         Assert.Equal(0, vm.ConfTargetIndex);
         Assert.Equal(Path.GetFullPath(Path.Combine(ServerRootDir, "conf", "httpd27.conf")),
             vm.ApacheConfPath, ignoreCase: true);
+    }
+
+    [Fact]
+    public void PopulateIncludes_WildcardAliasesInclude_ResolvesAliasFileAndConfTargets()
+    {
+        // Issue #63 (последний комментарий 7OH от 2026-10-26: «файл алиаса по-прежнему не
+        // вернулся»): include алиасов может идти через IncludeOptional с маской каталога
+        // («IncludeOptional aliases/*.conf» — типовой способ подключения 1c8Aliases*.conf).
+        // Детектор обязан раскрыть маску в реальные файлы (IncludeFiles), а VM — показать
+        // пункт «Include: 1c8Aliases27.conf» в списке webinst.
+        var tempDir = Path.Combine(Path.GetTempPath(), "W1C_Apache27Aliases_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var aliasesDir = Path.Combine(tempDir, "aliases");
+            Directory.CreateDirectory(aliasesDir);
+            File.WriteAllText(Path.Combine(aliasesDir, "1c8Aliases27.conf"),
+                "# 1c publication\nAlias \"/Demo\" \"${SRVROOT}/htdocs/27/Demo/\"\n");
+            File.WriteAllText(Path.Combine(aliasesDir, "ignored.txt"), "not a conf\n");
+            var mainPath = Path.Combine(tempDir, "httpd27.conf");
+            File.WriteAllText(mainPath,
+                "Define SRVROOT \"" + tempDir.Replace("\\", "/") + "\"\r\n" +
+                "Define OneCPort 27\r\n" +
+                "IncludeOptional aliases/*.conf\r\n");
+
+            var instance = new ApacheInstance
+            {
+                Id = "httpd27",
+                Name = "Apache 2.4 (httpd-27)",
+                ConfPath = mainPath,
+                ServerRoot = tempDir,
+                Htdocs = Path.Combine(tempDir, "htdocs"),
+                Kind = WebServerKind.Apache24
+            };
+            ApacheInstanceDetector.PopulateIncludes(instance, File.ReadAllText(mainPath), tempDir);
+
+            // Маска раскрыта в реальный файл алиасов (aliases\1c8Aliases27.conf) —
+            // файл в IncludeFiles, а не только «шаблон» каталога в IncludeDirs.
+            Assert.Contains(instance.IncludeFiles, p =>
+                p.EndsWith(Path.Combine("aliases", "1c8Aliases27.conf"), StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(instance.IncludeFiles, p => p.EndsWith("ignored.txt", StringComparison.OrdinalIgnoreCase));
+
+            var infobase = new Infobase
+            {
+                Name = "Тестовая база",
+                Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+            };
+            var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+            vm.ServerIndex = vm.ServerIndexFor(instance);
+
+            // Список webinst: основной конфиг службы + include-файл алиасов.
+            Assert.True(vm.HasConfTargets);
+            Assert.Contains(vm.ConfTargetPaths, p =>
+                p.EndsWith(Path.Combine("aliases", "1c8Aliases27.conf"), StringComparison.OrdinalIgnoreCase));
+            Assert.True(vm.ConfTargets.Count >= 2, "В списке webinst должны быть основной конфиг и include-файл алиасов");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); }
+            catch { /* временный каталог не влияет на результат теста */ }
+        }
     }
 
     private static string FindRepoRoot()

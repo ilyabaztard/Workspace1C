@@ -2251,6 +2251,10 @@
     "ServerMonitor.Infobase.Drop.HintAuth": "Проверьте логин и пароль администратора информационной базы (например, «Администратор» с правами на администрирование). Если база не защищена — ошибка может быть на уровне кластера: проверьте логин и пароль сервера в справочнике «Сервера управления».",
     "ServerMonitor.Infobase.Drop.HintSessions": "Похоже, база используется активными сеансами или соединениями — rac не удаляет занятую базу. Нажмите «Завершить сеансы и повторить» — активные сеансы и соединения будут разорваны.",
     "ServerMonitor.Infobase.Drop.HintDatabase": "Удаление базы данных на сервере СУБД выполняется под учётными данными СУБД из настроек базы (--db-user/--db-pwd). Если ошибка связана с базой данных, проверьте права пользователя СУБД.",
+    "ServerMonitor.Infobase.Drop.BlockScheduledJobs": "Установить блокировку регламентных заданий",
+    "ServerMonitor.Infobase.Drop.BlockedFormat": "Блокировка регламентных заданий информационной базы установлена.",
+    "ServerMonitor.Infobase.Drop.BlockFailed": "Не удалось установить блокировку регламентных заданий.",
+    "ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat": "Повторная попытка завершения сеансов не удалась: {0}",
     "ServerMonitor.Servers.Add": "Добавить",
     "ServerMonitor.Servers.Edit": "Изменить",
     "ServerMonitor.Servers.Delete": "Удалить",
@@ -2522,6 +2526,7 @@
     "ClusterMigration.Hint.InTarget": "Отмечены базы, которые уже есть в приёмнике — снимите их отметку.",
     "ClusterMigration.Summary.SelectedFormat": "Выделено: {0} из {1} · будет перенесено: {2}",
     "ClusterMigration.Summary.InTargetPending": "(отмечены базы «Есть в кластере» — проверьте выделение)",
+    "ClusterMigration.Summary.ResultFormat": "Перенесено: {0} · Ошибок: {1}",
 
     "ConnectionReplace.Summary.Format": "Совпадений: {0} · будет изменено баз: {1} · без совпадений: {2} · без подключения: {3}",
     "ConnectionReplace.Result.AppliedFormat": "Замена выполнена: изменено баз: {0}.",

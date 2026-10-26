@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -280,5 +281,55 @@ public sealed class WebPublishIssue63Tests
         Assert.True(string.Equals(vm.ApacheConfPath,
             Path.GetFullPath(@"C:\Apache\Apache24\conf\httpd27.conf"),
             System.StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ViewModel_FallbackFindsAliasesFileNextToServiceConfig_Issue63()
+    {
+        // Include-граф не содержит файла алиасов (IncludeOptional вне графа / маска каталога
+        // не раскрылась), но 1c8Aliases*.conf лежит рядом с конфигом службы. VM обязан найти
+        // его fallback-поиском и показать пункт «Include: 1c8Aliases27.conf» (issue #63,
+        // «файл алиаса по-прежнему не вернулся»).
+        var testData = Path.Combine(FindRepoRoot(), "Workspace1C.Tests", "TestData", "Apache27Conf");
+        var mainConf = Path.Combine(testData, "httpd27.conf");
+        Assert.True(File.Exists(mainConf), "Фикстура httpd27.conf должна существовать.");
+
+        var instance = new ApacheInstance
+        {
+            Id = "httpd27",
+            Name = "Apache 2.4 (httpd-27)",
+            ConfPath = mainConf,
+            ServerRoot = Path.GetDirectoryName(mainConf)!,
+            Htdocs = Path.Combine(Path.GetDirectoryName(mainConf)!, "htdocs"),
+            IncludeFiles = new List<string>(),
+            Kind = WebServerKind.Apache24
+        };
+
+        var infobase = new Infobase
+        {
+            Name = "Тестовая база",
+            Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+        };
+        var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+        vm.ServerIndex = vm.ServerIndexFor(instance);
+
+        Assert.True(vm.HasConfTargets);
+        Assert.Contains(vm.ConfTargetPaths, p => p.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase));
+        Assert.True(vm.ConfTargets.Count >= 2, "В списке webinst должны быть основной конфиг и include-файл алиасов");
+        // Основной конфиг службы — первый пункт (значения по умолчанию из него).
+        Assert.Equal(0, vm.ConfTargetIndex);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, "Workspace1C", "Views")) &&
+                Directory.Exists(Path.Combine(dir.FullName, "Workspace1C.Tests")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        throw new InvalidOperationException("Корень репозитория не найден из тестового каталога.");
     }
 }

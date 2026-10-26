@@ -16,6 +16,7 @@ public sealed class ClusterMigrationRow : INotifyPropertyChanged
     private bool _isChecked;
     private string _sourceStatus = string.Empty;
     private string _targetStatus = string.Empty;
+    private string _migrationStatus = string.Empty;
 
     public ClusterMigrationRow(
         string name,
@@ -96,7 +97,47 @@ public sealed class ClusterMigrationRow : INotifyPropertyChanged
             {
                 _targetStatus = value ?? string.Empty;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(TargetStatusDisplay));
             }
+        }
+    }
+
+    /// <summary>
+    /// Статус переноса конкретной базы (issue #41, continue-on-error): текст ошибки, если
+    /// база НЕ перенесена (create/drop не удался); пустая строка — попытка не было либо
+    /// база перенесена успешно. Хранится ОТДЕЛЬНО от <see cref="TargetStatus"/>, чтобы
+    /// автообновление статусов приёмника («Получить статусы») не затирало маркер ошибки.
+    /// Галочка <see cref="IsChecked"/> при ошибке сохраняется — пользователь сразу видит,
+    /// какие базы остались необработанными.
+    /// </summary>
+    public string MigrationStatus
+    {
+        get => _migrationStatus;
+        set
+        {
+            if (!string.Equals(_migrationStatus, value ?? string.Empty, StringComparison.Ordinal))
+            {
+                _migrationStatus = value ?? string.Empty;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(TargetStatusDisplay));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Текст колонки «Статус приёмника» для отображения: при ошибке переноса показывается
+    /// маркер ошибки (<see cref="MigrationStatus"/>) — приоритетно; «Есть в кластере» —
+    /// иначе. Обе ненулевые записи склеиваются («Есть в кластере · Ошибка: …»).
+    /// </summary>
+    public string TargetStatusDisplay
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(MigrationStatus))
+                return TargetStatus;
+            if (string.IsNullOrEmpty(TargetStatus))
+                return MigrationStatus;
+            return TargetStatus + " · " + MigrationStatus;
         }
     }
 

@@ -22,6 +22,7 @@ namespace Workspace1C
     {
         private readonly TextBox _loginBox;
         private readonly PasswordBox _passwordBox;
+        private readonly CheckBox _blockScheduledJobsCheckBox;
 
         /// <summary>Логин администратора ИБ для повторной попытки удаления.</summary>
         public string? User { get; private set; }
@@ -35,6 +36,11 @@ namespace Workspace1C
         /// <summary>True — пользователь нажал «Завершить сеансы и повторить»: перед
         /// повторным «infobase drop» завершить активные сеансы/соединения базы.</summary>
         public bool TerminateSessions { get; private set; }
+
+        /// <summary>True — пользователь поставил галочку «Установить блокировку регламентных
+        /// заданий» (issue #69, комментарий 7OH от 2026-10-26): перед завершением сеансов
+        /// сначала выполняется rac «infobase update --scheduled-jobs-deny=on».</summary>
+        public bool BlockScheduledJobs { get; private set; }
 
         /// <param name="errorText">Текст ошибки удаления («Не удалось удалить информационную
         /// базу.» + детали rac) — показывается в подписи окна.</param>
@@ -65,6 +71,15 @@ namespace Workspace1C
                 MaxLength = 200,
                 Password = password ?? string.Empty
             }.Styled(ControlThemes.ModernPasswordBox);
+            // issue #69, комментарий 7OH от 2026-10-26: галочка «Установить блокировку
+            // регламентных заданий» — появляется вместе с кнопкой «Завершить сеансы
+            // и повторить»; при повторном нажатии сначала ставится блокировка
+            // (--scheduled-jobs-deny=on), затем снимаются сеансы.
+            _blockScheduledJobsCheckBox = new CheckBox
+            {
+                Content = T("ServerMonitor.Infobase.Drop.BlockScheduledJobs"),
+                Margin = new Thickness(0, 10, 0, 0)
+            }.Styled(ControlThemes.CacheCleanCheckBox);
 
             Content = BuildRoot(errorText);
         }
@@ -162,6 +177,12 @@ namespace Workspace1C
             form.Children.Add(passwordLabel);
             form.Children.Add(_passwordBox);
 
+            // Галочка блокировки регламентных заданий видна только для занятой базы
+            // (там же, где кнопка «Завершить сеансы и повторить», issue #69).
+            if (kind != ServerMonitorViewModel.RacDropErrorKind.Sessions)
+                _blockScheduledJobsCheckBox.IsVisible = false;
+            form.Children.Add(_blockScheduledJobsCheckBox);
+
             root.Children.Add(form);
             return root;
         }
@@ -172,6 +193,7 @@ namespace Workspace1C
             Password = _passwordBox.Password ?? string.Empty;
             Retry = true;
             TerminateSessions = true;
+            BlockScheduledJobs = _blockScheduledJobsCheckBox.IsChecked == true;
             DialogResult = true;
             Close();
         }
@@ -181,6 +203,7 @@ namespace Workspace1C
             User = _loginBox.Text;
             Password = _passwordBox.Password ?? string.Empty;
             Retry = true;
+            BlockScheduledJobs = _blockScheduledJobsCheckBox.IsChecked == true;
             DialogResult = true;
             Close();
         }

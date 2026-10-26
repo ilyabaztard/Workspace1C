@@ -2251,6 +2251,10 @@
     "ServerMonitor.Infobase.Drop.HintAuth": "Check the infobase administrator login and password (e.g. \"Administrator\" with administration rights). If the infobase is not protected, the problem may be at the cluster level: check the server credentials in the \"Management servers\" reference.",
     "ServerMonitor.Infobase.Drop.HintSessions": "The infobase seems to be in use by active sessions or connections - rac cannot drop a busy infobase. Click \"Terminate sessions and retry\" - the active sessions and connections will be disconnected.",
     "ServerMonitor.Infobase.Drop.HintDatabase": "Dropping the database on the DB server uses the DB credentials from the infobase settings (--db-user/--db-pwd). If the error is related to the database, check the DB user permissions.",
+    "ServerMonitor.Infobase.Drop.BlockScheduledJobs": "Set the scheduled jobs restriction",
+    "ServerMonitor.Infobase.Drop.BlockedFormat": "The scheduled jobs restriction for the infobase has been set.",
+    "ServerMonitor.Infobase.Drop.BlockFailed": "Failed to set the scheduled jobs restriction.",
+    "ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat": "The retry attempt to terminate sessions failed: {0}",
     "ServerMonitor.Servers.Add": "Add",
     "ServerMonitor.Servers.Edit": "Edit",
     "ServerMonitor.Servers.Delete": "Delete",
@@ -2522,6 +2526,7 @@
     "ClusterMigration.Hint.InTarget": "Checked infobases already exist in the target — uncheck them.",
     "ClusterMigration.Summary.SelectedFormat": "Checked: {0} of {1} · will be migrated: {2}",
     "ClusterMigration.Summary.InTargetPending": "(checked infobases exist in the target — verify the selection)",
+    "ClusterMigration.Summary.ResultFormat": "Migrated: {0} · errors: {1}",
 
     "ConnectionReplace.Summary.Format": "Matches: {0} · bases to change: {1} · no matches: {2} · no connection: {3}",
     "ConnectionReplace.Result.AppliedFormat": "Replacement applied: bases changed: {0}.",

@@ -236,7 +236,7 @@
                 <DataGridTextColumn Width="130" Header="{loc:Loc ClusterMigration.Columns.SourceStatus}"
                                     Binding="{Binding SourceStatus}" ElementStyle="{StaticResource CenteredCellText}"/>
                 <DataGridTextColumn Width="130" Header="{loc:Loc ClusterMigration.Columns.TargetStatus}"
-                                    Binding="{Binding TargetStatus}" ElementStyle="{StaticResource CenteredCellText}"/>
+                                    Binding="{Binding TargetStatusDisplay}" ElementStyle="{StaticResource CenteredCellText}"/>
             </DataGrid.Columns>
         </DataGrid>
 

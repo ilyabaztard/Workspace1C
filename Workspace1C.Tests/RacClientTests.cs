@@ -1181,6 +1181,46 @@ public sealed class RacClientTests
     }
 
     [Fact]
+    public void InfobaseUpdateArgs_BlockScheduledJobs_SwitchesOnOff()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26 («Установить блокировку регламентных
+        // заданий»): для удаления занятой базы VM вызывает «infobase update» с
+        // ScheduledJobsDeny=true → rac-аргумент «--scheduled-jobs-deny=on»; null-свойства
+        // (полная блокировка сеансов и пр.) не добавляют лишних ключей.
+        var clusterId = Guid.NewGuid();
+        var infobaseId = Guid.NewGuid();
+        var onArgs = RacClient.InfobaseUpdateArgs(clusterId, infobaseId, new RacInfobaseUpdateRequest
+        {
+            Dbms = "MSSQLServer",
+            DbServer = "sql-01",
+            DbName = "buho",
+            ScheduledJobsDeny = true
+        });
+
+        Assert.Equal(new[]
+        {
+            "infobase", "update",
+            $"--cluster={clusterId}",
+            $"--infobase={infobaseId}",
+            "--dbms=MSSQLServer",
+            "--db-server=sql-01",
+            "--db-name=buho",
+            "--descr=",
+            "--scheduled-jobs-deny=on"
+        }, onArgs);
+
+        var offArgs = RacClient.InfobaseUpdateArgs(clusterId, infobaseId, new RacInfobaseUpdateRequest
+        {
+            Dbms = "MSSQLServer",
+            DbServer = "sql-01",
+            DbName = "buho",
+            ScheduledJobsDeny = false
+        });
+        Assert.Contains(offArgs, a => a == "--scheduled-jobs-deny=off");
+        Assert.DoesNotContain(offArgs, a => a == "--scheduled-jobs-deny=on");
+    }
+
+    [Fact]
     public void InfobaseUpdateArgs_FullProperties_AndInfobaseCredentials()
     {
         var clusterId = Guid.NewGuid();

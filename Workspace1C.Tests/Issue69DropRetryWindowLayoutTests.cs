@@ -240,4 +240,58 @@ public sealed class Issue69DropRetryWindowLayoutTests
         Assert.Contains("Завершить сеансы и повторить", ru, StringComparison.Ordinal);
         Assert.Contains("Terminate sessions and retry", en, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void WpfWindow_HasBlockScheduledJobsCheckbox()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «Если соединение не снимается —
+        // предлагать на форме галочкой "Установить блокировку регламентных заданий"».
+        // WPF: CheckBox + ключ локализации; code-behind читает его в оба обработчика
+        // («Завершить сеансы и повторить» и «Повторить попытку»).
+        var xaml = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.xaml");
+        var codeBehind = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.xaml.cs");
+
+        Assert.Contains("BlockScheduledJobsCheckBox", xaml, StringComparison.Ordinal);
+        Assert.Contains("ServerMonitor.Infobase.Drop.BlockScheduledJobs", xaml, StringComparison.Ordinal);
+        Assert.Contains("BlockScheduledJobs", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("BlockScheduledJobsCheckBox.IsChecked", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AvaloniaWindow_HasBlockScheduledJobsCheckbox()
+    {
+        var source = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.Avalonia.cs");
+
+        Assert.Contains("_blockScheduledJobsCheckBox", source, StringComparison.Ordinal);
+        Assert.Contains("ServerMonitor.Infobase.Drop.BlockScheduledJobs", source, StringComparison.Ordinal);
+        Assert.Contains("BlockScheduledJobs", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Localization_BlockScheduledJobsKeys_ExistInRuAndEn_WithRussianText()
+    {
+        var ru = ReadProjectFile("Workspace1C", "Localization", "Languages", "ru.json");
+        var en = ReadProjectFile("Workspace1C", "Localization", "Languages", "en.json");
+
+        foreach (var key in new[]
+        {
+            "ServerMonitor.Infobase.Drop.BlockScheduledJobs",
+            "ServerMonitor.Infobase.Drop.BlockedFormat",
+            "ServerMonitor.Infobase.Drop.BlockFailed",
+            "ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat"
+        })
+        {
+            Assert.Contains($"\"{key}\"", ru, StringComparison.Ordinal);
+            Assert.Contains($"\"{key}\"", en, StringComparison.Ordinal);
+        }
+
+        using var doc = JsonDocument.Parse(ru);
+        var strings = doc.RootElement.GetProperty("strings");
+        Assert.Equal("Установить блокировку регламентных заданий",
+            strings.GetProperty("ServerMonitor.Infobase.Drop.BlockScheduledJobs").GetString());
+        Assert.Contains("не удалась",
+            strings.GetProperty("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat").GetString());
+        Assert.Contains("{0}",
+            strings.GetProperty("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat").GetString());
+    }
 }

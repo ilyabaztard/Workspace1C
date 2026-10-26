@@ -285,8 +285,96 @@ public sealed class WebPublishViewModel : ViewModelBase
                 Path.GetFileName(include)));
         }
 
+        // Fallback (issue #63, «файл алиаса по-прежнему не вернулся»): файл алиасов
+        // 1c8Aliases*.conf может подключаться через IncludeOptional вне графа Include или
+        // маску каталога (conf\aliases\*.conf), которую не удалось раскрыть. Если его нет
+        // в списке — ищем рядом с основным конфигом службы (conf\1c8Aliases*.conf,
+        // conf\aliases\1c8Aliases*.conf и т.п.), чтобы пункт «Include: 1c8Aliases27.conf»
+        // всегда был доступен для webinst.
+        if (!HasAliasFile(_confTargetPaths))
+        {
+            foreach (var alias in FindAliasFilesNear(instance.ConfPath))
+            {
+                if (!seen.Add(NormalizeTargetKey(alias)))
+                    continue;
+                _confTargetPaths.Add(alias);
+                _confTargets.Add(string.Format(
+                    LocalizationManager.T("WebPublish.ConfTargetInclude"),
+                    Path.GetFileName(alias)));
+            }
+        }
+
         _confTargetIndex = _confTargetPaths.Count > 0 ? 0 : -1;
         _apacheConfPath = _confTargetPaths.Count > 0 ? _confTargetPaths[0] : string.Empty;
+    }
+
+    /// <summary>Есть ли среди целей webinst файл алиасов 1С (1c8Aliases*.conf).</summary>
+    private static bool HasAliasFile(IReadOnlyList<string> paths)
+        => paths.Any(IsAliasFileName);
+
+    /// <summary>Имя файла алиасов 1С: «1c8Aliases27.conf» и т.п.</summary>
+    private static bool IsAliasFileName(string? path)
+        => !string.IsNullOrWhiteSpace(path)
+           && Path.GetFileName(path).StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Существующие файлы алиасов (1c8Aliases*.conf) рядом с конфигом службы: каталог
+    /// конфига, conf\aliases, ServerRoot\conf\aliases и ServerRoot\aliases. Только реально
+    /// существующие файлы; пути с неразрешёнными ${...} пропускаются; дубликаты отсекаются
+    /// вызывающим кодом (seen).
+    /// </summary>
+    private static IEnumerable<string> FindAliasFilesNear(string? confPath)
+    {
+        if (string.IsNullOrWhiteSpace(confPath))
+            yield break;
+        string? confDir;
+        try
+        {
+            confDir = Path.GetDirectoryName(confPath);
+        }
+        catch
+        {
+            yield break;
+        }
+        if (string.IsNullOrWhiteSpace(confDir))
+            yield break;
+
+        var dirs = new List<string> { confDir };
+        try
+        {
+            dirs.Add(Path.Combine(confDir, "aliases"));
+            var serverRoot = Path.GetDirectoryName(confDir);
+            if (!string.IsNullOrWhiteSpace(serverRoot))
+            {
+                dirs.Add(Path.Combine(serverRoot, "conf", "aliases"));
+                dirs.Add(Path.Combine(serverRoot, "aliases"));
+            }
+        }
+        catch
+        {
+            // Невалидный путь — используем только каталог конфига.
+        }
+
+        foreach (var dir in dirs.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            string[] files;
+            try
+            {
+                if (!Directory.Exists(dir))
+                    continue;
+                files = Directory.GetFiles(dir, "1c8Aliases*.conf");
+            }
+            catch
+            {
+                continue;
+            }
+            foreach (var file in files)
+            {
+                if (file.IndexOf("${", StringComparison.Ordinal) >= 0)
+                    continue;
+                yield return file;
+            }
+        }
     }
 
     /// <summary>Ключ сравнения путей конфиг-файлов: без учёта регистра и разделителей пути.</summary>

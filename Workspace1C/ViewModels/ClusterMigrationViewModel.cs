@@ -70,6 +70,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     private string _errorMessage = string.Empty;
     private int _progressIndex;
     private int _progressTotal;
+    private int _processedCount;
     private string _currentBaseName = string.Empty;
     private bool _migrationCompleted;
     private ClusterMigrationResult? _result;
@@ -530,6 +531,17 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Счётчик фактически обработанных строк (успешно или с ошибкой; issue #41): растёт
+    /// по мере перебора отмеченных баз и НЕ зависит от снятых галочек — это число попыток
+    /// переноса, а не позиция в списке (в отличие от <see cref="ProgressIndex"/>).
+    /// </summary>
+    public int ProcessedCount
+    {
+        get => _processedCount;
+        private set => SetProperty(ref _processedCount, value);
+    }
+
     /// <summary>Строка прогресса «N из M: база» (issue #41, фоном в диалоге).</summary>
     public string ProgressText =>
         ProgressTotal <= 0
@@ -977,11 +989,17 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     /// СУБД из диалога), затем, если <see cref="KeepInSource"/> НЕ отмечен — удалить базу
     /// из старого кластера БЕЗ удаления БД на сервере СУБД (rac «infobase drop» без
     /// --drop-database). Перенесённые базы добавляются в новую группу (имя кластера —
-    /// приёмник, как в импорте). Фоновый прогресс: <see cref="ProgressIndex"/> из
-    /// <see cref="ProgressTotal"/>, <see cref="CurrentBaseName"/>. При успехе формирует
-    /// <see cref="Result"/> (новый сервер/порт — из «cluster info» кластера приёмника)
-    /// и устанавливает <see cref="MigrationCompleted"/>. Первая ошибка останавливает
-    /// перенос и показывается в <see cref="ErrorMessage"/>.
+    /// приёмник, как в импорте). Фоновый прогресс: <see cref="ProgressIndex"/> — позиция
+    /// обрабатываемой строки в ПОЛНОМ списке (не смещается при снятии галочек и повторном
+    /// запуске, issue #41 «починить индексы»), <see cref="ProgressTotal"/> — число строк
+    /// списка, <see cref="CurrentBaseName"/>, <see cref="ProcessedCount"/> — счётчик
+    /// обработанных. При ошибке ОДНОЙ базы перенос НЕ прерывается: строка помечается
+    /// ошибкой (<see cref="ClusterMigrationRow.MigrationStatus"/>) и сохраняет галочку,
+    /// обработка переходит к следующей (continue-on-error). Результат формируется по
+    /// фактически успешному списку — перенесённые базы добавляются в список приложения,
+    /// даже если другие строки завершились ошибкой (не бывает «в кластере, но не в
+    /// списке»); при успехе хотя бы одной базы ставится <see cref="MigrationCompleted"/>
+    /// и показывается сводка «Перенесено: N · Ошибок: M».
     /// </summary>
     public async Task MigrateAsync()
     {
@@ -1075,74 +1093,133 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
 
             var migrated = new List<string>(rows.Count);
             var addedInfobases = new List<Infobase>(rows.Count);
+            var failedCount = 0;
 
             // Обновления прогресса доставляются в UI-поток: окно подписано на
             // PropertyChanged и напрямую трогает элементы управления (ProgressText →
             // UpdateCommandStates), а продолжение после ConfigureAwait(false) —
             // в пуле потоков (issue #41, кросс-потоковая InvalidOperationException).
-            Dispatch(() => ProgressTotal = rows.Count);
+            //
+            // Индексы статуса «починить индексы» (issue #41, комментарий 7OH):
+            // ProgressTotal — число строк ВИДИМОГО списка (стабильно при снятии галочек
+            // и повторном запуске); ProgressIndex — позиция обрабатываемой строки в
+            // ПОЛНОМ списке SourceRows (1-based), поэтому при снятой галочке у первой
+            // базы третья покажет «3», а не «2»; ProcessedCount — счётчик фактически
+            // обработанных строк (растёт независимо от позиции в списке).
+            Dispatch(() =>
+            {
+                ProgressTotal = SourceRows.Count;
+                ProgressIndex = 0;
+                ProcessedCount = 0;
+                CurrentBaseName = string.Empty;
+            });
 
             for (var i = 0; i < rows.Count; i++)
             {
                 var row = rows[i];
-                var index = i + 1;
+                var listIndex = SourceRows.IndexOf(row) + 1; // позиция в полном списке (1-based)
+                var processed = i + 1;
                 var name = row.Name;
                 Dispatch(() =>
                 {
-                    ProgressIndex = index;
+                    ProgressIndex = listIndex;
                     CurrentBaseName = name;
+                    ProcessedCount = processed;
+                    // Свежий прогон переноса: сбрасываем маркер ошибки предыдущего запуска.
+                    row.MigrationStatus = string.Empty;
                 });
 
-                // 1) Добавляем базу с теми же данными в новый кластер (rac «infobase create»).
-                // Значения «Тип СУБД»/«Сервер СУБД» с формы (issue #41) приоритетнее данных
-                // источника: приёмник может быть на другом сервере СУБД. Имя БД в СУБД
-                // переносится автоматически внутри BuildCreateRequest (DbName из rac, иначе —
-                // имя ИБ; issue #41, фикс 1.0.0.71), поэтому поле «Имя БД» на форме отсутствует,
-                // а DbName у запроса всегда непуст (исключение — база без имени вовсе; тогда
-                // rac вернёт общую ошибку создания, ключ ClusterMigration.Error.CreateFailedFormat).
-                // Локаль с формы (issue #41): автозаполнена из первой базы источника; при
-                // необходимости пользователь меняет списком выбора, значение передаётся
-                // в запрос создания с приоритетом над данными источника.
-                var request = ClusterMigrationService.BuildCreateRequest(
-                    row.Source!, DbUser, DbPassword, Dbms, DbServer, Locale);
-                var created = await _rac.CreateInfobaseAsync(targetParams, targetClusterId, request).ConfigureAwait(false);
-                if (!created)
+                string? error = null;
+                try
                 {
-                    failed = true;
-                    ErrorMessage = string.Format(
-                        LocalizationManager.T("ClusterMigration.Error.CreateFailedFormat"), row.Name, _rac.LastActionError);
-                    return;
-                }
-
-                // 2) Если «Не удалять в старом» не отмечено — удаляем базу из старого
-                //    кластера БЕЗ удаления БД на сервере СУБД (--drop-database не передаётся).
-                if (!KeepInSource)
-                {
-                    var dropped = await _rac.DropInfobaseAsync(
-                        sourceParams, sourceClusterId, row.Source!.InfobaseId, dropDatabase: false).ConfigureAwait(false);
-                    if (!dropped)
+                    // 1) Добавляем базу с теми же данными в новый кластер (rac «infobase create»).
+                    // Значения «Тип СУБД»/«Сервер СУБД» с формы (issue #41) приоритетнее данных
+                    // источника: приёмник может быть на другом сервере СУБД. Имя БД в СУБД
+                    // переносится автоматически внутри BuildCreateRequest (DbName из rac, иначе —
+                    // имя ИБ; issue #41, фикс 1.0.0.71), поэтому поле «Имя БД» на форме отсутствует,
+                    // а DbName у запроса всегда непуст (исключение — база без имени вовсе; тогда
+                    // rac вернёт общую ошибку создания, ключ ClusterMigration.Error.CreateFailedFormat).
+                    // Локаль с формы (issue #41): автозаполнена из первой базы источника; при
+                    // необходимости пользователь меняет списком выбора, значение передаётся
+                    // в запрос создания с приоритетом над данными источника.
+                    var request = ClusterMigrationService.BuildCreateRequest(
+                        row.Source!, DbUser, DbPassword, Dbms, DbServer, Locale);
+                    var created = await _rac.CreateInfobaseAsync(targetParams, targetClusterId, request).ConfigureAwait(false);
+                    if (!created)
                     {
-                        failed = true;
-                        ErrorMessage = string.Format(
-                            LocalizationManager.T("ClusterMigration.Error.DropFailedFormat"), row.Name, _rac.LastActionError);
-                        return;
+                        error = string.Format(
+                            LocalizationManager.T("ClusterMigration.Error.CreateFailedFormat"), name, _rac.LastActionError);
+                    }
+                    else
+                    {
+                        // 2) База ДОБАВИЛАСЬ в приёмник — она перенесена: добавляется в группу
+                        // списка приложения ПО МЕРЕ УСПЕХА (issue #41: при раннем выходе по
+                        // ошибке база оставалась в кластере, но не попадала в список).
+                        addedInfobases.Add(RacInfobaseMapper.ToInfobase(
+                            row.Source!, targetServer.Address, newPort, info?.HostName, groupName));
+                        migrated.Add(name);
+
+                        // 3) Если «Не удалять в старом» не отмечено — удаляем базу из старого
+                        //    кластера БЕЗ удаления БД на сервере СУБД (--drop-database не передаётся).
+                        if (!KeepInSource)
+                        {
+                            var dropped = await _rac.DropInfobaseAsync(
+                                sourceParams, sourceClusterId, row.Source!.InfobaseId, dropDatabase: false).ConfigureAwait(false);
+                            if (!dropped)
+                            {
+                                error = string.Format(
+                                    LocalizationManager.T("ClusterMigration.Error.DropFailedFormat"), name, _rac.LastActionError);
+                            }
+                        }
                     }
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    error = ex.Message;
+                    _logger?.Error($"Ошибка переноса базы «{name}» (миграция баз)", ex);
+                }
 
-                // 3) База добавляется в новую группу (имя кластера — приёмник), как в импорте.
-                addedInfobases.Add(RacInfobaseMapper.ToInfobase(
-                    row.Source!, targetServer.Address, newPort, info?.HostName, groupName));
-                migrated.Add(row.Name);
+                // Continue-on-error (issue #41): ошибка ОДНОЙ базы не прерывает цикл — строка
+                // помечается ошибкой и сохраняет галочку («всё, что с ошибками, останется в
+                // списке с галочками — сможем увидеть»), обработка переходит к следующей базе.
+                if (error is null)
+                {
+                    // База перенесена успешно — галочку снимаем (переносить больше нечего);
+                    // итоговую «Есть в кластере» проставит автообновление статусов (finally).
+                    Dispatch(() => row.IsChecked = false);
+                }
+                else
+                {
+                    failedCount++;
+                    failed = true;
+                    ErrorMessage = error; // последняя ошибка — в красной строке окна
+                    // Маркер ошибки ХРАНИТСЯ ОТДЕЛЬНО от TargetStatus: автообновление статусов
+                    // приёмника его не затирает (см. ClusterMigrationRow.MigrationStatus).
+                    Dispatch(() => row.MigrationStatus = error);
+                }
             }
 
             // Финальный блок (Result/MigrationCompleted) — ТОЛЬКО в UI-потоке: по
             // MigrationCompleted окно показывает диалог и закрывается (issue #41).
-            var result = new ClusterMigrationResult(migrated, addedInfobases, newServer, newPort, ReplaceConnectionStrings: false);
+            // Результат строится по ФАКТИЧЕСКИ успешному списку — перенесённые базы
+            // попадают в список приложения, даже если другие строки завершились ошибкой.
+            // Сводка: «Перенесено: N · Ошибок: M». Если не перенеслось НИЧЕГО — результат
+            // не формируется, окно остаётся открытым: строки помечены ошибкой и видны.
             Dispatch(() =>
             {
-                Result = result;
-                StatusText = string.Format(LocalizationManager.T("ClusterMigration.SuccessFormat"), migrated.Count);
-                MigrationCompleted = true;
+                StatusText = failedCount == 0
+                    ? string.Format(LocalizationManager.T("ClusterMigration.SuccessFormat"), migrated.Count)
+                    : string.Format(LocalizationManager.T("ClusterMigration.Summary.ResultFormat"), migrated.Count, failedCount);
+                if (migrated.Count > 0)
+                {
+                    Result = new ClusterMigrationResult(
+                        migrated, addedInfobases, newServer, newPort, ReplaceConnectionStrings: false);
+                    MigrationCompleted = true;
+                }
             });
         }
         catch (OperationCanceledException)

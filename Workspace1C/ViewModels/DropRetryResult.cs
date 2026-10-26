@@ -8,8 +8,17 @@ namespace Workspace1C.ViewModels;
 /// <see cref="TerminateSessions"/> — пользователь попросил перед повтором завершить
 /// активные сеансы/соединения базы (кнопка «Завершить сеансы и повторить» при
 /// ошибке удаления из-за занятой базы).
+/// <see cref="BlockScheduledJobs"/> — пользователь поставил галочку «Установить
+/// блокировку регламентных заданий» (комментарий 7OH от 2026-10-26): перед
+/// завершением сеансов и повторным удалением сначала выполняется rac «infobase
+/// update --scheduled-jobs-deny=on».
 /// </summary>
-public sealed record DropRetryResult(bool Retry, string? User, string? Password, bool TerminateSessions = false)
+public sealed record DropRetryResult(
+    bool Retry,
+    string? User,
+    string? Password,
+    bool TerminateSessions = false,
+    bool BlockScheduledJobs = false)
 {
     /// <summary>Результат «Отмена»: повторная попытка удаления не выполняется.</summary>
     public static DropRetryResult Cancel { get; } = new(false, null, null);

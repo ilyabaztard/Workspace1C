@@ -198,6 +198,14 @@ public static partial class ApacheInstanceDetector
                         continue;
                     if (target.Contains('*') || target.Contains('?'))
                     {
+                        // Include/IncludeOptional с маской (например «Include conf/aliases/*.conf» —
+                        // типовой способ подключения файлов алиасов 1С): Apache подключает реальные
+                        // файлы каталога. Раскрываем маску в существующие файлы — они попадают в
+                        // IncludeFiles и в граф чтения, иначе 1c8Aliases27.conf не появлялся бы в
+                        // списке webinst (issue #63, «файл алиаса по-прежнему не вернулся»).
+                        if (TryExpandWildcard(target, includeFiles, includeDirs, visitedPaths,
+                                seenTargets, allTexts, readFileText, ref added, instance.ConfPath))
+                            continue;
                         includeDirs.Add(target);
                         continue;
                     }
@@ -267,6 +275,82 @@ public static partial class ApacheInstanceDetector
                 }
             }
             instance.ListenPorts = ports;
+        }
+    }
+
+    /// <summary>
+    /// Раскрывает Include-маску (например <c>conf\aliases\*.conf</c>) в реальные файлы каталога
+    /// (issue #63): каждый существующий файл добавляется в <paramref name="includeFiles"/> и в граф
+    /// чтения — так include-файл алиасов <c>1c8Aliases27.conf</c>, подключаемый через
+    /// <c>IncludeOptional conf/aliases/*.conf</c>, появляется в списке webinst (иначе цель с
+    /// wildcard уходила в <paramref name="includeDirs"/>, а VM использует только IncludeFiles).
+    /// Основной конфиг инстанса (<paramref name="confPath"/>) в список не дублируется;
+    /// <c>${...}</c> в путях файлов не добавляется. Возвращает true, если маска обработана
+    /// (каталог существует — даже если файлов по ней не найдено); false — каталог недоступен,
+    /// цель кладётся в IncludeDirs как раньше.
+    /// </summary>
+    private static bool TryExpandWildcard(string target,
+        List<string> includeFiles, List<string> includeDirs,
+        HashSet<string> visitedPaths, HashSet<string> seenTargets,
+        List<(string Path, string Text)> allTexts, Func<string, string?> readFileText,
+        ref bool added, string? confPath)
+    {
+        string? directory;
+        string? pattern;
+        try
+        {
+            directory = Path.GetDirectoryName(target);
+            pattern = Path.GetFileName(target);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(pattern))
+            return false;
+
+        try
+        {
+            if (!Directory.Exists(directory))
+                return false;
+            foreach (var file in Directory.GetFiles(directory, pattern))
+            {
+                if (!seenTargets.Add(file))
+                    continue;
+                // Неразрешённая переменная (${...}) в путях в окне публикации не показываем.
+                if (file.IndexOf("${", StringComparison.Ordinal) >= 0)
+                    continue;
+                // Основной конфиг инстанса в include-списке уже есть (первый пункт ConfTargets).
+                if (!string.IsNullOrWhiteSpace(confPath)
+                    && string.Equals(NormalizeVisitKey(file), NormalizeVisitKey(confPath), StringComparison.Ordinal))
+                    continue;
+                includeFiles.Add(file);
+                if (!visitedPaths.Add(NormalizeVisitKey(file)))
+                    continue;
+                try
+                {
+                    var includeText = readFileText(file);
+                    if (!string.IsNullOrWhiteSpace(includeText))
+                    {
+                        allTexts.Add((file, includeText));
+                        added = true;
+                    }
+                }
+                catch
+                {
+                    // Файл удалён/недоступен — не роняем разбор.
+                }
+            }
+
+            // Маска обработана (файлы, подходящие под неё, собраны) — как IncludeOptional:
+            // сам «шаблон conf\aliases\*.conf» списком файлов webinst не становится.
+            return true;
+        }
+        catch
+        {
+            // Каталог недоступен (нет прав/странная маска) — сохраняем прежнее поведение.
+            return false;
         }
     }
 
