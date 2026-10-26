@@ -208,4 +208,77 @@ public sealed class WebPublishIssue63Tests
             $"Физический каталог не совпал: {vm.PhysicalDirectory}");
         Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
     }
+
+    // ---------- Issue #63 (последний комментарий 7OH от 2026-10-26):
+    // конфиг службы как основной + файл алиасов в списке webinst ----------
+
+    [Fact]
+    public void ViewModel_DefaultsFromServiceConfig_NotFromDefaultHttpdConf_Issue63()
+    {
+        // Служба: -d c:\Apache\Apache24 -f conf\httpd27.conf (строка запуска из комментария).
+        // Детектор обязан отдать конфиг СЛУЖБЫ (httpd27.conf) как основной — значения по
+        // умолчанию (каталог публикации с подкаталогом сайта, порт Listen) берутся из его
+        // Include-графа, а не из «обычного» httpd.conf (замечание 7OH).
+        var instance = ApacheInstanceDetector.ParseWindowsServiceImagePath(
+            "Apache2.4", "Apache HTTP Server", "Apache/2.4.62",
+            "\"C:\\Apache\\Apache24\\bin\\httpd.exe\" -d c:\\Apache\\Apache24 -f conf\\httpd27.conf");
+
+        Assert.NotNull(instance);
+        Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\conf\httpd27.conf"),
+            instance!.ConfPath, ignoreCase: true);
+
+        const string mainConf = """
+        Define OneCPort 27
+        Include conf/httpd.conf
+        """;
+        const string includeConf = """
+        Define SRVROOT "c:/Apache/Apache24"
+        DocumentRoot "${SRVROOT}/htdocs/${OneCPort}"
+        Listen "80${OneCPort}"
+        Include "${SRVROOT}/conf/1c8Aliases27.conf"
+        """;
+        const string aliasesConf = "Alias \"/Demo\" \"${SRVROOT}/htdocs/${OneCPort}/Demo/\"\n";
+
+        string? ReadFixtureByFileName(string path) => path switch
+        {
+            _ when path.EndsWith("httpd27.conf", System.StringComparison.OrdinalIgnoreCase) => mainConf,
+            _ when path.EndsWith("httpd.conf", System.StringComparison.OrdinalIgnoreCase) => includeConf,
+            _ when path.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase) => aliasesConf,
+            _ => null
+        };
+
+        ApacheInstanceDetector.PopulateIncludes(instance, mainConf,
+            Path.GetDirectoryName(instance.ConfPath), ReadFixtureByFileName);
+
+        // Значения по умолчанию из конфига службы: DocumentRoot «htdocs\27» и порт 8027.
+        Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\htdocs\27"), instance.DocumentRoot, ignoreCase: true);
+        Assert.Equal(new[] { 8027 }, instance.ListenPorts);
+        Assert.Contains(instance.IncludeFiles, p => p.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase));
+
+        var infobase = new Infobase
+        {
+            Name = "Тестовая база",
+            Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+        };
+        var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+        vm.ServerIndex = vm.ServerIndexFor(instance);
+        vm.VirtualDirectory = "demo_27";
+
+        // Каталог публикации по умолчанию и адрес — из конфига службы (не «обычного» httpd.conf).
+        Assert.True(string.Equals(vm.PhysicalDirectory,
+                Path.GetFullPath(@"C:\Apache\Apache24\htdocs\27\demo_27"),
+                System.StringComparison.OrdinalIgnoreCase),
+            $"Физический каталог не совпал: {vm.PhysicalDirectory}");
+        Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+
+        // Второй ComboBox webinst содержит основной конфиг службы и файл алиасов.
+        Assert.True(vm.HasConfTargets);
+        Assert.Contains(vm.ConfTargetPaths, p => p.EndsWith("httpd27.conf", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(vm.ConfTargetPaths, p => p.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase));
+        Assert.True(vm.ConfTargets.Count >= 2, "В списке webinst должны быть основной конфиг и include-файлы");
+        Assert.Equal(0, vm.ConfTargetIndex);
+        Assert.True(string.Equals(vm.ApacheConfPath,
+            Path.GetFullPath(@"C:\Apache\Apache24\conf\httpd27.conf"),
+            System.StringComparison.OrdinalIgnoreCase));
+    }
 }

@@ -139,10 +139,12 @@ public sealed class ServerMonitorViewModelTests
         Assert.Single(dialogs.Confirms);
         Assert.Empty(dialogs.Warnings);
 
-        // Клиент вызван с верными аргументами: кластер + id выбранного сеанса.
+        // Клиент вызван с верными аргументами: кластер + id выбранного сеанса
+        // (рабочий процесс из вкладки «Сеансы» не виден — rac сам его находит).
         Assert.Single(client.TerminateCalls);
         Assert.Equal(FakeRacClient.FirstClusterId, client.TerminateCalls[0].clusterId);
         Assert.Equal(session.Id, client.TerminateCalls[0].sessionId);
+        Assert.Null(client.TerminateCalls[0].processId);
         Assert.Empty(client.LastActionError);
 
         // После действия списки перечитаны (Refresh в finally).
@@ -234,6 +236,8 @@ public sealed class ServerMonitorViewModelTests
         Assert.Single(client.DisconnectCalls);
         Assert.Equal(FakeRacClient.FirstClusterId, client.DisconnectCalls[0].clusterId);
         Assert.Equal(connection.Id, client.DisconnectCalls[0].connectionId);
+        // issue #69: rac 8.5.4 требует --process=<pid> — VM берёт его из строки соединения.
+        Assert.Equal(FakeRacClient.FirstProcessId, client.DisconnectCalls[0].processId);
         Assert.NotEmpty(vm.StatusText);
     }
 
@@ -1152,11 +1156,11 @@ public sealed class ServerMonitorViewModelTests
         // с логином/паролем администратора ИБ → второй «infobase drop» с кредами → успех.
         var client = new FakeRacClient { DropInfobaseFailuresLeft = 1 };
         var dialogs = new RecordingDialogs();
-        var retryShown = new List<(string error, string? login)>();
+        var retryShown = new List<(string error, string? login, string? password)>();
         var vm = new ServerMonitorViewModel(client, dialogs,
-            dropRetryDialog: (error, login) =>
+            dropRetryDialog: (error, login, password) =>
             {
-                retryShown.Add((error, login));
+                retryShown.Add((error, login, password));
                 return new DropRetryResult(true, "ИБ-админ", "секрет");
             });
         await vm.ConnectAsync();
@@ -1187,7 +1191,7 @@ public sealed class ServerMonitorViewModelTests
         var dialogs = new RecordingDialogs();
         var retryShown = 0;
         var vm = new ServerMonitorViewModel(client, dialogs,
-            dropRetryDialog: (error, login) =>
+            dropRetryDialog: (error, login, password) =>
             {
                 retryShown++;
                 return DropRetryResult.Cancel;
@@ -1205,18 +1209,18 @@ public sealed class ServerMonitorViewModelTests
     }
 
     [Fact]
-    public async Task DropSelectedInfobase_RepeatedFailures_ShowsDialogAgain_WithSavedLogin()
+    public async Task DropSelectedInfobase_RepeatedFailures_ShowsDialogAgain_WithSavedLoginAndPassword()
     {
-        // Повторная ошибка: диалог показывается снова, логин из прошлой попытки
-        // предзаполнен (передан колбэком), пароль вводится заново; после успеха —
-        // статус «удалена из кластера».
+        // Повторная ошибка: диалог показывается снова, логин И пароль из прошлой
+        // попытки предзаполнены (переданы колбэком — комментарий 7OH от 2026-10-26
+        // «Пароль сохранять между попытками»); после успеха — статус «удалена».
         var client = new FakeRacClient { DropInfobaseFailuresLeft = 3 };
         var dialogs = new RecordingDialogs();
-        var retryShown = new List<(string error, string? login)>();
+        var retryShown = new List<(string error, string? login, string? password)>();
         var vm = new ServerMonitorViewModel(client, dialogs,
-            dropRetryDialog: (error, login) =>
+            dropRetryDialog: (error, login, password) =>
             {
-                retryShown.Add((error, login));
+                retryShown.Add((error, login, password));
                 return new DropRetryResult(true, "ИБ-админ", "новый-пароль");
             });
         await vm.ConnectAsync();
@@ -1228,10 +1232,14 @@ public sealed class ServerMonitorViewModelTests
         // 3 неудачи + 1 успешная попытка.
         Assert.Equal(4, client.DropInfobaseCalls.Count);
         Assert.Equal(3, retryShown.Count);
-        // Первый показ — без логина; второй и третий — с логином из ответа диалога.
+        // Первый показ — без логина и пароля; второй и третий — с кредами из первого
+        // ответа диалога (пароль тоже сохраняется между попытками).
         Assert.Null(retryShown[0].login);
+        Assert.Null(retryShown[0].password);
         Assert.Equal("ИБ-админ", retryShown[1].login);
+        Assert.Equal("новый-пароль", retryShown[1].password);
         Assert.Equal("ИБ-админ", retryShown[2].login);
+        Assert.Equal("новый-пароль", retryShown[2].password);
         Assert.Equal("ИБ-админ", client.DropInfobaseCallsWithCredentials[1].infobaseUser);
         Assert.Equal("новый-пароль", client.DropInfobaseCallsWithCredentials[1].infobasePassword);
         // После успешной повторной попытки диалог больше не показывается.
@@ -1254,7 +1262,7 @@ public sealed class ServerMonitorViewModelTests
             finally { shownOnUi = previous; }
         }
         var vm = new ServerMonitorViewModel(client, dialogs, dispatch,
-            dropRetryDialog: (error, login) =>
+            dropRetryDialog: (error, login, password) =>
             {
                 Assert.True(shownOnUi, "диалог повтора должен открываться в UI-потоке");
                 return new DropRetryResult(true, "ИБ-админ", "пароль");
@@ -1301,7 +1309,7 @@ public sealed class ServerMonitorViewModelTests
         var dialogs = new RecordingDialogs();
         var errors = new List<string>();
         var vm = new ServerMonitorViewModel(client, dialogs,
-            dropRetryDialog: (error, login) =>
+            dropRetryDialog: (error, login, password) =>
             {
                 errors.Add(error);
                 return new DropRetryResult(true, "ИБ-админ", "пароль");
@@ -1336,7 +1344,7 @@ public sealed class ServerMonitorViewModelTests
         };
         var dialogs = new RecordingDialogs();
         var vm = new ServerMonitorViewModel(client, dialogs,
-            dropRetryDialog: (error, login) =>
+            dropRetryDialog: (error, login, password) =>
                 new DropRetryResult(true, "ИБ-админ", "секрет", TerminateSessions: true));
         await vm.ConnectAsync();
         await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
@@ -1349,10 +1357,14 @@ public sealed class ServerMonitorViewModelTests
         Assert.Equal(1, client.FilteredConnectionsListCalls);
         Assert.Equal(1, client.FilteredSessionsListCalls);
         // Фикстура возвращает одно соединение и один сеанс — оба разорваны/завершены.
+        // issue #69 («повторить — ошибка», «Ошибка разбора параметра: process»): рабочий
+        // процесс передаётся обеим rac-командам (8.5.4 без --process их отклоняет).
         var connection = Assert.Single(client.DisconnectCalls);
         Assert.Equal(FakeRacClient.FirstClusterId, connection.clusterId);
+        Assert.Equal(FakeRacClient.FirstProcessId, connection.processId);
         var session = Assert.Single(client.TerminateCalls);
         Assert.Equal(FakeRacClient.FirstSessionId, session.sessionId);
+        Assert.Equal(FakeRacClient.FirstProcessId, session.processId);
         // Первый «infobase drop» без кредов упал (активные сеансы), второй — с кредами
         // администратора ИБ → успех.
         Assert.Equal(2, client.DropInfobaseCalls.Count);
@@ -1696,6 +1708,13 @@ public sealed class ServerMonitorViewModelTests
         /// <summary>Идентификатор сеанса (детерминированный — соединение ссылается на него).</summary>
         public static readonly System.Guid FirstSessionId = System.Guid.Parse("dddddddd-1111-2222-3333-444455556666");
 
+        /// <summary>Идентификатор соединения сеанса (issue #69: по нему VM находит рабочий процесс).</summary>
+        public static readonly System.Guid FirstConnectionId = System.Guid.Parse("eeeeeeee-1111-2222-3333-444455556666");
+
+        /// <summary>Идентификатор рабочего процесса соединения (issue #69: rac 8.5.4 требует
+        /// «--process=<pid>» для «session terminate»/«connection disconnect»).</summary>
+        public static readonly System.Guid FirstProcessId = System.Guid.Parse("ffffffff-1111-2222-3333-444455556666");
+
         private readonly bool _throwOnClusters;
         private readonly bool _throwOnAction;
         private readonly bool _actionFails;
@@ -1724,11 +1743,14 @@ public sealed class ServerMonitorViewModelTests
         /// <summary>Текст последней ошибки действия (как в реальном клиенте).</summary>
         public string LastActionError { get; private set; } = string.Empty;
 
-        /// <summary>Вызовы «session terminate»: (clusterId, sessionId).</summary>
-        public List<(System.Guid clusterId, System.Guid sessionId)> TerminateCalls { get; } = new();
+        /// <summary>Вызовы «session terminate»: (clusterId, sessionId, processId) — processId
+        /// обязателен для rac 8.5.4 (issue #69 «Ошибка разбора параметра: process»).</summary>
+        public List<(System.Guid clusterId, System.Guid sessionId, System.Guid? processId)>
+            TerminateCalls { get; } = new();
 
-        /// <summary>Вызовы «connection disconnect»: (clusterId, connectionId).</summary>
-        public List<(System.Guid clusterId, System.Guid connectionId)> DisconnectCalls { get; } = new();
+        /// <summary>Вызовы «connection disconnect»: (clusterId, connectionId, processId).</summary>
+        public List<(System.Guid clusterId, System.Guid connectionId, System.Guid? processId)>
+            DisconnectCalls { get; } = new();
 
         /// <summary>Параметры последнего вызова «cluster list» (проверка нормализации host:port).</summary>
         public RacConnectionParams? LastParams { get; private set; }
@@ -1858,6 +1880,9 @@ public sealed class ServerMonitorViewModelTests
                     Id = FirstSessionId,
                     // issue #324, C2: infobase-id сеанса маппится на имя из «infobase summary list».
                     InfobaseId = FirstInfobaseId,
+                    // issue #69: ConnectionId сеанса = Id соединения — по нему VM находит
+                    // рабочий процесс для «session terminate --process=...».
+                    ConnectionId = FirstConnectionId,
                     User = "Иванов",
                     Host = "client1",
                     AppId = "1CV8",
@@ -1881,10 +1906,14 @@ public sealed class ServerMonitorViewModelTests
             {
                 new RacConnectionInfo
                 {
-                    Id = System.Guid.NewGuid(),
+                    Id = FirstConnectionId,
                     // issue #3: SessionId соединения указывает на сеанс — по нему
-                    // клиентская фильтрация определяет базу соединения.
+                    // клиентская фильтрация определяет базу соединения. Id — тот же,
+                    // что ConnectionId у сеанса (issue #69: маппинг на рабочий процесс).
                     SessionId = FirstSessionId,
+                    // issue #69: рабочий процесс соединения — «session terminate»/
+                    // «connection disconnect» требуют --process=<pid> в rac 8.5.4.
+                    ProcessId = FirstProcessId,
                     Connector = "1CV8",
                     Host = "client1",
                     Port = 52000,
@@ -1998,9 +2027,9 @@ public sealed class ServerMonitorViewModelTests
 
         public Task<bool> TerminateSessionAsync(
             RacConnectionParams parameters, Guid clusterId, Guid sessionId,
-            CancellationToken cancellationToken = default)
+            Guid? processId = null, CancellationToken cancellationToken = default)
         {
-            TerminateCalls.Add((clusterId, sessionId));
+            TerminateCalls.Add((clusterId, sessionId, processId));
             if (_throwOnAction)
                 throw new RacClientException("нет прав администратора");
             if (_actionFails)
@@ -2013,9 +2042,9 @@ public sealed class ServerMonitorViewModelTests
 
         public Task<bool> DisconnectConnectionAsync(
             RacConnectionParams parameters, Guid clusterId, Guid connectionId,
-            CancellationToken cancellationToken = default)
+            Guid? processId = null, CancellationToken cancellationToken = default)
         {
-            DisconnectCalls.Add((clusterId, connectionId));
+            DisconnectCalls.Add((clusterId, connectionId, processId));
             if (_throwOnAction)
                 throw new RacClientException("нет прав администратора");
             if (_actionFails)

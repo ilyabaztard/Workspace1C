@@ -141,6 +141,46 @@ public sealed class Apache27ConfRegressionTests
         Assert.Equal(WebServerKind.Apache24, vm.BuildRequest().Server);
     }
 
+    [Fact]
+    public void ViewModel_RealUserConfigs_ConfTargetsContainAliasesFile()
+    {
+        // Issue #63, последний комментарий: «пропала опция … файла алиасов выборе нет,
+        // а значения по умолчанию из обычного файла, а не который указан в службе».
+        // Основной конфиг — httpd27.conf из службы (-f conf\httpd27.conf), а не «обычный»
+        // httpd.conf; второй ComboBox webinst показывает include-файлы графа, включая
+        // 1c8Aliases27.conf.
+        var instance = new ApacheInstance
+        {
+            Id = "httpd27",
+            Name = "Apache 2.4 (httpd-27)",
+            ConfPath = Path.Combine(ServerRootDir, "conf", "httpd27.conf"),
+            ServerRoot = ServerRootDir,
+            Htdocs = Path.Combine(ServerRootDir, "htdocs"),
+            Kind = WebServerKind.Apache24
+        };
+        ApacheInstanceDetector.PopulateIncludes(instance, ReadFixture("httpd27.conf"),
+            Path.Combine(ServerRootDir, "conf"), ReadFixtureByPath);
+
+        var infobase = new Infobase
+        {
+            Name = "Тестовая база",
+            Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+        };
+        var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+        vm.ServerIndex = vm.ServerIndexFor(instance);
+
+        Assert.True(vm.HasConfTargets);
+        // Второй ComboBox webinst: основной конфиг службы и включаемые файлы графа
+        // (в т.ч. файл алиасов 1c8Aliases27.conf).
+        Assert.Contains(vm.ConfTargetPaths, p => p.EndsWith("httpd27.conf", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(vm.ConfTargetPaths, p => p.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase));
+        Assert.True(vm.ConfTargets.Count >= 2, "В списке webinst должны быть основной конфиг и include-файлы");
+        // По умолчанию выбран основной конфиг — конфиг, указанный в службе.
+        Assert.Equal(0, vm.ConfTargetIndex);
+        Assert.Equal(Path.GetFullPath(Path.Combine(ServerRootDir, "conf", "httpd27.conf")),
+            vm.ApacheConfPath, ignoreCase: true);
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

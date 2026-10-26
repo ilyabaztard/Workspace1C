@@ -284,6 +284,41 @@ public static partial class ApacheInstanceDetector
                 return tokens[i + 1];
             }
         }
+
+        // Слитные формы ключа «-f=conf\httpd27.conf» / «/f:"conf\httpd27.conf"» (некоторые
+        // обёртки служб записывают ImagePath без пробела между ключом и значением) —
+        // конфиг, указанный в службе, должен обязательно стать ConfPath инстанса (issue #63).
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var value = ExtractInlineSwitch(tokens[i], key);
+            if (value is not null)
+                return value;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Значение слитного ключа вида «-f=value», «-f:value», «/f:value». Форма без
+    /// разделителя («-fvalue») намеренно не распознаётся — иначе посторонние ключи
+    /// вида «-debug» ошибочно приняли бы «ebug» за значение конфига.
+    /// </summary>
+    private static string? ExtractInlineSwitch(string token, string key)
+    {
+        foreach (var prefix in new[]
+        {
+            "-" + key + "=", "-" + key + ":",
+            "/" + key + "=", "/" + key + ":"
+        })
+        {
+            if (!token.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var value = token.Substring(prefix.Length).Trim();
+            if (value.Length == 0)
+                continue;
+            value = value.Trim('"');
+            return value.Length == 0 ? null : value;
+        }
         return null;
     }
 

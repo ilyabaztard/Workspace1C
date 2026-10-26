@@ -14,8 +14,9 @@ namespace Workspace1C
     /// версия WPF-окна <see cref="RacInfobaseDropRetryWindow"/>: при неудачном
     /// rac «infobase drop» (например, защищённая база) вместо простого окна с OK —
     /// текст ошибки, поля «Логин»/«Пароль» администратора ИБ и кнопки «Повторить
-    /// попытку» (default) / «Отмена» (cancel). Логин сохраняется между показами
-    /// диалога, пароль вводится заново. Подписи полей — кисть FormLabelBrush (issue #61).
+    /// попытку» (default) / «Отмена» (cancel). Логин и пароль сохраняются между
+    /// показами диалога (комментарий 7OH от 2026-10-26). Подписи полей — кисть
+    /// FormLabelBrush (issue #61).
     /// </summary>
     public sealed class RacInfobaseDropRetryWindow : ModalWindowBase
     {
@@ -38,13 +39,15 @@ namespace Workspace1C
         /// <param name="errorText">Текст ошибки удаления («Не удалось удалить информационную
         /// базу.» + детали rac) — показывается в подписи окна.</param>
         /// <param name="login">Логин администратора ИБ с прошлой попытки (null — первый показ).</param>
-        public RacInfobaseDropRetryWindow(string errorText, string? login = null)
+        /// <param name="password">Пароль администратора ИБ с прошлой попытки (null — первый
+        /// показ): сохраняется между попытками (комментарий 7OH от 2026-10-26).</param>
+        public RacInfobaseDropRetryWindow(string errorText, string? login = null, string? password = null)
         {
             Title = LocalizationManager.T("ServerMonitor.Infobase.Drop.RetryTitle");
             Width = 520;
-            Height = 320;
+            Height = 440;
             MinWidth = 480;
-            MinHeight = 300;
+            MinHeight = 400;
             FontSize = 13;
             CanResize = false;
 
@@ -56,8 +59,12 @@ namespace Workspace1C
                 MaxLength = 200,
                 Text = login ?? string.Empty
             }.Styled(ControlThemes.ModernTextBox);
-            _passwordBox = new PasswordBox { Height = 32, MaxLength = 200 }
-                .Styled(ControlThemes.ModernPasswordBox);
+            _passwordBox = new PasswordBox
+            {
+                Height = 32,
+                MaxLength = 200,
+                Password = password ?? string.Empty
+            }.Styled(ControlThemes.ModernPasswordBox);
 
             Content = BuildRoot(errorText);
         }

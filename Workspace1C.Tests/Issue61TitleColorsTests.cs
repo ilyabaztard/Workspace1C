@@ -215,4 +215,20 @@ public sealed class Issue61TitleColorsTests
                 xaml, System.StringComparison.Ordinal);
         }
     }
+
+    [Fact]
+    public void LaunchParametersWindow_ListView_UsesThemedContainer()
+    {
+        // Issue #61 (комментарий 7OH от 2026-10-26): «Конфигуратор параметров запуска» —
+        // строка списка выделялась системными цветами (тёмное на тёмном при наведении,
+        // белый фон с белыми буквами при выборе без фокуса). ListView с GridView теперь
+        // покрыт неявным стилем темы (ModernListViewItem) — в разметке окна нет
+        // фиксированных белых/тёмных фонов выделения.
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "LaunchParametersWindow.xaml"));
+        Assert.Contains("<ListView", xaml, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("Background=\"White\"", xaml, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("Background=\"#FFFFFF\"", xaml, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("Background=\"Black\"", xaml, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("Background=\"#000000\"", xaml, System.StringComparison.Ordinal);
+    }
 }

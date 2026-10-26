@@ -1,11 +1,15 @@
 #if LINUX
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Workspace1C.Localization;
+using Workspace1C.Models;
 using Workspace1C.Themes;
 using Workspace1C.ViewModels;
 
@@ -31,20 +35,53 @@ namespace Workspace1C
 
             Title = LocalizationManager.T("PlatformChange.Title");
             Width = 460;
-            CanResize = false;
+            CanResize = true;
+            // Минимальные размеры (issue #55): при уменьшении окна содержимое не сжимается
+            // до обрезки — дальше нижней границы окно не уменьшается, а прокрутка
+            // (ScrollViewer ниже) страхует от обрезки по вертикали.
+            MinWidth = 380;
+            MinHeight = 240;
             FontSize = 13;
             DataContext = _vm;
 
             // ---- Выбор версии платформы. ----
             var platformCombo = new ComboBox
             {
-                Width = 260,
+                // Фиксированная ширина 260 уезжала за правый край окна при уменьшении
+                // ширины/крупных шрифтах (issue #55): поле растягивается в звёздной
+                // колонке Grid ниже, а не прячется.
+                MinWidth = 180,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalContentAlignment = VerticalAlignment.Center
             };
             platformCombo.Styled(ControlThemes.ModernComboBox);
-            platformCombo.ItemsSource = _vm.InstalledPlatformVersions;
-            platformCombo.Bind(ComboBox.SelectedItemProperty,
-                new Binding("SelectedPlatform", BindingMode.TwoWay));
+            platformCombo.ItemsSource = _vm.InstalledPlatformItems;
+            // Тонкие клиенты (issue #54) помечаются локализованным суффиксом
+            // «(тонкий клиент)» (DisplayName — единый форматтер, issue #33) и
+            // подсвечиваются оранжевым, как в настройках.
+            platformCombo.ItemTemplate = new FuncDataTemplate<PlatformVersionInfo>((item, _) =>
+            {
+                var text = new TextBlock
+                {
+                    Text = item?.DisplayName ?? string.Empty,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                if (item is { IsThinClient: true })
+                    text.Foreground = new SolidColorBrush(Color.Parse("#F59E0B"));
+                else
+                    ThemeBrushes.Bind(text, TextBlock.ForegroundProperty, "TextPrimaryBrush");
+                return text;
+            });
+            // В Avalonia нет SelectedValuePath (см. UtilitiesMenuEditorWindow): выбранную
+            // версию пишем в VM вручную по событию, а начальный выбор (предзаполнение
+            // первой версии в VM) восстанавливаем по SelectedPlatform.
+            platformCombo.SelectedItem = _vm.InstalledPlatformItems
+                .FirstOrDefault(i => i.Display == _vm.SelectedPlatform);
+            platformCombo.SelectionChanged += (_, _) =>
+            {
+                if (platformCombo.SelectedItem is PlatformVersionInfo item)
+                    _vm.SelectedPlatform = item.Display;
+            };
 
             // ---- Сводка и результат. ----
             var summary = new TextBlock
@@ -106,27 +143,33 @@ namespace Workspace1C
                 Children = { applyButton, cancelButton }
             };
 
+            // Строка «подпись + поле»: сетка Auto+* вместо горизонтального StackPanel —
+            // при уменьшении окна комбобокс сжимается вместе со звёздной колонкой,
+            // а не обрезается правым краем (issue #55).
+            var labelRow = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) } };
+            Grid.SetColumn(platformCombo, 1);
+            labelRow.Children.Add(FieldLabel("PlatformChange.PlatformLabel"));
+            labelRow.Children.Add(platformCombo);
+
             var panel = new StackPanel
             {
                 Margin = new Thickness(20, 16),
                 Children =
                 {
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 6,
-                        Children =
-                        {
-                            FieldLabel("PlatformChange.PlatformLabel"),
-                            platformCombo
-                        }
-                    },
+                    labelRow,
                     summary,
                     result,
                     buttons
                 }
             };
-            Content = panel;
+            // Прокрутка по вертикали (issue #55): при малой высоте окна содержимое
+            // скроллится, а не обрезается.
+            Content = new ScrollViewer
+            {
+                Content = panel,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
         }
 
         private void OnApplyClick()

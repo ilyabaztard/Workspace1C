@@ -73,9 +73,9 @@ namespace Workspace1C
                 dialogs,
                 action => Application.Current?.Dispatcher.BeginInvoke(action),
                 serverListStore,
-                (errorText, login) =>
+                (errorText, login, password) =>
                 {
-                    var retry = new RacInfobaseDropRetryWindow(errorText, login) { Owner = this };
+                    var retry = new RacInfobaseDropRetryWindow(errorText, login, password) { Owner = this };
                     return retry.ShowDialog() == true
                         ? new ViewModels.DropRetryResult(
                             retry.Retry, retry.User, retry.Password, retry.TerminateSessions)

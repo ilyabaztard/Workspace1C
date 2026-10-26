@@ -12,9 +12,10 @@
         Icon="{StaticResource AppIcon}"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        ResizeMode="NoResize"
+        ResizeMode="CanResizeWithGrip"
         SizeToContent="Height"
         Width="460"
+        MinWidth="380" MinHeight="240"
         Background="{DynamicResource ContentBackgroundBrush}">
 
     <Window.Resources>
@@ -23,19 +24,51 @@
         </Style>
     </Window.Resources>
 
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="20,16,20,16">
-        <!-- Выбор версии платформы. -->
-        <StackPanel Orientation="Horizontal">
-            <TextBlock Text="{loc:Loc PlatformChange.PlatformLabel}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <ComboBox Width="260" Style="{StaticResource ModernComboBox}"
-                      ItemsSource="{Binding InstalledPlatformVersions}"
-                      SelectedItem="{Binding SelectedPlatform, Mode=TwoWay}"
-                      VerticalContentAlignment="Center" Padding="6,2"/>
-        </StackPanel>
+        <!-- Выбор версии платформы: сетка Auto+* вместо горизонтального StackPanel —
+             при уменьшении окна или крупных шрифтах поле уходит за правый край и обрезается
+             (issue #55); звездная колонка сжимает комбобокс, а не прячет его. -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{loc:Loc PlatformChange.PlatformLabel}"
+                       VerticalAlignment="Center" Margin="0,0,8,0" TextWrapping="Wrap"/>
+            <!-- Список установленных версий (issue #54): тонкие клиенты помечаются
+                 локализованным суффиксом «(тонкий клиент)» (DisplayName — единый
+                 форматтер, issue #33) и подсвечиваются оранжевым, как в настройках.
+                 Выбор привязан к строке версии через SelectedValuePath="Display". -->
+            <ComboBox Grid.Column="1" MinWidth="180" Style="{StaticResource ModernComboBox}"
+                      ItemsSource="{Binding InstalledPlatformItems}"
+                      SelectedValuePath="Display"
+                      SelectedValue="{Binding SelectedPlatform, Mode=TwoWay}"
+                      VerticalContentAlignment="Center" Padding="6,2">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                                    <Style.Triggers>
+                                        <!-- Тонкий клиент (issue #54): подсветка оранжевым —
+                                             видно, что полные возможности недоступны. -->
+                                        <DataTrigger Binding="{Binding IsThinClient}" Value="True">
+                                            <Setter Property="Foreground" Value="#F59E0B"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </Grid>
 
         <!-- Сводка: число баз, которым будет изменена платформа. -->
-        <TextBlock Text="{Binding SummaryText}" FontWeight="SemiBold" Margin="0,12,0,0"/>
-        <TextBlock Text="{Binding ResultText}" FontSize="12" Opacity="0.85" Margin="0,6,0,0"/>
+        <TextBlock Text="{Binding SummaryText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,12,0,0"/>
+        <TextBlock Text="{Binding ResultText}" FontSize="12" Opacity="0.85" TextWrapping="Wrap" Margin="0,6,0,0"/>
 
         <!-- Действия: Сменить / Отмена. -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
@@ -51,4 +84,5 @@
             </Button>
         </StackPanel>
     </StackPanel>
+    </ScrollViewer>
 </local:EscClosableWindow>

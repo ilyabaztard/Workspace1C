@@ -38,14 +38,22 @@ public sealed class PlatformChangeViewModel : ViewModelBase
     /// Колбэк после применения: <see cref="MainViewModel.ApplyConnectionReplace"/> —
     /// сохранение undo-истории, персистентность, пересборка дерева, выгрузка ibases.v8i.
     /// </param>
+    /// <param name="installedPlatformInfos">
+    /// Установленные версии с признаком тонкого клиента (единый источник —
+    /// <see cref="PlatformVersionService.FindInstalledVersionInfos"/>): по ним в списке
+    /// помечаются тонкие клиенты суффиксом и оранжевой подсветкой, как в настройках
+    /// (issue #54). null — без пометки (все версии обычные).
+    /// </param>
     public PlatformChangeViewModel(
         IReadOnlyList<Infobase> candidates,
         IReadOnlyList<string>? installedPlatformVersions = null,
-        Action<IReadOnlyList<ConnectionReplaceUndoEntry>>? onApplied = null)
+        Action<IReadOnlyList<ConnectionReplaceUndoEntry>>? onApplied = null,
+        IReadOnlyList<PlatformVersionInfo>? installedPlatformInfos = null)
     {
         _candidates = candidates ?? throw new ArgumentNullException(nameof(candidates));
         _onApplied = onApplied;
         InstalledPlatformVersions = (installedPlatformVersions ?? Array.Empty<string>()).ToList();
+        InstalledPlatformItems = BuildPlatformItems(InstalledPlatformVersions, installedPlatformInfos);
 
         // При пустом выборе сразу подставляем первую установленную версию (как галочка
         // «Сменить платформу» в старой реализации окна замены строк, issue #54).
@@ -59,6 +67,39 @@ public sealed class PlatformChangeViewModel : ViewModelBase
 
     /// <summary>Установленные версии платформы 1С для выбора.</summary>
     public IReadOnlyList<string> InstalledPlatformVersions { get; }
+
+    /// <summary>
+    /// Установленные версии платформы 1С для ComboBox с признаком тонкого клиента
+    /// (issue #54): <see cref="PlatformVersionInfo.DisplayName"/> содержит локализованный
+    /// суффикс «(тонкий клиент)», а <see cref="PlatformVersionInfo.IsThinClient"/> позволяет
+    /// подсветить такие версии оранжевым, как в настройках (issue #33).
+    /// </summary>
+    public IReadOnlyList<PlatformVersionInfo> InstalledPlatformItems { get; }
+
+    /// <summary>
+    /// Строит элементы списка из строк версий, помечая тонкие клиенты по
+    /// <paramref name="infos"/> (единый источник — <see cref="PlatformVersionService.FindInstalledVersionInfos"/>).
+    /// Порядок и состав повторяют <paramref name="versions"/>; версии, которых нет в
+    /// <paramref name="infos"/>, считаются обычными.
+    /// </summary>
+    private static IReadOnlyList<PlatformVersionInfo> BuildPlatformItems(
+        IReadOnlyList<string> versions,
+        IReadOnlyList<PlatformVersionInfo>? infos)
+    {
+        var thinClients = new HashSet<string>(
+            (infos ?? Array.Empty<PlatformVersionInfo>())
+                .Where(i => i.IsThinClient)
+                .Select(i => i.Display),
+            StringComparer.OrdinalIgnoreCase);
+
+        return versions
+            .Select(s => new PlatformVersionInfo
+            {
+                Display = s,
+                IsThinClient = thinClients.Contains(s)
+            })
+            .ToList();
+    }
 
     /// <summary>Выбранная версия платформы (пустая — применение недоступно).</summary>
     public string SelectedPlatform

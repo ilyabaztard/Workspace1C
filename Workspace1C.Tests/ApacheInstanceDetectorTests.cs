@@ -27,6 +27,35 @@ public sealed class ApacheInstanceDetectorTests
     }
 
     [Fact]
+    public void ApacheInstanceDetector_Windows_ParsesInlineConfigSwitch_Issue63()
+    {
+        // Некоторые обёртки записывают ImagePath слитно («-f=conf\httpd27.conf», «/f:…»):
+        // конфиг, указанный в службе, всё равно должен стать ConfPath инстанса (issue #63,
+        // «значения по умолчанию из файла, указанного в службе, а не из обычного httpd.conf»).
+        var instance = ApacheInstanceDetector.ParseWindowsServiceImagePath(
+            "Apache2.4", "Apache HTTP Server", "Apache/2.4.62",
+            "\"C:\\Apache\\Apache24\\bin\\httpd.exe\" -d c:\\Apache\\Apache24 -f=conf\\httpd27.conf");
+
+        Assert.NotNull(instance);
+        Assert.Equal(@"C:\Apache\Apache24\conf\httpd27.conf", instance!.ConfPath, ignoreCase: true);
+    }
+
+    [Fact]
+    public void ApacheInstanceDetector_Windows_ConfigFromService_PreferredOverDefaultHttpdConf()
+    {
+        // Если в службе указан -f conf\httpd27.conf, дефолтный ServerRoot\conf\httpd.conf
+        // НЕ подставляется — основной конфиг ровно тот, что указан в службе (issue #63).
+        var instance = ApacheInstanceDetector.ParseWindowsServiceImagePath(
+            "Apache2.4", "Apache HTTP Server", "Apache/2.4.62",
+            "\"C:\\Apache\\Apache24\\bin\\httpd.exe\" -d C:\\Apache\\Apache24 -f conf\\httpd27.conf");
+
+        Assert.NotNull(instance);
+        Assert.False(string.Equals(@"C:\Apache\Apache24\conf\httpd.conf", instance!.ConfPath,
+            System.StringComparison.OrdinalIgnoreCase));
+        Assert.EndsWith("httpd27.conf", instance.ConfPath, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ApacheInstanceDetector_Windows_WithoutDOrF_UsesExeDirAndDefaultConf()
     {
         // Нет ключей -d/-f: ServerRoot выводится из каталога бинарника, conf — по умолчанию.

@@ -186,4 +186,58 @@ public sealed class Issue69DropRetryWindowLayoutTests
         Assert.Contains("администратор", strings.GetProperty("ServerMonitor.Infobase.Drop.HintAuth").GetString());
         Assert.Contains("СУБД", strings.GetProperty("ServerMonitor.Infobase.Drop.HintDatabase").GetString());
     }
+
+    [Fact]
+    public void WpfWindow_HasEnoughHeight_ForRetryButtons()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «Окошко с кнопкой повторить надо бы
+        // выше сделать - кнопки не влезли» — высота увеличена, кнопки не обрезаются.
+        var xaml = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.xaml");
+
+        Assert.Contains("Height=\"440\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"400\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Height=\"320\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AvaloniaWindow_HasEnoughHeight_ForRetryButtons()
+    {
+        var source = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.Avalonia.cs");
+
+        Assert.Contains("Height = 440;", source, StringComparison.Ordinal);
+        Assert.Contains("MinHeight = 400;", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Height = 320;", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Windows_PreloadPasswordFromPreviousAttempt()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «Пароль сохранять между попытками» —
+        // оба окна предзаполняют поле пароля значением с прошлой попытки.
+        var codeBehind = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.xaml.cs");
+        var avalonia = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.Avalonia.cs");
+
+        Assert.Contains("password ?? string.Empty", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Password = password ?? string.Empty", avalonia, StringComparison.Ordinal);
+        // Конструкторы обеих платформ принимают пароль третьим параметром.
+        Assert.Contains("string errorText, string? login = null, string? password = null", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("string errorText, string? login = null, string? password = null", avalonia, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Localization_HintSessions_HasNoSessionsTabSuggestion()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «Надо удалить эту фразу до слова "или".
+        // Сразу "Нажмите ..."» — просьба завершить сеансы во вкладке «Сеансы» убрана
+        // из подсказки в обоих языках, остаётся кнопка «Завершить сеансы и повторить».
+        var ru = ReadProjectFile("Workspace1C", "Localization", "Languages", "ru.json");
+        var en = ReadProjectFile("Workspace1C", "Localization", "Languages", "en.json");
+
+        // Убрана «Завершите сеансы во вкладке «Сеансы» или ...».
+        Assert.DoesNotContain("во вкладке", ru, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sessions\" tab", en, StringComparison.Ordinal);
+        // Осталась прямая подсказка нажать кнопку повтора.
+        Assert.Contains("Завершить сеансы и повторить", ru, StringComparison.Ordinal);
+        Assert.Contains("Terminate sessions and retry", en, StringComparison.Ordinal);
+    }
 }

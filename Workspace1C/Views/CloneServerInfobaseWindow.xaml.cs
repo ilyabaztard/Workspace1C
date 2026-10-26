@@ -104,6 +104,12 @@ namespace Workspace1C
 
         private void UpdateModeHint()
         {
+            // Issue #70: RadioButton ModeFullRadio в XAML объявлен с IsChecked="True" и
+            // Checked="OnModeChanged"; во время InitializeComponent событие Checked может
+            // сработать раньше, чем будет создан TextBlock HintText (объявлен ниже по
+            // разметке), что приводило к NullReferenceException при открытии окна.
+            if (HintText is null)
+                return;
             var full = ModeFullRadio.IsChecked == true;
             HintText.Text = LocalizationManager.T(full
                 ? "CloneServer.ModeFullHint"

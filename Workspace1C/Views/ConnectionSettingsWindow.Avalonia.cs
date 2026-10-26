@@ -560,6 +560,9 @@ namespace Workspace1C
             {
                 Text = LocalizationManager.T("Connection.HeaderSubtitle"),
                 FontSize = 12,
+                // Перенос (issue #55): при уменьшении ширины окна подзаголовок шапки
+                // переносится, а не обрезается правым краем.
+                TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 2, 0, 0)
             };
             Themes.ThemeBrushes.Bind(subtitle, TextBlock.ForegroundProperty, "TextSecondaryBrush");

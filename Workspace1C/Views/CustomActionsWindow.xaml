@@ -19,6 +19,9 @@
             <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <!-- Строки ListView с GridView: темизированный контейнер вместо системных
+                 цветов выделения (issue #61). -->
+            <Setter Property="ItemContainerStyle" Value="{StaticResource ModernListViewItem}"/>
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
         </Style>
         <Style TargetType="GridViewColumnHeader">

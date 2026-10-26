@@ -616,6 +616,39 @@
         </Setter>
     </Style>
 
+    <!-- ===================== Стиль элемента списка ListView (GridView) =====================
+         ListView с GridView (LaunchParametersWindow, CustomActionsWindow, ExportsListWindow)
+         использует контейнер ListViewItem, а не ListBoxItem: без явного стиля он красится
+         системными цветами — «тёмное на тёмном» при наведении и «белый фон с белыми
+         буквами» при выборе без фокуса (issue #61). Тот же шаблон, что у ModernListBoxItem,
+         но с GridViewRowPresenter; текст всегда первичный, фон выделения — кисти схемы. -->
+    <Style x:Key="ModernListViewItem" TargetType="ListViewItem">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <Border x:Name="border"
+                            Background="Transparent"
+                            CornerRadius="8"
+                            Margin="2,1"
+                            Padding="4,2">
+                        <GridViewRowPresenter Content="{TemplateBinding Content}"
+                                              Columns="{TemplateBinding GridView.ColumnCollection}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource ItemHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource ItemSelectedBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ===================== Стиль элемента дерева ===================== -->
     <Style x:Key="ModernTreeViewItem" TargetType="TreeViewItem">
         <!-- FallbackValue глушит ошибки привязки для узлов без свойства IsExpanded (напр. PlatformVersionGroup) -->
@@ -937,6 +970,36 @@
         <Setter Property="ItemContainerStyle" Value="{StaticResource ModernListBoxItem}"/>
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
         <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+    </Style>
+
+    <!-- ===================== Стиль ListView (GridView) =====================
+         ListView с GridView не имел неявного стиля: строки красились системными
+         цветами (issue #61). Тот же набор, что у ListBox, но контейнер строки —
+         ModernListViewItem; заголовок колонок — GridViewColumnHeader ниже. -->
+    <Style TargetType="ListView">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="ItemContainerStyle" Value="{StaticResource ModernListViewItem}"/>
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+    </Style>
+
+    <!-- ===================== Стиль заголовка колонки ListView (GridView) =====================
+         По умолчанию GridViewColumnHeader рисуется системным светлым фоном — в тёмной
+         теме это белая полоса над списком (issue #61). Оформляем как заголовок DataGrid:
+         фон карточки, вторичный текст, нижняя граница. Шаблон не переопределяем, чтобы
+         не сломать перетаскивание колонок (PART_FloatingHeaderCanvas) — дефолтный шаблон
+         уважает Background/BorderBrush/Padding. -->
+    <Style TargetType="GridViewColumnHeader">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="Padding" Value="8,4"/>
     </Style>
 
     <!-- ===================== Стиль DataGrid (таблица баз) ===================== -->

@@ -216,9 +216,10 @@
                 </Border>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="{loc:Loc Connection.HeaderTitle}" FontSize="18" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                               Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap"/>
                     <TextBlock Text="{loc:Loc Connection.HeaderSubtitle}"
-                               FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0"/>
+                               FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0"
+                               TextWrapping="Wrap"/>
                 </StackPanel>
             </StackPanel>
         </Border>

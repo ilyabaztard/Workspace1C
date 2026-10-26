@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Workspace1C.Localization;
 using Workspace1C.Models;
 using Workspace1C.Services;
@@ -34,8 +35,9 @@ public sealed class PlatformChangeViewModelTests
     private static PlatformChangeViewModel CreateVm(
         IReadOnlyList<Infobase> candidates,
         IReadOnlyList<string>? installedPlatforms = null,
-        Action<IReadOnlyList<ConnectionReplaceUndoEntry>>? onApplied = null)
-        => new(candidates, installedPlatforms, onApplied);
+        Action<IReadOnlyList<ConnectionReplaceUndoEntry>>? onApplied = null,
+        IReadOnlyList<PlatformVersionInfo>? installedPlatformInfos = null)
+        => new(candidates, installedPlatforms, onApplied, installedPlatformInfos);
 
     [Fact]
     public void Apply_ChangesPlatformVersion_ForAllCandidates_AndInvokesCallback()
@@ -126,5 +128,65 @@ public sealed class PlatformChangeViewModelTests
         Assert.True(vm.CanApply);
         Assert.Equal(string.Format(
             LocalizationManager.T("PlatformChange.SummaryFormat"), 1), vm.SummaryText);
+    }
+
+    // ------------------------------------------------------------------
+    // Выделение тонкого клиента в списке платформ (issue #54, комментарий
+    // ArtyoZ): тонкие клиенты помечаются суффиксом «(тонкий клиент)» и
+    // подсвечиваются оранжевым, как в настройках (issue #33).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void InstalledPlatformItems_MarksThinClients_FromInfos()
+    {
+        var vm = CreateVm(
+            new List<Infobase> { Base("1", "База", "8.3.22.1483") },
+            new[] { "8.3.27.1644", "8.3.24.1664" },
+            installedPlatformInfos: new[]
+            {
+                new PlatformVersionInfo { Display = "8.3.27.1644", IsThinClient = true },
+                new PlatformVersionInfo { Display = "8.3.24.1664", IsThinClient = false }
+            });
+
+        Assert.Equal(2, vm.InstalledPlatformItems.Count);
+        Assert.True(vm.InstalledPlatformItems[0].IsThinClient);
+        Assert.False(vm.InstalledPlatformItems[1].IsThinClient);
+
+        // DisplayName тонкого клиента содержит локализованный суффикс (issue #33/#54).
+        Assert.Contains(
+            LocalizationManager.T("PlatformVersionPicker.ThinClientSuffix"),
+            vm.InstalledPlatformItems[0].DisplayName);
+        Assert.Equal("8.3.24.1664", vm.InstalledPlatformItems[1].DisplayName);
+    }
+
+    [Fact]
+    public void InstalledPlatformItems_WithoutInfos_AllNormal()
+    {
+        var vm = CreateVm(
+            new List<Infobase> { Base("1", "База", "8.3.22.1483") },
+            new[] { "8.3.27.1644", "8.3.24.1664" });
+
+        Assert.Equal(2, vm.InstalledPlatformItems.Count);
+        Assert.All(vm.InstalledPlatformItems, i => Assert.False(i.IsThinClient));
+        Assert.All(vm.InstalledPlatformItems, i => Assert.Equal(i.Display, i.DisplayName));
+    }
+
+    [Fact]
+    public void InstalledPlatformItems_OrderMatchesVersions_AndPrefillUsesFirst()
+    {
+        var vm = CreateVm(
+            new List<Infobase> { Base("1", "База", "8.3.22.1483") },
+            new[] { "8.3.24.1664", "8.3.22.1483" },
+            installedPlatformInfos: new[]
+            {
+                new PlatformVersionInfo { Display = "8.3.22.1483", IsThinClient = true }
+            });
+
+        // Порядок и состав списка повторяют InstalledPlatformVersions.
+        Assert.Equal(
+            new[] { "8.3.24.1664", "8.3.22.1483" },
+            vm.InstalledPlatformItems.Select(i => i.Display));
+        Assert.Equal("8.3.24.1664", vm.SelectedPlatform);
+        Assert.True(vm.InstalledPlatformItems[1].IsThinClient);
     }
 }

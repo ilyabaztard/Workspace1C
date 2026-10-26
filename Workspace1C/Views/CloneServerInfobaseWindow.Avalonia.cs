@@ -285,6 +285,11 @@ namespace Workspace1C
 
         private void UpdateModeHint()
         {
+            // Issue #70: WPF-аналог падал NullReferenceException, когда Checked-событие
+            // RadioButton срабатывало до создания TextBlock подсказки; здесь поле создаётся
+            // сразу, но guard сохраняет устойчивость к порядку инициализации дерева.
+            if (_hintText is null)
+                return;
             var full = _modeFullRadio.IsChecked == true;
             _hintText.Text = LocalizationManager.T(full
                 ? "CloneServer.ModeFullHint"

@@ -37,6 +37,10 @@ namespace Workspace1C
             Title = LocalizationManager.T("Utilities.Editor.Title");
             Width = 760;
             Height = 560;
+            // Минимальные размеры (issue #55): при уменьшении окна дерево и панель
+            // операций не сжимаются до обрезки.
+            MinWidth = 640;
+            MinHeight = 480;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
             _vm = new UtilitiesMenuEditorViewModel(store);

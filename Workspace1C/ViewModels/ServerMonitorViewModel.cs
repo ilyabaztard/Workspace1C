@@ -30,11 +30,13 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Показ диалога повтора удаления базы из кластера (issue #69): реализует окно
-    /// монитора (WPF/Avalonia), чтобы VM оставалась тестируемой. null — диалог
-    /// недоступен (тесты без колбэка): используется прежнее поведение —
-    /// предупреждение с одной кнопкой OK.
+    /// монитора (WPF/Avalonia), чтобы VM оставалась тестируемой. Получает текст
+    /// ошибки, логин и пароль администратора ИБ с прошлой попытки (пароль сохраняется
+    /// между попытками, комментарий 7OH от 2026-10-26). null — диалог недоступен
+    /// (тесты без колбэка): используется прежнее поведение — предупреждение с одной
+    /// кнопкой OK.
     /// </summary>
-    private readonly Func<string, string?, DropRetryResult>? _dropRetryDialog;
+    private readonly Func<string, string?, string?, DropRetryResult>? _dropRetryDialog;
 
     private Timer? _autoRefreshTimer;
     private int _busy;
@@ -88,17 +90,17 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// null — справочник недоступен (тесты без хранилища).</param>
     /// <param name="dropRetryDialog">
     /// Показ диалога повтора удаления базы из кластера (issue #69): получает текст
-    /// ошибки и предзаполненный логин администратора ИБ, возвращает решение
-    /// пользователя. Реализует окно монитора — чтобы VM оставалась тестируемой;
-    /// null — диалог недоступен, при ошибке удаления показывается прежнее
-    /// предупреждение с одной кнопкой OK.
+    /// ошибки, логин и пароль администратора ИБ с прошлой попытки, возвращает
+    /// решение пользователя. Реализует окно монитора — чтобы VM оставалась
+    /// тестируемой; null — диалог недоступен, при ошибке удаления показывается
+    /// прежнее предупреждение с одной кнопкой OK.
     /// </param>
     public ServerMonitorViewModel(
         IRacClient rac,
         IDialogService dialogs,
         Action<Action>? dispatchToUi = null,
         IServerListStore? serverListStore = null,
-        Func<string, string?, DropRetryResult>? dropRetryDialog = null)
+        Func<string, string?, string?, DropRetryResult>? dropRetryDialog = null)
     {
         _rac = rac ?? throw new ArgumentNullException(nameof(rac));
         _dialogs = dialogs ?? throw new ArgumentNullException(nameof(dialogs));
@@ -697,7 +699,7 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// (защищённая база, issue #69) показывается диалог повтора с полями «Логин»/
     /// «Пароль» администратора ИБ: «Повторить попытку» выполняет ещё один
     /// «infobase drop» с этими учётными данными (при повторной ошибке — снова тот же
-    /// диалог: логин сохраняется, пароль вводится заново, а текст помечается
+    /// диалог: логин и пароль сохраняются, а текст помечается
     /// «Повторная попытка не удалась»), «Отмена» — выход. Типовая ошибка rac
     /// распознаётся (<see cref="ClassifyDropError"/>): если базу занимают активные
     /// сеансы/соединения, диалог предлагает «Завершить сеансы и повторить» — перед
@@ -731,7 +733,7 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                 }
 
                 attempts++;
-                var answer = AskDropRetryOnUi(detail, infobaseUser, attempts);
+                var answer = AskDropRetryOnUi(detail, infobaseUser, infobasePassword, attempts);
                 if (!answer.Retry)
                 {
                     StatusText = attempts > 1
@@ -799,12 +801,14 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// исходной неудачи) — заголовок «Не удалось удалить информационную базу.» +
     /// детали rac; повторные показы помечаются «Повторная попытка удаления не
     /// удалась: ...», чтобы пользователь видел, что креды применены, но rac снова
-    /// вернул ошибку (комментарий 7OH от 2026-10-26). Если колбэк диалога не назначен
+    /// вернул ошибку (комментарий 7OH от 2026-10-26). Логин и пароль с прошлой
+    /// попытки передаются в диалог предзаполненными (пароль сохраняется между
+    /// попытками — комментарий 7OH от 2026-10-26). Если колбэк диалога не назначен
     /// (тесты/окно без поддержки) — прежнее поведение: предупреждение с одной кнопкой
     /// OK, повтор не выполняется. Модальное окно открывается через dispatch-маршалер
     /// (как <see cref="ShowWarningOnUi"/>), рабочий поток ждёт результат диалога.
     /// </summary>
-    private DropRetryResult AskDropRetryOnUi(string detail, string? login, int attempts)
+    private DropRetryResult AskDropRetryOnUi(string detail, string? login, string? password, int attempts)
     {
         // Заголовок диалога повтора: на исходной неудаче — «Не удалось удалить
         // информационную базу.» + детали rac; на повторной — «Повторная попытка
@@ -820,7 +824,7 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         }
 
         if (_dispatchToUi is null)
-            return _dropRetryDialog(message, login);
+            return _dropRetryDialog(message, login, password);
 
         DropRetryResult result = DropRetryResult.Cancel;
         using var gate = new ManualResetEventSlim(false);
@@ -828,7 +832,7 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         {
             try
             {
-                result = _dropRetryDialog(message, login);
+                result = _dropRetryDialog(message, login, password);
             }
             finally
             {
@@ -858,16 +862,33 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                 .ConfigureAwait(false);
             foreach (var connection in connections)
             {
-                if (!await _rac.DisconnectConnectionAsync(parameters, clusterId, connection.Id)
+                // issue #69, комментарий 7OH от 2026-10-26 («повторить — ошибка»): rac 8.5.4
+                // отклоняет «connection disconnect» без параметра --process=<pid> («Ошибка
+                // разбора параметра: process»); pid — рабочий процесс из «connection list».
+                if (!await _rac.DisconnectConnectionAsync(
+                        parameters, clusterId, connection.Id, connection.ProcessId)
                         .ConfigureAwait(false))
                     return (false, BuildActionError(_rac.LastActionError));
             }
 
             var sessions = await _rac.GetSessionsAsync(parameters, clusterId, infobaseId)
                 .ConfigureAwait(false);
+            // Рабочий процесс сеанса — из соединения, которое его обслуживает
+            // (в выводе «session list» номера процесса нет). После разрыва всех соединений
+            // такие сеансы уже не активны; сеансы без найденного процесса не терминируем.
+            var processByConnectionId = new Dictionary<Guid, Guid>(connections.Count);
+            foreach (var connection in connections)
+            {
+                if (connection.ProcessId != Guid.Empty)
+                    processByConnectionId[connection.Id] = connection.ProcessId;
+            }
+
             foreach (var session in sessions)
             {
-                if (!await _rac.TerminateSessionAsync(parameters, clusterId, session.Id)
+                var processId = processByConnectionId.TryGetValue(session.ConnectionId, out var pid)
+                    ? pid
+                    : (Guid?)null;
+                if (!await _rac.TerminateSessionAsync(parameters, clusterId, session.Id, processId)
                         .ConfigureAwait(false))
                     return (false, BuildActionError(_rac.LastActionError));
             }
@@ -1499,7 +1520,10 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
 
         try
         {
-            var ok = await _rac.DisconnectConnectionAsync(BuildParams(), clusterId, row.Id).ConfigureAwait(false);
+            // issue #69: rac 8.5.4 без --process=<pid> отклоняет «connection disconnect»
+            // («Ошибка разбора параметра: process») — pid известен из «connection list».
+            var ok = await _rac.DisconnectConnectionAsync(
+                BuildParams(), clusterId, row.Id, row.ProcessId).ConfigureAwait(false);
             if (!ok)
             {
                 var detail = BuildActionError(_rac.LastActionError);

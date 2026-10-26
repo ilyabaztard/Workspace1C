@@ -1053,12 +1053,12 @@ public sealed class ClusterImportViewModelTests
 
         public Task<bool> TerminateSessionAsync(
             RacConnectionParams parameters, System.Guid clusterId, System.Guid sessionId,
-            CancellationToken cancellationToken = default) =>
+            System.Guid? processId = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
 
         public Task<bool> DisconnectConnectionAsync(
             RacConnectionParams parameters, System.Guid clusterId, System.Guid connectionId,
-            CancellationToken cancellationToken = default) =>
+            System.Guid? processId = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(true);
 
         // Создание/удаление/изменение баз (issue #3) окно импорта не использует — успех.

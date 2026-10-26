@@ -828,16 +828,44 @@ public sealed class RacClient : IRacClient
     /// <inheritdoc />
     public Task<bool> TerminateSessionAsync(
         RacConnectionParams parameters, Guid clusterId, Guid sessionId,
-        CancellationToken cancellationToken = default) =>
-        RunActionAsync(parameters, cancellationToken, "session", "terminate",
-            $"--cluster={clusterId}", $"--session={sessionId}");
+        Guid? processId = null, CancellationToken cancellationToken = default) =>
+        RunActionAsync(parameters, cancellationToken,
+            SessionTerminateArgs(clusterId, sessionId, processId));
 
     /// <inheritdoc />
     public Task<bool> DisconnectConnectionAsync(
         RacConnectionParams parameters, Guid clusterId, Guid connectionId,
-        CancellationToken cancellationToken = default) =>
-        RunActionAsync(parameters, cancellationToken, "connection", "disconnect",
-            $"--cluster={clusterId}", $"--connection={connectionId}");
+        Guid? processId = null, CancellationToken cancellationToken = default) =>
+        RunActionAsync(parameters, cancellationToken,
+            ConnectionDisconnectArgs(clusterId, connectionId, processId));
+
+    /// <summary>
+    /// Аргументы команды «session terminate»: «--process=<pid>» включается, когда рабочий
+    /// процесс сеанса известен (rac 8.5.4 без него: «Ошибка разбора параметра: process»,
+    /// issue #69). Internal — для юнит-тестов без запуска rac.
+    /// </summary>
+    internal static string[] SessionTerminateArgs(Guid clusterId, Guid sessionId, Guid? processId = null)
+    {
+        var args = new List<string>(5) { "session", "terminate", $"--cluster={clusterId}" };
+        if (processId is Guid pid && pid != Guid.Empty)
+            args.Add($"--process={pid}");
+        args.Add($"--session={sessionId}");
+        return args.ToArray();
+    }
+
+    /// <summary>
+    /// Аргументы команды «connection disconnect»: «--process=<pid>» включается, когда рабочий
+    /// процесс соединения известен (rac 8.5.4 без него: «Ошибка разбора параметра: process»,
+    /// issue #69). Internal — для юнит-тестов без запуска rac.
+    /// </summary>
+    internal static string[] ConnectionDisconnectArgs(Guid clusterId, Guid connectionId, Guid? processId = null)
+    {
+        var args = new List<string>(5) { "connection", "disconnect", $"--cluster={clusterId}" };
+        if (processId is Guid pid && pid != Guid.Empty)
+            args.Add($"--process={pid}");
+        args.Add($"--connection={connectionId}");
+        return args.ToArray();
+    }
 
     /// <inheritdoc />
     public Task<bool> CreateInfobaseAsync(

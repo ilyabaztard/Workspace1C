@@ -8,8 +8,8 @@ namespace Workspace1C
     /// Диалог повтора удаления информационной базы кластера (issue #69): при неудачном
     /// rac «infobase drop» (например, защищённая база) вместо простого окна с OK —
     /// текст ошибки, поля «Логин»/«Пароль» администратора ИБ и кнопки «Повторить
-    /// попытку» (default) / «Отмена» (cancel). Логин сохраняется между показами
-    /// диалога, пароль вводится заново при каждой попытке. Типовая ошибка rac
+    /// попытку» (default) / «Отмена» (cancel). Логин и пароль сохраняются между
+    /// показами диалога (комментарий 7OH от 2026-10-26). Типовая ошибка rac
     /// классифицируется (<see cref="ServerMonitorViewModel.ClassifyDropError"/>):
     /// при занятости базы активными сеансами появляется кнопка «Завершить сеансы и
     /// повторить» и подсказка, что делать дальше (комментарий 7OH от 2026-10-26).
@@ -33,7 +33,9 @@ namespace Workspace1C
         /// базу.» + детали rac либо «Повторная попытка... не удалась: ...») — показывается
         /// в подписи окна.</param>
         /// <param name="login">Логин администратора ИБ с прошлой попытки (null — первый показ).</param>
-        public RacInfobaseDropRetryWindow(string errorText, string? login = null)
+        /// <param name="password">Пароль администратора ИБ с прошлой попытки (null — первый
+        /// показ): сохраняется между попытками (комментарий 7OH от 2026-10-26).</param>
+        public RacInfobaseDropRetryWindow(string errorText, string? login = null, string? password = null)
         {
             InitializeComponent();
 
@@ -44,6 +46,7 @@ namespace Workspace1C
             ErrorText.Text = string.IsNullOrWhiteSpace(errorText) ? "—" : errorText;
             PromptText.Text = LocalizationManager.T("ServerMonitor.Infobase.Drop.RetryPrompt");
             LoginBox.Text = login ?? string.Empty;
+            PasswordBox.Password = password ?? string.Empty;
             PasswordBox.Focus();
             Loaded += (_, _) => PasswordBox.Focus();
 

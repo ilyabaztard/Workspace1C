@@ -194,7 +194,11 @@ namespace Workspace1C
             header.Children.Add(help);
 
             var titleStack = new StackPanel { Spacing = 2 };
-            titleStack.Children.Add(ThemedText(LocalizationManager.T(TitleKey), 17, secondary: false, FontWeight.SemiBold));
+            // Перенос заголовка/подзаголовка (issue #55): в DockPanel при уменьшении
+            // ширины окна текст переносится, а не обрезается правым краем.
+            var title = ThemedText(LocalizationManager.T(TitleKey), 17, secondary: false, FontWeight.SemiBold);
+            title.TextWrapping = TextWrapping.Wrap;
+            titleStack.Children.Add(title);
             var subtitle = ThemedText(LocalizationManager.T(SubtitleKey), 12.5, secondary: true, FontWeight.Normal);
             subtitle.TextWrapping = TextWrapping.Wrap;
             titleStack.Children.Add(subtitle);

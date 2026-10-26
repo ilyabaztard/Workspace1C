@@ -73,6 +73,9 @@ public sealed class WebPublishViewModel : ViewModelBase
     /// <summary>Варианты конфиг-файла webinst: основной conf и include-файлы (пусто — не применимо).</summary>
     public ObservableCollection<string> ConfTargets => _confTargets;
 
+    /// <summary>Абсолютные пути конфиг-файлов (для webinst): основной и include-файлы графа.</summary>
+    internal IReadOnlyList<string> ConfTargetPaths => _confTargetPaths;
+
     /// <summary>Выбран ли инстанс Apache (а не IIS или fallback Apache).</summary>
     public bool IsInstanceSelected => _selectedInstance is not null;
 
@@ -205,7 +208,17 @@ public sealed class WebPublishViewModel : ViewModelBase
 
         var version = option.Kind == WebServerKind.Apache22 ? "2.2" : "2.4";
         if (option.Instance is { } instance && !string.IsNullOrWhiteSpace(instance.Name))
+        {
+            // Issue #63: имя конфиг-файла в подписи инстанса — при нескольких службах
+            // Apache (httpd.conf / conf\httpd27.conf) видно, что значения по умолчанию
+            // берутся из конфига конкретной службы, а не из «обычного» httpd.conf.
+            if (!string.IsNullOrWhiteSpace(instance.ConfPath))
+            {
+                return string.Format(LocalizationManager.T("WebPublish.ApacheInstanceOptionWithConf"),
+                    version, instance.Name, Path.GetFileName(instance.ConfPath));
+            }
             return string.Format(LocalizationManager.T("WebPublish.ApacheInstanceOption"), version, instance.Name);
+        }
         return string.Format(LocalizationManager.T("WebPublish.ApacheDefaultOption"), version);
     }
 
@@ -249,8 +262,12 @@ public sealed class WebPublishViewModel : ViewModelBase
         _confTargetPaths.Clear();
         _confTargets.Clear();
 
+        // Файлы для webinst: основной конфиг службы (из -f) и включаемые файлы графа
+        // Include (в т.ч. файл алиасов 1c8Aliases*.conf) — issue #63.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrWhiteSpace(instance.ConfPath))
         {
+            seen.Add(NormalizeTargetKey(instance.ConfPath));
             _confTargetPaths.Add(instance.ConfPath);
             _confTargets.Add(string.Format(
                 LocalizationManager.T("WebPublish.ConfTargetMain"),
@@ -260,6 +277,8 @@ public sealed class WebPublishViewModel : ViewModelBase
         {
             if (string.IsNullOrWhiteSpace(include))
                 continue;
+            if (!seen.Add(NormalizeTargetKey(include)))
+                continue;
             _confTargetPaths.Add(include);
             _confTargets.Add(string.Format(
                 LocalizationManager.T("WebPublish.ConfTargetInclude"),
@@ -268,6 +287,17 @@ public sealed class WebPublishViewModel : ViewModelBase
 
         _confTargetIndex = _confTargetPaths.Count > 0 ? 0 : -1;
         _apacheConfPath = _confTargetPaths.Count > 0 ? _confTargetPaths[0] : string.Empty;
+    }
+
+    /// <summary>Ключ сравнения путей конфиг-файлов: без учёта регистра и разделителей пути.</summary>
+    private static string NormalizeTargetKey(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return string.Empty;
+        return path.Trim()
+            .Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .ToUpperInvariant();
     }
 
     private void ApplyPhysicalForCurrent() => RebuildPhysicalForCurrent();

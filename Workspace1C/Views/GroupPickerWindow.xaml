@@ -197,9 +197,13 @@
                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <StackPanel Grid.Column="1">
-                <TextBlock x:Name="TitleText" Text="" FontSize="17" FontWeight="SemiBold"/>
+                <!-- Перенос заголовка/подзаголовка (issue #55): при уменьшении ширины
+                     окна текст переносится, а не обрезается правым краем. -->
+                <TextBlock x:Name="TitleText" Text="" FontSize="17" FontWeight="SemiBold"
+                           TextWrapping="Wrap"/>
                 <TextBlock x:Name="SubtitleText" Text="" FontSize="12.5"
-                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           TextWrapping="Wrap"/>
             </StackPanel>
             <controls:HelpLink x:Name="HelpLink" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Top"
                                HelpText=""/>

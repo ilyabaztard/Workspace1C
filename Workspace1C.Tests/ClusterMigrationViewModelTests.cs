@@ -1069,11 +1069,11 @@ public sealed class ClusterMigrationViewModelTests
 
         public Task<bool> TerminateSessionAsync(
             RacConnectionParams parameters, Guid clusterId, Guid sessionId,
-            CancellationToken cancellationToken = default) => Task.FromResult(true);
+            Guid? processId = null, CancellationToken cancellationToken = default) => Task.FromResult(true);
 
         public Task<bool> DisconnectConnectionAsync(
             RacConnectionParams parameters, Guid clusterId, Guid connectionId,
-            CancellationToken cancellationToken = default) => Task.FromResult(true);
+            Guid? processId = null, CancellationToken cancellationToken = default) => Task.FromResult(true);
 
         public Task<bool> UpdateInfobaseAsync(
             RacConnectionParams parameters, Guid clusterId, Guid infobaseId,

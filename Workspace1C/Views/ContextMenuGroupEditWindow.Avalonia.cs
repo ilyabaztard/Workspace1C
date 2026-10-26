@@ -24,6 +24,9 @@ namespace Workspace1C
         {
             Title = LocalizationManager.T("ContextMenu.Editor.GroupDialogTitle");
             Width = 440;
+            // Минимальные размеры (issue #55): при уменьшении окна поля не обрезаются.
+            MinWidth = 400;
+            MinHeight = 200;
             // Высота по содержимому: фиксированная обрезала нижние кнопки (как в UtilitiesGroupEditWindow).
             SizeToContent = SizeToContent.Height;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;

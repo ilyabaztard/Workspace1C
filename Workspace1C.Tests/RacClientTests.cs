@@ -106,6 +106,86 @@ public sealed class RacClientTests
     }
 
     [Fact]
+    public void SessionTerminateArgs_WithoutProcess_OmitsProcessOption()
+    {
+        // Вкладка «Сеансы»: rac самого находит рабочий процесс — «--process» не нужен.
+        var clusterId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var args = RacClient.SessionTerminateArgs(clusterId, sessionId, processId: null);
+
+        Assert.Equal(new[]
+        {
+            "session", "terminate",
+            $"--cluster={clusterId}",
+            $"--session={sessionId}"
+        }, args);
+        Assert.DoesNotContain(args, a => a.StartsWith("--process="));
+    }
+
+    [Fact]
+    public void SessionTerminateArgs_WithProcess_IncludesProcessOption()
+    {
+        // issue #69 («повторить — ошибка», «Ошибка разбора параметра: process»): рабочий
+        // процесс сеанса известен из «connection list» — rac 8.5.4 требует «--process=<pid>».
+        var clusterId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var processId = Guid.NewGuid();
+        var args = RacClient.SessionTerminateArgs(clusterId, sessionId, processId);
+
+        Assert.Equal(new[]
+        {
+            "session", "terminate",
+            $"--cluster={clusterId}",
+            $"--process={processId}",
+            $"--session={sessionId}"
+        }, args);
+    }
+
+    [Fact]
+    public void SessionTerminateArgs_WithEmptyProcess_OmitsProcessOption()
+    {
+        var clusterId = Guid.NewGuid();
+        var args = RacClient.SessionTerminateArgs(clusterId, Guid.NewGuid(), Guid.Empty);
+
+        Assert.DoesNotContain(args, a => a.StartsWith("--process="));
+    }
+
+    [Fact]
+    public void ConnectionDisconnectArgs_WithProcess_IncludesProcessOption()
+    {
+        // issue #69: «connection disconnect» тоже требует «--process=<pid>» в rac 8.5.4 —
+        // pid берётся из строки «connection list» (процесс, обслуживающий соединение).
+        var clusterId = Guid.NewGuid();
+        var connectionId = Guid.NewGuid();
+        var processId = Guid.NewGuid();
+        var args = RacClient.ConnectionDisconnectArgs(clusterId, connectionId, processId);
+
+        Assert.Equal(new[]
+        {
+            "connection", "disconnect",
+            $"--cluster={clusterId}",
+            $"--process={processId}",
+            $"--connection={connectionId}"
+        }, args);
+    }
+
+    [Fact]
+    public void ConnectionDisconnectArgs_WithoutProcess_OmitsProcessOption()
+    {
+        var clusterId = Guid.NewGuid();
+        var connectionId = Guid.NewGuid();
+        var args = RacClient.ConnectionDisconnectArgs(clusterId, connectionId);
+
+        Assert.Equal(new[]
+        {
+            "connection", "disconnect",
+            $"--cluster={clusterId}",
+            $"--connection={connectionId}"
+        }, args);
+        Assert.DoesNotContain(args, a => a.StartsWith("--process="));
+    }
+
+    [Fact]
     public void BuildArguments_ClusterInfo_IncludesHostPortToken_AndClusterOption()
     {
         // Команда «cluster info» (данные кластера на вкладке «Информация о кластере»,

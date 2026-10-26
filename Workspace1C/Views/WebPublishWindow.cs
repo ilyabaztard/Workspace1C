@@ -34,7 +34,9 @@ namespace Workspace1C
             form.Children.Add(WpfUi.Wrap(WpfUi.Label("WebPublish.Base"),
                 WpfUi.BoundCombo(_vm.InfobaseNames, nameof(WebPublishViewModel.SelectedIndex), 420)));
             form.Children.Add(WpfUi.Wrap(WpfUi.Label("WebPublish.Server"),
-                WpfUi.BoundCombo(_vm.ServerOptions, nameof(WebPublishViewModel.ServerIndex), 200)));
+                // Issue #63: поле выбора сервера расширено — надписи «Apache 2.4 — служба (конфиг)»
+                // не обрезаются (пользователь: «Поле выбора сервера - надо сделать шире»).
+                WpfUi.BoundCombo(_vm.ServerOptions, nameof(WebPublishViewModel.ServerIndex), 400)));
             form.Children.Add(WpfUi.Wrap(WpfUi.Label("WebPublish.Name"),
                 WpfUi.BoundTextBox(nameof(WebPublishViewModel.VirtualDirectory), 220),
                 WpfUi.BoundText(nameof(WebPublishViewModel.Url))));

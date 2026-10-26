@@ -10,6 +10,7 @@
         Title="{loc:Loc ConfigDiff.Title}"
         Icon="{StaticResource AppIcon}"
         Height="640" Width="860"
+        MinWidth="700" MinHeight="520"
         WindowStartupLocation="CenterOwner"
         FontFamily="Segoe UI"
         FontSize="13"

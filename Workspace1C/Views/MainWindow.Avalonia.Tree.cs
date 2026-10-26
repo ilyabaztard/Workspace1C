@@ -2543,6 +2543,7 @@ namespace Workspace1C
             var vm = new PlatformChangeViewModel(
                 candidates,
                 installedPlatformVersions: _vm.InstalledPlatformVersions,
+                installedPlatformInfos: PlatformVersionService.FindInstalledVersionInfos(_vm.AdditionalPlatformSearchPaths),
                 onApplied: _vm.ApplyConnectionReplace);
             var win = new PlatformChangeWindow(vm);
             win.ShowDialogSync(this);

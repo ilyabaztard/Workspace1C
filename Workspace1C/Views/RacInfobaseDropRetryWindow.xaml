@@ -4,7 +4,7 @@
         xmlns:loc="clr-namespace:Workspace1C.Localization"
         Icon="{StaticResource AppIcon}"
         Title="{loc:Loc ServerMonitor.Infobase.Drop.RetryTitle}"
-        Width="520" Height="320" MinWidth="480" MinHeight="300"
+        Width="520" Height="440" MinWidth="480" MinHeight="400"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         Background="{DynamicResource ContentBackgroundBrush}">
@@ -79,7 +79,8 @@
                        Text="{loc:Loc ServerMonitor.Infobase.Drop.RetryLogin}"/>
             <TextBox x:Name="LoginBox" Style="{StaticResource Field}" MaxLength="200"/>
 
-            <!-- Пароль администратора ИБ (при каждом показе — пустой). -->
+            <!-- Пароль администратора ИБ (сохраняется между показами диалога,
+                 комментарий 7OH от 2026-10-26: «Пароль сохранять между попытками»). -->
             <TextBlock Style="{StaticResource FieldLabel}"
                        Text="{loc:Loc ServerMonitor.Infobase.Drop.RetryPassword}"/>
             <PasswordBox x:Name="PasswordBox" Padding="6,3" MaxLength="200"

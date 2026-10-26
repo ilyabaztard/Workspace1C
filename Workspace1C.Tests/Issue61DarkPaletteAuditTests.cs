@@ -239,4 +239,70 @@ public sealed class Issue61DarkPaletteAuditTests
                 $"Схема {baseHex} (светлая): контраст выделения ниже 4.5:1");
         }
     }
+
+    [Fact]
+    public void WpfThemes_HaveModernListViewItem_WithThemeSelectionBrushes()
+    {
+        // Issue #61 (комментарий 7OH от 2026-10-26): «Конфигуратор параметров запуска» —
+        // ListView с GridView красил строки системными цветами (тёмное на тёмном при
+        // наведении, белый фон с белыми буквами при выборе без фокуса). Стиль
+        // ModernListViewItem темизирует контейнер: фон выделения — кисти схемы
+        // (ItemHoverBrush/ItemSelectedBrush), текст — первичный, без фиксированных
+        // белых/тёмных фонов.
+        foreach (var theme in new[] { "LightTheme.xaml", "DarkTheme.xaml" })
+        {
+            var text = File.ReadAllText(Path.Combine(FindRepoRoot(), "Workspace1C", "Themes", theme));
+            Assert.Contains("x:Key=\"ModernListViewItem\"", text, StringComparison.Ordinal);
+            Assert.Contains("TargetType=\"ListViewItem\"", text, StringComparison.Ordinal);
+            Assert.Contains("ItemHoverBrush", text, StringComparison.Ordinal);
+            Assert.Contains("ItemSelectedBrush", text, StringComparison.Ordinal);
+            Assert.Contains("GridViewRowPresenter", text, StringComparison.Ordinal);
+            // Нет фиксированных белых/тёмных фонов выделения.
+            Assert.DoesNotContain("Background=\"White\"", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Background=\"#FFFFFF\"", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Background=\"Black\"", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Background=\"#000000\"", text, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void WpfThemes_HaveImplicitListViewStyle_WithModernListViewItem()
+    {
+        // Неявный стиль ListView (как у ListBox) покрывает все окна с ListView+GridView:
+        // LaunchParametersWindow, CustomActionsWindow, ExportsListWindow.
+        foreach (var theme in new[] { "LightTheme.xaml", "DarkTheme.xaml" })
+        {
+            var text = File.ReadAllText(Path.Combine(FindRepoRoot(), "Workspace1C", "Themes", theme));
+            Assert.Contains("<Style TargetType=\"ListView\">", text, StringComparison.Ordinal);
+            Assert.Contains("ItemContainerStyle\" Value=\"{StaticResource ModernListViewItem}\"",
+                text, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void ListViewWindows_NoFixedSelectionBackgrounds()
+    {
+        // Окна с ListView+GridView не должны красить строки фиксированными белыми/тёмными
+        // фонами выделения — только кисти схемы через ModernListViewItem.
+        foreach (var name in new[] { "LaunchParametersWindow.xaml", "CustomActionsWindow.xaml", "ExportsListWindow.xaml" })
+        {
+            var text = File.ReadAllText(Path.Combine(FindRepoRoot(), "Workspace1C", "Views", name));
+            Assert.DoesNotContain("Background=\"White\"", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Background=\"#FFFFFF\"", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Background=\"Black\"", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Background=\"#000000\"", text, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Avalonia_ListBox_UsesModernListBoxItem()
+    {
+        // Avalonia-версия «Конфигуратора параметров запуска» использует ListBox, который
+        // через ControlDefaults.axaml получает ModernListBoxItem (кисти схемы на наведении
+        // и выборе) — в отличие от WPF ListView, отдельный стиль не нужен.
+        var defaults = File.ReadAllText(Path.Combine(FindRepoRoot(), "Workspace1C", "Themes", "ControlDefaults.axaml"));
+        Assert.Contains("Selector=\"ListBox\"", defaults, StringComparison.Ordinal);
+        Assert.Contains("ItemContainerTheme", defaults, StringComparison.Ordinal);
+        Assert.Contains("ModernListBoxItem", defaults, StringComparison.Ordinal);
+    }
 }

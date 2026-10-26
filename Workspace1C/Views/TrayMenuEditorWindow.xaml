@@ -10,6 +10,7 @@
         Title="{loc:Loc TrayMenu.Title}"
         Icon="{StaticResource AppIcon}"
         Height="560" Width="760"
+        MinWidth="640" MinHeight="480"
         WindowStartupLocation="CenterOwner"
         FontFamily="Segoe UI"
         FontSize="13"

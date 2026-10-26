@@ -106,9 +106,9 @@ namespace Workspace1C
                 dialogs,
                 action => Dispatcher.UIThread.Post(action),
                 serverListStore,
-                (errorText, login) =>
+                (errorText, login, password) =>
                 {
-                    var retry = new RacInfobaseDropRetryWindow(errorText, login);
+                    var retry = new RacInfobaseDropRetryWindow(errorText, login, password);
                     return retry.ShowSync(this)
                         ? new ViewModels.DropRetryResult(
                             retry.Retry, retry.User, retry.Password, retry.TerminateSessions)
