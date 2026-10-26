@@ -1,6 +1,7 @@
 #if LINUX
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -274,14 +275,26 @@ namespace Workspace1C
                 Header = T("ServerMonitor.Infobase.Props.Tab.Settings"),
                 Padding = new Thickness(14, 6),
                 FontSize = 12.5,
-                Content = new ScrollViewer { Content = settingsPanel }
+                Content = new ScrollViewer
+                {
+                    Content = settingsPanel,
+                    // Горизонтальная полоса - fallback (issue #55): при узком окне
+                    // содержимое вкладки не обрезается правым краем.
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+                }
             });
             tabs.Items.Add(new TabItem
             {
                 Header = T("ServerMonitor.Infobase.Props.Tab.Basic"),
                 Padding = new Thickness(14, 6),
                 FontSize = 12.5,
-                Content = new ScrollViewer { Content = basicPanel }
+                Content = new ScrollViewer
+                {
+                    Content = basicPanel,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+                }
             });
             root.Children.Add(tabs);
             return root;

@@ -453,7 +453,7 @@
                          прокручивается, а не обрезается; дерево версий осталось
                          в гибкой строке сверху. -->
                     <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
+                                  HorizontalScrollBarVisibility="Auto">
                     <StackPanel>
                     <TextBlock x:Name="StatusText"
                                Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -520,7 +520,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0"
                                        Text="{loc:Loc Settings.DefaultArch.Hint}"/>
-                            <ComboBox x:Name="DefaultArchComboBox" Grid.Column="1" Width="200"
+                            <ComboBox x:Name="DefaultArchComboBox" Grid.Column="1" MinWidth="200"
                                       HorizontalAlignment="Left" VerticalAlignment="Center"/>
                         </Grid>
                     </GroupBox>
@@ -550,7 +550,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Icons.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -593,7 +593,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Columns.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -688,7 +688,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Panels.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -795,7 +795,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Status.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -868,7 +868,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Font.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -880,7 +880,7 @@
                                           SelectionChanged="OnElement_SelectionChanged"/>
                                 <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="160"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="150"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
@@ -939,7 +939,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <!-- Полноценная тема: выбор применяется мгновенно и сохраняется в AppSettings.FullTheme. -->
@@ -1001,13 +1001,13 @@
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Settings.IconSetOverride}"
                                                VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                     <ComboBox x:Name="IconSetOverrideComboBox" Grid.Row="0" Grid.Column="1"
-                                              Width="240" Height="34" Margin="10,0,0,6" VerticalAlignment="Center"
+                                              MinWidth="240" Height="34" Margin="10,0,0,6" VerticalAlignment="Center"
                                               Style="{StaticResource ModernComboBox}"
                                               SelectionChanged="OnThemeOverrideCombo_SelectionChanged"/>
                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Settings.WindowButtonStyleOverride}"
                                                VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}"/>
                                     <ComboBox x:Name="WindowButtonStyleOverrideComboBox" Grid.Row="1" Grid.Column="1"
-                                              Width="240" Height="34" Margin="10,0,0,0" VerticalAlignment="Center"
+                                              MinWidth="240" Height="34" Margin="10,0,0,0" VerticalAlignment="Center"
                                               Style="{StaticResource ModernComboBox}"
                                               SelectionChanged="OnThemeOverrideCombo_SelectionChanged"/>
                                 </Grid>
@@ -1090,7 +1090,7 @@
 
                     <!-- Левая колонка: настройки темы и редактор цветов (прокручиваются) -->
                     <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled" Padding="0,0,12,0">
+                                  HorizontalScrollBarVisibility="Auto" Padding="0,0,12,0">
                         <StackPanel>
                             <GroupBox Header="{loc:Loc Settings.Theme}" Padding="8" Margin="0,0,0,12">
                                 <StackPanel>
@@ -1098,7 +1098,7 @@
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{loc:Loc Settings.ThemeLabel}" VerticalAlignment="Center"
                                                        Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                            <ComboBox x:Name="SchemeComboBox" Width="240" Height="34" Margin="10,0,0,0"
+                                            <ComboBox x:Name="SchemeComboBox" MinWidth="240" Height="34" Margin="10,0,0,0"
                                                       VerticalAlignment="Center"
                                                       Style="{StaticResource ModernComboBox}"
                                                       SelectionChanged="OnSchemeCombo_SelectionChanged"/>
@@ -1233,7 +1233,7 @@
                          ограничен по высоте и получает собственную вертикальную прокрутку. -->
                     <GroupBox Grid.Column="1" Header="{loc:Loc Settings.Preview}" Padding="8"
                               VerticalAlignment="Top">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                                       MaxHeight="520">
                             <Border x:Name="PreviewShell" Width="264" CornerRadius="8" BorderThickness="1"
                                     ClipToBounds="True" HorizontalAlignment="Left" VerticalAlignment="Top">
@@ -1343,7 +1343,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -1368,7 +1368,7 @@
                                  (issue #15). -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.Enterprise}" VerticalAlignment="Center"
@@ -1379,7 +1379,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.Configurator}" VerticalAlignment="Center"
@@ -1390,7 +1390,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.Favorites}" VerticalAlignment="Center"
@@ -1401,7 +1401,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.Edit}" VerticalAlignment="Center"
@@ -1412,7 +1412,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.Delete}" VerticalAlignment="Center"
@@ -1423,7 +1423,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ClearCache}" VerticalAlignment="Center"
@@ -1434,7 +1434,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.AddBase}" VerticalAlignment="Center"
@@ -1445,7 +1445,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.Pin}" VerticalAlignment="Center"
@@ -1456,7 +1456,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ShowAll}" VerticalAlignment="Center"
@@ -1467,7 +1467,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ShowFavorites}" VerticalAlignment="Center"
@@ -1478,7 +1478,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ShowRecent}" VerticalAlignment="Center"
@@ -1489,7 +1489,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ClearSearch}" VerticalAlignment="Center"
@@ -1500,7 +1500,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ClearTags}" VerticalAlignment="Center"
@@ -1511,7 +1511,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.RightPanelDetails}" VerticalAlignment="Center"
@@ -1522,7 +1522,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.SwitchUser}" VerticalAlignment="Center"
@@ -1533,7 +1533,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.SessionLock}" VerticalAlignment="Center"
@@ -1544,7 +1544,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.LockApp}" VerticalAlignment="Center"
@@ -1556,7 +1556,7 @@
                             <!-- Администрирование ИБ (Этап 6, функция №29 + консоль серверов). -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.CheckIntegrity}" VerticalAlignment="Center"
@@ -1567,7 +1567,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ServerConsole}" VerticalAlignment="Center"
@@ -1579,7 +1579,7 @@
                             <!-- Управление службами (issue #11): Ctrl+Shift+S по умолчанию. -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.Services}" VerticalAlignment="Center"
@@ -1591,7 +1591,7 @@
                             <!-- Сохранение копии экрана (функция №30 StartManager) -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.Screenshot}" VerticalAlignment="Center"
@@ -1603,7 +1603,7 @@
                             <!-- «Найти в списке» — переход к базе в общем списке (issue #285). -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.FindInList}" VerticalAlignment="Center"
@@ -1615,7 +1615,7 @@
                             <!-- Масштаб строк списка (issue #303): Ctrl++ / Ctrl+- / Ctrl+0. -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ZoomIn}" VerticalAlignment="Center"
@@ -1626,7 +1626,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ZoomOut}" VerticalAlignment="Center"
@@ -1637,7 +1637,7 @@
                             </Grid>
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ZoomReset}" VerticalAlignment="Center"
@@ -1649,7 +1649,7 @@
                             <!-- Командная палитра (Ctrl+K): быстрый поиск баз и команд. -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.CommandPalette}" VerticalAlignment="Center"
@@ -1661,7 +1661,7 @@
                             <!-- Автообновление платформы 1С (функция 9, этап 0.3.9.214): Ctrl+F9. -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.PlatformUpdate}" VerticalAlignment="Center"
@@ -1673,7 +1673,7 @@
                             <!-- Отбор «Только запущенные» (issue #339): настраиваемая горячая клавиша. -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ShowRunning}" VerticalAlignment="Center"
@@ -1685,7 +1685,7 @@
                             <!-- Меню закладок (issue #356): настраиваемая горячая клавиша, по умолчанию Ctrl+B. -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.BookmarksMenu}" VerticalAlignment="Center"
@@ -1697,7 +1697,7 @@
                             <!-- Меню служб (issue #11, пункт 6): настраиваемая горячая клавиша, по умолчанию Ctrl+Shift+Alt+S. -->
                             <Grid Margin="0,0,0,6">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="150"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Loc Settings.Hotkeys.ServicesMenu}" VerticalAlignment="Center"
@@ -1765,7 +1765,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <GroupBox Header="{loc:Loc Settings.Language}" Padding="8" Margin="0,0,0,12">
@@ -1773,7 +1773,7 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="{loc:Loc Settings.LanguageLabel}" VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                    <ComboBox x:Name="LanguageComboBox" Width="280" Height="34" Margin="10,0,0,0"
+                                    <ComboBox x:Name="LanguageComboBox" MinWidth="280" Height="34" Margin="10,0,0,0"
                                               VerticalAlignment="Center"
                                               Style="{StaticResource ModernComboBox}"
                                               SelectionChanged="OnLanguage_Changed"/>
@@ -1842,7 +1842,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,6">
                             <materialDesign:PackIcon Kind="RocketLaunch" Width="16" Height="16" Foreground="#22C55E" Margin="0,0,8,0" VerticalAlignment="Center"/>
                             <TextBlock Text="{loc:Loc Settings.General.AfterLaunchAction}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <ComboBox x:Name="AfterLaunchActionCombo" Width="230" Height="30"
+                            <ComboBox x:Name="AfterLaunchActionCombo" MinWidth="230" Height="30"
                                       VerticalAlignment="Center"
                                       Style="{StaticResource ModernComboBox}"/>
                         </StackPanel>
@@ -1915,12 +1915,12 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <TextBlock Text="{loc:Loc Settings.General.ComConnectorPreviewVersionLabel}"
                                                VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <TextBox x:Name="ComConnectorPreviewVersionBox" Text="8.3.45.6789" Height="32" Width="120"
+                                    <TextBox x:Name="ComConnectorPreviewVersionBox" Text="8.3.45.6789" Height="32" MinWidth="120"
                                              VerticalContentAlignment="Center"
                                              Style="{StaticResource ModernTextBox}"/>
                                     <TextBlock Text="{loc:Loc Settings.General.ComConnectorPreviewResultLabel}"
                                                VerticalAlignment="Center" Margin="12,0,10,0"/>
-                                    <TextBox x:Name="ComConnectorPreviewResultBox" Height="32" Width="220"
+                                    <TextBox x:Name="ComConnectorPreviewResultBox" Height="32" MinWidth="220"
                                              VerticalContentAlignment="Center" IsReadOnly="True"
                                              Style="{StaticResource ModernTextBox}"
                                              Text="{loc:Loc Settings.General.ComConnectorPreviewEmpty}"/>
@@ -1942,7 +1942,7 @@
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
                                            TextWrapping="Wrap" Margin="0,0,0,8"/>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBox x:Name="ComDetectTimeoutMsBox" Height="32" Width="120"
+                                    <TextBox x:Name="ComDetectTimeoutMsBox" Height="32" MinWidth="120"
                                              VerticalContentAlignment="Center"
                                              Style="{StaticResource ModernTextBox}"/>
                                     <TextBlock Text="{loc:Loc Settings.General.ComDetectTimeoutUnit}"
@@ -2091,7 +2091,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <!-- Общее описание вкладки (issue #56): здесь настраиваются и меню
@@ -2170,8 +2170,9 @@
                     </StackPanel>
                 </TabItem.Header>
                 <!-- Прокрутка по вертикали, чтобы при маленьком окне данные не выходили за границы.
-                     Горизонтальная прокрутка отключена, чтобы элементы растягивались по ширине окна. -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                     Горизонтальная полоса - fallback (issue #55): элементы с жёсткой шириной
+                     больше не обрезаются правым краем, а становятся доступны прокруткой. -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <TextBlock Text="{loc:Loc Settings.Ibases.Description}"
@@ -2244,13 +2245,13 @@
                                     <TextBlock x:Name="SyncIntervalLabel" Text="{loc:Loc Settings.Ibases.Interval}"
                                                VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                    <TextBox x:Name="SyncIntervalTextBox" Grid.Column="1" Width="60" Margin="10,0,0,0"
+                                    <TextBox x:Name="SyncIntervalTextBox" Grid.Column="1" MinWidth="60" Margin="10,0,0,0"
                                              VerticalAlignment="Center" TextAlignment="Center"
                                              TextChanged="OnSyncInterval_TextChanged"/>
                                     <TextBlock x:Name="SyncScheduleLabel" Grid.Column="2" Text="{loc:Loc Settings.Ibases.ScheduleTime}"
                                                VerticalAlignment="Center" Margin="16,0,0,0"
                                                Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                    <TextBox x:Name="SyncScheduleTimePicker" Grid.Column="3" Width="70" Margin="10,0,0,0"
+                                    <TextBox x:Name="SyncScheduleTimePicker" Grid.Column="3" MinWidth="70" Margin="10,0,0,0"
                                              VerticalAlignment="Center" TextAlignment="Center"
                                              TextChanged="OnSyncScheduleTime_TextChanged"/>
                                 </Grid>
@@ -2295,7 +2296,7 @@
                                 <StackPanel Orientation="Horizontal" Margin="24,0,0,6">
                                     <TextBlock Text="{loc:Loc Settings.Ibases.BackupKeepCount}" VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextPrimaryBrush}"/>
-                                    <TextBox x:Name="IbasesBackupKeepCountBox" Width="50" Margin="8,0,0,0"
+                                    <TextBox x:Name="IbasesBackupKeepCountBox" MinWidth="50" Margin="8,0,0,0"
                                              Text="5" VerticalAlignment="Center"
                                              Style="{StaticResource ModernTextBox}"/>
                                 </StackPanel>
@@ -2348,7 +2349,7 @@
                                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                                 </StackPanel>
                             </TabItem.Header>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
                                 <StackPanel>
                                     <!-- Экспорт / загрузка списка баз -->
                                     <GroupBox Header="{loc:Loc Settings.IbaseList}" Padding="8" Margin="0,0,0,8">
@@ -2456,7 +2457,7 @@
                                                            VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                 <controls:HelpLink Margin="0,0,8,0" VerticalAlignment="Center"
                                                                    HelpText="{loc:Loc Settings.Bases.HistoryDepthTooltip}"/>
-                                                <TextBox x:Name="MaxLaunchHistoryDepthBox" Height="30" Width="90"
+                                                <TextBox x:Name="MaxLaunchHistoryDepthBox" Height="30" MinWidth="90"
                                                          VerticalContentAlignment="Center"/>
                                             </StackPanel>
                                             <!-- Глобальное действие по двойному щелчку на базе (функция №28 StartManager). -->
@@ -2465,7 +2466,7 @@
                                                            VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                 <controls:HelpLink Margin="0,0,8,0" VerticalAlignment="Center"
                                                                    HelpText="{loc:Loc Settings.DblClickActionTooltip}"/>
-                                                <ComboBox x:Name="DoubleClickActionGlobalCombo" Height="30" Width="200"
+                                                <ComboBox x:Name="DoubleClickActionGlobalCombo" Height="30" MinWidth="200"
                                                           VerticalContentAlignment="Center"
                                                           SelectionChanged="OnDoubleClickActionGlobal_SelectionChanged"/>
                                             </StackPanel>
@@ -2530,7 +2531,7 @@
                                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                                 </StackPanel>
                             </TabItem.Header>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
                                 <StackPanel>
                                     <GroupBox Header="{loc:Loc Settings.TemplateDirs}" Padding="8" Margin="0,0,0,8">
                                         <StackPanel>
@@ -2591,7 +2592,7 @@
                                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                                 </StackPanel>
                             </TabItem.Header>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
                                 <StackPanel>
                                     <!-- Сервис (по аналогии со StartManager) -->
                                     <GroupBox Header="{loc:Loc Settings.Maintenance}" Padding="8" Margin="0,0,0,8">
@@ -2625,7 +2626,7 @@
                                                            VerticalAlignment="Center" Margin="0,0,8,0"/>
                                                 <controls:HelpLink Margin="0,0,8,0" VerticalAlignment="Center"
                                                                    HelpText="{loc:Loc Settings.Bases.FreeSpaceWarningGbTooltip}"/>
-                                                <TextBox x:Name="MaintenanceFreeSpaceWarningGbBox" Width="70" Height="30"
+                                                <TextBox x:Name="MaintenanceFreeSpaceWarningGbBox" MinWidth="70" Height="30"
                                                          VerticalContentAlignment="Center"
                                                          Style="{StaticResource ModernTextBox}"/>
                                                 <TextBlock Text="{loc:Loc Settings.Bases.FreeSpaceWarningGbUnit}"
@@ -2717,7 +2718,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="4,12,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Margin="4,12,4,0">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="{loc:Loc App.Title}" FontSize="18" FontWeight="SemiBold"

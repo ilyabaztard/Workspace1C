@@ -22,7 +22,9 @@
         </Style>
     </Window.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <!-- Горизонтальная полоса - fallback (issue #55): при узком окне контент не
+         обрезается правым краем, а прокручивается. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
         <StackPanel Margin="16">
             <TextBlock x:Name="EditorTitle" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,12"/>
 

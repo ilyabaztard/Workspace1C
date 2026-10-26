@@ -32,7 +32,7 @@
     <StackPanel Margin="16">
         <Grid Margin="0,4">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="Auto" MinWidth="130"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{loc:Loc LaunchParams.Parameter}" Style="{StaticResource FieldLabel}"/>
@@ -42,7 +42,7 @@
 
         <Grid Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="Auto" MinWidth="130"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{loc:Loc LaunchParams.Description}" Style="{StaticResource FieldLabel}"/>

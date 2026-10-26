@@ -2161,7 +2161,7 @@ namespace Workspace1C
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             _statusInfo = new TextBlock { FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-            ThemeBrushes.Bind(_statusInfo, TextBlock.ForegroundProperty, "TextOnAccentBrush");
+            ThemeBrushes.Bind(_statusInfo, TextBlock.ForegroundProperty, "SidebarTextBrush");
             _statusInfo.Bind(TextBlock.TextProperty, new Binding("StatusBarInfo"));
             // Подсказка показывает строку целиком: в нижней панели она обрезается
             // многоточием. Контекстное меню с копированием строки подключения
@@ -2177,7 +2177,7 @@ namespace Workspace1C
             Grid.SetColumn(_statusInfo, 0);
 
             _syncMessage = new TextBlock { FontSize = 12, Margin = new Thickness(16, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
-            ThemeBrushes.Bind(_syncMessage, TextBlock.ForegroundProperty, "TextOnAccentBrush");
+            ThemeBrushes.Bind(_syncMessage, TextBlock.ForegroundProperty, "SidebarTextBrush");
             _syncMessage.Bind(TextBlock.TextProperty, new Binding("SyncMessage"));
             ToolTip.SetTip(_syncMessage, LocalizationManager.T("Main.SyncResultTooltip"));
             grid.Children.Add(_syncMessage);
@@ -2216,7 +2216,7 @@ namespace Workspace1C
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
-            ThemeBrushes.Bind(downloadsText, TextBlock.ForegroundProperty, "TextOnAccentBrush");
+            ThemeBrushes.Bind(downloadsText, TextBlock.ForegroundProperty, "SidebarTextBrush");
             downloadsText.Bind(TextBlock.TextProperty, new Binding("DownloadsStatusText"));
             downloadsText.Bind(ToolTip.TipProperty, new Binding("DownloadsStatusText"));
             // Клик по тексту (паритет с разметкой WPF, issue #359): при загрузках из разных
@@ -2244,7 +2244,7 @@ namespace Workspace1C
                 Margin = new Thickness(6, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            ThemeBrushes.Bind(downloadsEtaText, TextBlock.ForegroundProperty, "TextOnAccentBrush");
+            ThemeBrushes.Bind(downloadsEtaText, TextBlock.ForegroundProperty, "SidebarTextBrush");
             downloadsEtaText.Bind(TextBlock.TextProperty, new Binding("DownloadsEtaText"));
             downloadsPanel.Children.Add(downloadsEtaText);
 
@@ -2306,7 +2306,7 @@ namespace Workspace1C
         /// <summary>
         /// Панель выбора окна у индикатора загрузок (issue #359). Фон и цвет текста —
         /// как у нижней строки состояния главного окна: <c>StatusBarBorder</c> (сборка
-        /// ниже) залит кистью <c>SidebarBrush</c>, текст в строке — <c>TextOnAccentBrush</c>;
+        /// ниже) залит кистью <c>SidebarBrush</c>, текст в строке — <c>SidebarTextBrush</c>;
         /// рамка, скругление 6 и тень остаются от темы <c>ModernContextMenu</c>. Панель
         /// ограничена по ширине и высоте размером окна, а позицию считает callback для
         /// <c>Placement=Custom</c>: панель стоит над индикатором, X зажат в границах окна —
@@ -2352,7 +2352,7 @@ namespace Workspace1C
             {
                 menu.Background = bg;
             }
-            if (Application.Current?.TryFindResource("TextOnAccentBrush", out var foreground) == true
+            if (Application.Current?.TryFindResource("SidebarTextBrush", out var foreground) == true
                 && foreground is IBrush fg)
             {
                 menu.Foreground = fg;
@@ -2363,7 +2363,7 @@ namespace Workspace1C
 
         /// <summary>
         /// Цвета пунктов панели выбора окна (issue #359): текст — как в строке состояния
-        /// (<c>TextOnAccentBrush</c>), подсветка — <c>SidebarHoverBrush</c>. Пункты лежат на
+        /// (<c>SidebarTextBrush</c>), подсветка — <c>SidebarHoverBrush</c>. Пункты лежат на
         /// тёмном фоне <c>SidebarBrush</c>, поэтому <c>TextPrimaryBrush</c> светлой темы
         /// (чёрный) и <c>ItemHoverBrush</c> светлой темы (бледно-жёлтый) не годятся.
         /// Подсветка и цвет подписи в шаблоне пункта красятся DynamicResource'ом, а
@@ -2373,7 +2373,7 @@ namespace Workspace1C
         private void ApplyDownloadsPickerItemTheme(MenuItem item)
         {
             var app = Application.Current;
-            if (app?.TryFindResource("TextOnAccentBrush", out var text) == true && text is IBrush tb)
+            if (app?.TryFindResource("SidebarTextBrush", out var text) == true && text is IBrush tb)
             {
                 item.Foreground = tb;
                 item.Resources["TextPrimaryBrush"] = tb;
@@ -2394,7 +2394,7 @@ namespace Workspace1C
         {
             var button = new Button
             {
-                Content = IconHelper.MakeIcon(iconKey, 18, "TextOnAccentBrush"),
+                Content = IconHelper.MakeIcon(iconKey, 18, "SidebarTextBrush"),
                 Margin = new Thickness(4, 0, 0, 0),
                 MinWidth = 0,
                 MinHeight = 0,

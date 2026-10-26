@@ -154,7 +154,9 @@ namespace Workspace1C
         private static Control MakeFieldRow(string label, Control editor)
         {
             var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(140, GridUnitType.Pixel)));
+            // Подпись Auto с минимумом (issue #55): длинная подпись не обрезается,
+            // короткая сохраняет выравнивание по минимальной ширине.
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto) { MinWidth = 130 });
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             grid.Margin = new Thickness(0, 4, 0, 4);
 

@@ -11,6 +11,62 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.79] — 2026-10-26
+
+### Добавлено
+
+- **Контрастность текста на акцентном фоне и тёмных панелях (issue #26, Windows и
+  Linux)** — кисть `TextOnAccentBrush` больше не берётся фиксированной из палитры, а
+  пересчитывается контрастной к акценту (WCAG AA), как `AccentTextBrush`; для тёмных
+  панелей (статус-бар, строка состояния, меню выбора окна) введена отдельная кисть
+  `SidebarTextBrush`, контрастная к `SidebarColor`. Акцентные кнопки и тёмные панели
+  переведены на контрастные кисти в обоих вариантах интерфейса
+  ([`ThemeManager.cs`](Workspace1C/Themes/ThemeManager.cs),
+  [`ThemeManager.Avalonia.cs`](Workspace1C/Themes/ThemeManager.Avalonia.cs),
+  [`SettingsWindow.Schemes.cs`](Workspace1C/Views/SettingsWindow.Schemes.cs),
+  [`SettingsWindow.Avalonia.Schemes.cs`](Workspace1C/Views/SettingsWindow.Avalonia.Schemes.cs)).
+  Покрыто тестами `ThemeContrastRegressionTests`.
+
+### Исправлено
+
+- **Адаптивная раскладка форм: контент вкладок больше не обрезается при узком окне
+  (issue #55, Windows и Linux)** — горизонтальная полоса прокрутки включена как fallback
+  (Auto вместо Disabled), жёсткие ширины полей и комбобоксов заменены MinWidth, длинные
+  подписи переносятся (TextWrapping), длинное имя базы обрезается многоточием; правки
+  синхронизированы между WPF (*.xaml) и Avalonia (*.Avalonia.cs)
+  ([`SettingsWindow.xaml`](Workspace1C/Views/SettingsWindow.xaml),
+  [`SettingsWindow.Avalonia.cs`](Workspace1C/Views/SettingsWindow.Avalonia.cs),
+  [`ConnectionSettingsWindow.xaml`](Workspace1C/Views/ConnectionSettingsWindow.xaml),
+  [`ConnectionSettingsWindow.Avalonia.cs`](Workspace1C/Views/ConnectionSettingsWindow.Avalonia.cs),
+  [`ServerEditWindow.xaml`](Workspace1C/Views/ServerEditWindow.xaml),
+  [`ServerEditWindow.Avalonia.cs`](Workspace1C/Views/ServerEditWindow.Avalonia.cs),
+  [`LaunchParameterEditWindow.xaml`](Workspace1C/Views/LaunchParameterEditWindow.xaml),
+  [`LaunchParameterEditWindow.Avalonia.cs`](Workspace1C/Views/LaunchParameterEditWindow.Avalonia.cs),
+  [`RacInfobaseCreateWindow.xaml`](Workspace1C/Views/RacInfobaseCreateWindow.xaml),
+  [`RacInfobasePropertiesWindow.xaml`](Workspace1C/Views/RacInfobasePropertiesWindow.xaml),
+  [`RacInfobasePropertiesWindow.Avalonia.cs`](Workspace1C/Views/RacInfobasePropertiesWindow.Avalonia.cs),
+  [`ScriptScenarioEditWindow.xaml`](Workspace1C/Views/ScriptScenarioEditWindow.xaml),
+  [`ScriptScenarioEditWindow.Avalonia.cs`](Workspace1C/Views/ScriptScenarioEditWindow.Avalonia.cs),
+  [`ScriptPickWindow.xaml`](Workspace1C/Views/ScriptPickWindow.xaml)).
+  Покрыто тестами `Issue55AdaptiveLayoutTests`.
+
+- **Миграция баз: счётчик прогресса привязан к текущему прогону (issue #41, Windows и
+  Linux)** — `ProgressIndex` — порядковый номер обрабатываемой базы в текущем прогоне
+  (1-based: «1 из K», «2 из K»…), а не позиция в полном списке; `ProgressTotal` —
+  количество отмеченных баз (`rows.Count`, стабильно в рамках прогона); счётчик
+  `ProcessedCount` совпадает с `ProgressIndex`
+  ([`ClusterMigrationViewModel.cs`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs),
+  [`ClusterMigrationRow.cs`](Workspace1C/ViewModels/ClusterMigrationRow.cs)). Покрыто
+  тестами `ClusterMigrationViewModelTests`.
+
+### Подтверждено пользователем
+
+- **#57** — общая авторизация: пользователь подтвердил («Есть - теперь раздельно»), что
+  общие учётные данные задаются отдельно для «1С:Предприятия» и «Конфигуратора»; правок
+  кода не требовалось.
+
+---
+
 ## [1.0.0.78] — 2026-10-26
 
 ### Добавлено

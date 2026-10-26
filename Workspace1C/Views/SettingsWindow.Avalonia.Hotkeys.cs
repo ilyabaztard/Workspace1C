@@ -90,10 +90,10 @@ namespace Workspace1C
         /// <summary>Строка переназначения: подпись действия и поле ввода сочетания.</summary>
         private static Controls.HotkeyBox HotkeyRow(Panel host, string action, string value)
         {
-            // Раскладка строки из разметки WPF: подпись в колонке 170, поле тянется
-            // по остатку ширины, шаг между строками 6.
+            // Раскладка строки из разметки WPF: подпись в колонке Auto (минимум 150,
+            // issue #55), поле тянется по остатку ширины, шаг между строками 6.
             var grid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(170)));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto) { MinWidth = 150 });
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
 
             var label = new TextBlock { Text = action, VerticalAlignment = VerticalAlignment.Center };

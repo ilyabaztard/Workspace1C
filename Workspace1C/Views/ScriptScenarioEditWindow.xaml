@@ -30,7 +30,7 @@
             <Button Content="Отмена" Width="90" Padding="6,4" IsCancel="True" Click="Cancel_Click"/>
         </StackPanel>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
             <StackPanel>
                 <TextBlock x:Name="NameLabel" Text="Наименование" FontWeight="SemiBold" Margin="0,0,0,4"/>
                 <TextBox x:Name="NameBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Padding="4" Margin="0,0,0,10"/>
@@ -77,12 +77,18 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <ComboBox x:Name="ShellCombo" Grid.Column="0" SelectedValuePath="Key" DisplayMemberPath="Value"
-                              HorizontalAlignment="Left" MinWidth="260"
+                              HorizontalAlignment="Left" MinWidth="220"
                               SelectionChanged="OnSelectionChanged"/>
-                    <CheckBox x:Name="HideWindowCheckBox" Grid.Column="2" Content="{loc:Loc Script.HideWindow}"
-                              IsChecked="{Binding HideWindow, Mode=TwoWay}" FontSize="12" VerticalAlignment="Center"/>
-                    <CheckBox x:Name="NotifyOnStartCheckBox" Grid.Column="4" Content="{loc:Loc Script.NotifyOnStart}"
-                              IsChecked="{Binding NotifyOnStart, Mode=TwoWay}" FontSize="12" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="HideWindowCheckBox" Grid.Column="2"
+                              IsChecked="{Binding HideWindow, Mode=TwoWay}" FontSize="12" VerticalAlignment="Center">
+                        <!-- Метки чекбоксов переносятся (issue #55): при узком окне надписи
+                             не обрезаются правым краем. -->
+                        <TextBlock Text="{loc:Loc Script.HideWindow}" TextWrapping="Wrap" MaxWidth="150" VerticalAlignment="Center"/>
+                    </CheckBox>
+                    <CheckBox x:Name="NotifyOnStartCheckBox" Grid.Column="4"
+                              IsChecked="{Binding NotifyOnStart, Mode=TwoWay}" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock Text="{loc:Loc Script.NotifyOnStart}" TextWrapping="Wrap" MaxWidth="150" VerticalAlignment="Center"/>
+                    </CheckBox>
                 </Grid>
 
                 <TextBlock x:Name="ParametersLabel" Text="Параметры" FontWeight="SemiBold" Margin="0,0,0,4"/>

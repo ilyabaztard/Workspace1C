@@ -2,6 +2,7 @@
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -267,7 +268,7 @@ public sealed class ScriptScenarioEditWindow : ModalWindowBase
             new TextBlock { Text = pair.Value });
         _shellCombo.SelectedItem = shellItems.FirstOrDefault(p => p.Key == _vm.Shell);
         _shellCombo.HorizontalAlignment = HorizontalAlignment.Left;
-        _shellCombo.MinWidth = 260;
+        _shellCombo.MinWidth = 220;
         _shellCombo.VerticalAlignment = VerticalAlignment.Center;
         _shellCombo.SelectionChanged += (_, _) => UpdatePreview();
         // Issue #308, п.14:39: галки «Скрывать окно скрипта» и «Уведомлять о запуске» —
@@ -416,7 +417,14 @@ public sealed class ScriptScenarioEditWindow : ModalWindowBase
         panel.Children.Add(bottom);
 
         UpdatePreview();
-        return new ScrollViewer { Content = panel };
+        return new ScrollViewer
+        {
+            Content = panel,
+            // Горизонтальная полоса - fallback (issue #55): строка «Интерпретатор + галки»
+            // не обрезается правым краем при узком окне, а прокручивается.
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
     }
 
     private void BrowseFile()

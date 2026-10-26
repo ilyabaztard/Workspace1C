@@ -136,7 +136,7 @@
                 <Button Width="100" Content="{loc:Loc MetadataExplorer.Browse}" Command="{Binding BrowseCfCommand}"
                         Margin="0,0,8,0" IsEnabled="{Binding IsSourceCf}"/>
                 <Button Width="120" Content="{loc:Loc MetadataExplorer.Load}" Command="{Binding LoadCommand}"
-                        Background="{DynamicResource AccentBrush}" Foreground="White"/>
+                        Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource TextOnAccentBrush}"/>
             </StackPanel>
         </StackPanel>
 

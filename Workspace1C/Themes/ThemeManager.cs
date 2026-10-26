@@ -861,6 +861,16 @@ namespace Workspace1C.Themes
             // FavoriteColor, чтобы номера Alt+N и подписи бейджей были читаемыми
             // и в тёмной теме, и в пользовательских схемах с тёмным «янтарём».
             SetContrastBrush(dict, scheme, dark, "FavoriteTextBrush", "FavoriteColor");
+
+            // Текст на акцентных кнопках и плитках (issue #26): из палитры TextOnAccentColor
+            // приходит фиксированный белый и теряет читаемость на тёмных акцентах
+            // пользовательских схем (например #AF6B1D — белый даёт лишь 4.25:1).
+            // Пересчитываем по WCAG, как AccentTextBrush.
+            SetContrastBrush(dict, scheme, dark, "TextOnAccentBrush", "AccentColor");
+            // Текст на тёмных панелях (статус-бар, меню выбора окна): контраст по WCAG
+            // к фактическому SidebarColor — SidebarBrush всегда тёмный, но пользовательская
+            // схема может его осветлить (issue #26).
+            SetContrastBrush(dict, scheme, dark, "SidebarTextBrush", "SidebarColor");
         }
 
         /// <summary>Выставляет кисть, контрастную заданному цвету палитры (WCAG 4.5:1).</summary>

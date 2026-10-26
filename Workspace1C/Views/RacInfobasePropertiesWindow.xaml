@@ -39,8 +39,10 @@
     <DockPanel Margin="16">
         <!-- Заголовок + «Обновить» справа (как в эталоне). -->
         <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+            <!-- Длинное имя базы не должно обрезаться правым краем (issue #55):
+                 обрезаем с многоточием вместо клиппинга содержимого. -->
             <TextBlock FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"
-                       Text="{Binding Name, StringFormat={}{0}}"/>
+                       Text="{Binding Name, StringFormat={}{0}}" TextTrimming="CharacterEllipsis"/>
             <Button HorizontalAlignment="Right" Style="{StaticResource ModernButton}"
                     Background="{DynamicResource ItemHoverBrush}" Padding="12,5"
                     Click="OnRefreshClick" ToolTip="{loc:Loc ServerMonitor.Infobase.Props.RefreshHint}">
@@ -85,7 +87,8 @@
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
             <!-- Вкладка «Настройки» (первая): блокировки, внешнее управление, профили. -->
             <TabItem Header="{loc:Loc ServerMonitor.Infobase.Props.Tab.Settings}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <!-- Горизонтальная полоса - fallback (issue #55). -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                     <StackPanel Margin="12,8,12,10">
                         <!-- Блокировка начала сеансов. -->
                         <Border BorderBrush="{DynamicResource BorderBrushColor}" BorderThickness="1"
@@ -165,7 +168,8 @@
 
             <!-- Вкладка «Основная» (вторая): общие/подключение. -->
             <TabItem Header="{loc:Loc ServerMonitor.Infobase.Props.Tab.Basic}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <!-- Горизонтальная полоса - fallback (issue #55). -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                     <StackPanel Margin="12,8,12,10">
                         <!-- Администратор информационной базы (учётные данные для rac). -->
                         <Border BorderBrush="{DynamicResource BorderBrushColor}" BorderThickness="1"

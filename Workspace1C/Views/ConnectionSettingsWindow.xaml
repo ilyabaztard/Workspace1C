@@ -212,7 +212,7 @@
                 <Border Width="40" Height="40" CornerRadius="10" Margin="0,0,12,0"
                         Background="{DynamicResource AccentBrush}" VerticalAlignment="Center">
                     <materialDesign:PackIcon Kind="Database" Width="22" Height="22"
-                                             Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                             Foreground="{DynamicResource TextOnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="{loc:Loc Connection.HeaderTitle}" FontSize="18" FontWeight="SemiBold"
@@ -235,7 +235,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Base}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
                 <StackPanel>
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
@@ -352,7 +352,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Connection}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
                 <StackPanel>
                     <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
@@ -505,7 +505,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Repository}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
                         <StackPanel Orientation="Horizontal">
@@ -596,7 +596,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Auth}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
                 <StackPanel>
                     <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                         <GroupBox.Header>
@@ -845,7 +845,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Launch}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
                         <StackPanel Orientation="Horizontal">
@@ -855,7 +855,7 @@
                     </GroupBox.Header>
                     <StackPanel>
                     <TextBlock Text="{loc:Loc Connection.DblClickActionLabel}" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
-                    <ComboBox x:Name="DoubleClickActionCombo" Width="220" HorizontalAlignment="Left" Margin="0,0,0,4"
+                    <ComboBox x:Name="DoubleClickActionCombo" MinWidth="220" HorizontalAlignment="Left" Margin="0,0,0,4"
                               SelectionChanged="OnDoubleClickActionCombo_SelectionChanged"/>
 
                     <TextBlock Text="{loc:Loc Connection.ExternalProcessingLabel}" FontWeight="SemiBold" FontSize="12" Margin="0,8,0,4"/>
@@ -1027,7 +1027,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Bitness}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
                         <StackPanel Orientation="Horizontal">
@@ -1159,7 +1159,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Platform}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
                 <StackPanel>
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
@@ -1301,7 +1301,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Id}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
                 <StackPanel Margin="8,12,8,8" VerticalAlignment="Top">
                     <TextBlock Text="{loc:Loc Connection.IdDescription}"
                                FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"

@@ -28,7 +28,7 @@
 
         <Grid Margin="0,4">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="Auto" MinWidth="130"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{loc:Loc ServerMonitor.Servers.Description}"
@@ -39,7 +39,7 @@
 
         <Grid Margin="0,4">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="Auto" MinWidth="130"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{loc:Loc ServerMonitor.Servers.Address}"
@@ -51,7 +51,7 @@
 
         <Grid Margin="0,4">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="Auto" MinWidth="130"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{loc:Loc ServerMonitor.Servers.Port}"
@@ -63,7 +63,7 @@
 
         <Grid Margin="0,4">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="Auto" MinWidth="130"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{loc:Loc ServerMonitor.Servers.User}"
@@ -74,7 +74,7 @@
 
         <Grid Margin="0,4">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="Auto" MinWidth="130"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{loc:Loc ServerMonitor.Servers.Password}"

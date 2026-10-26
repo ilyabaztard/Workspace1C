@@ -183,7 +183,7 @@ namespace Workspace1C
         private static Control MakeFieldRow(string label, Control editor)
         {
             var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(150, GridUnitType.Pixel)));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto) { MinWidth = 140 });
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             grid.Margin = new Thickness(0, 4, 0, 4);
 

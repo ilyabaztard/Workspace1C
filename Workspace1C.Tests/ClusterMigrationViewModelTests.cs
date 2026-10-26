@@ -391,12 +391,13 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
-    public async Task Migrate_ProgressIndex_IsFullListPosition_NotShiftedByUncheckedRow()
+    public async Task Migrate_ProgressIndex_IsRunOrdinal_NotFullListPosition()
     {
-        // Issue #41 «починить индексы»: ProgressIndex — позиция в ПОЛНОМ списке (1-based),
-        // не смещается при снятии галочек. Снята первая из трёх — третья обрабатывается
-        // как «3 из 3», а не «2 из 3»; ProgressTotal — строки видимого списка; ProcessedCount
-        // — число фактически обработанных.
+        // Issue #41 (счётчик, комментарий 7OH): ProgressIndex — порядковый номер
+        // обрабатываемой базы в текущем прогоне (1-based), а НЕ позиция в полном списке.
+        // Снята первая из трёх — обрабатываются «База2» и «База3»: счётчик «1 из 2»,
+        // «2 из 2»; ProgressTotal — количество отмеченных (rows.Count), ProcessedCount
+        // — число фактически обработанных (совпадает с ProgressIndex).
         var client = new FakeRacClient(sourceBaseCount: 3);
         var vm = new ClusterMigrationViewModel(
             client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
@@ -412,12 +413,121 @@ public sealed class ClusterMigrationViewModelTests
 
         await vm.MigrateAsync();
 
-        Assert.Equal(3, vm.ProgressTotal);       // стабильное «из N» по видимому списку
-        Assert.Equal(3, vm.ProgressIndex);       // последняя обработанная — ТРЕТЬЯ строка
+        Assert.Equal(3, vm.SourceRows.Count);       // полный список — 3 строки
+        Assert.Equal(2, vm.ProgressTotal);          // отмеченных — 2 (rows.Count)
+        Assert.Equal(2, vm.ProgressIndex);          // последняя обработанная — «2 из 2»
         Assert.Equal("База3", vm.CurrentBaseName);
-        Assert.Equal(2, vm.ProcessedCount);      // обработано две отмеченные базы
+        Assert.Equal(2, vm.ProcessedCount);         // обработано две отмеченные базы
         Assert.True(vm.MigrationCompleted);
         Assert.Equal(new[] { "База2", "База3" }, vm.Result!.MigratedBaseNames);
+    }
+
+    [Fact]
+    public async Task Migrate_UncheckedFirstBase_FirstProcessedShowsOneOfChecked()
+    {
+        // Issue #41 (счётчик): при снятой галочке первой базы первая ОБРАБАТЫВАЕМАЯ база
+        // показывает «1 из K» (ProgressIndex == 1), а не свою позицию в полном списке
+        // («2 из 3»). Значения фиксируются в момент начала обработки первой базы.
+        var client = new FakeRacClient(sourceBaseCount: 3);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        vm.SourceRows[0].IsChecked = false; // первая из трёх снята
+
+        var firstIndex = -1;
+        var firstTotal = -1;
+        var firstName = string.Empty;
+        client.OnBeforeCreate = () =>
+        {
+            if (firstIndex >= 0)
+                return; // фиксируем значения только ПЕРВОЙ обрабатываемой базы
+            firstIndex = vm.ProgressIndex;
+            firstTotal = vm.ProgressTotal;
+            firstName = vm.CurrentBaseName;
+        };
+
+        await vm.MigrateAsync();
+
+        // Первая обрабатываемая — «База2» (вторая строка списка): «1 из 2», не «2 из 3».
+        Assert.Equal(1, firstIndex);
+        Assert.Equal(2, firstTotal);
+        Assert.Equal("База2", firstName);
+        Assert.True(vm.MigrationCompleted);
+    }
+
+    [Fact]
+    public async Task Migrate_ProgressTotal_IsCheckedRowsCount_NotFullListCount()
+    {
+        // Issue #41 (счётчик): ProgressTotal — количество ОТМЕЧЕННЫХ баз в текущем прогоне
+        // (rows.Count), а не размер полного списка SourceRows.
+        var client = new FakeRacClient(sourceBaseCount: 3);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        vm.SourceRows[0].IsChecked = false; // отмечены только 2 из 3
+
+        await vm.MigrateAsync();
+
+        Assert.Equal(3, vm.SourceRows.Count);   // полный список — 3
+        Assert.Equal(2, vm.ProgressTotal);      // отмеченных — 2 (rows.Count)
+        Assert.Equal(2, vm.ProgressIndex);      // последняя обработанная — «2 из 2»
+        Assert.True(vm.MigrationCompleted);
+    }
+
+    [Fact]
+    public async Task Migrate_SecondRun_ProgressRestartsFromOne_WithCheckedCount()
+    {
+        // Issue #41 (счётчик): при повторном запуске счётчик начинается заново — первая
+        // обрабатываемая база показывает «1 из K», где K — отмеченные на момент запуска
+        // (не позиция в полном списке и не остаток предыдущего прогона).
+        var client = new FakeRacClient(sourceBaseCount: 3, failCreateOnIndex: 2);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        // Первый прогон: «База1» и «База3» перенесены (галочки сняты автообновлением
+        // статусов), «База2» — ошибка (галочка осталась).
+        await vm.MigrateAsync();
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(1, vm.CheckedCount);
+
+        // Второй прогон: обрабатывается только «База2» — счётчик «1 из 1», а не «2 из 3».
+        var firstIndex = -1;
+        var firstTotal = -1;
+        client.OnBeforeCreate = () =>
+        {
+            if (firstIndex >= 0)
+                return; // фиксируем значения только ПЕРВОЙ обрабатываемой базы
+            firstIndex = vm.ProgressIndex;
+            firstTotal = vm.ProgressTotal;
+        };
+
+        await vm.MigrateAsync();
+
+        Assert.Equal(1, firstIndex);
+        Assert.Equal(1, firstTotal);
+        Assert.Equal("База2", vm.CurrentBaseName);
+        Assert.True(vm.MigrationCompleted);
     }
 
     [Fact]
@@ -1087,6 +1197,9 @@ public sealed class ClusterMigrationViewModelTests
         /// <summary>Число вызовов «infobase summary list» (счётчик автообновления статусов, issue #41).</summary>
         public int GetInfobasesCalls { get; private set; }
 
+        /// <summary>Колбэк перед каждым «infobase create» (для проверки прогресса в момент обработки).</summary>
+        public Action? OnBeforeCreate { get; set; }
+
         public string LastActionError { get; private set; } = string.Empty;
 
         public Task<IReadOnlyList<RacCluster>> GetClustersAsync(
@@ -1151,6 +1264,7 @@ public sealed class ClusterMigrationViewModelTests
             RacConnectionParams parameters, Guid clusterId, RacInfobaseCreateRequest request,
             CancellationToken cancellationToken = default)
         {
+            OnBeforeCreate?.Invoke();
             Created.Add((clusterId, request));
             if (_throwOnCreate)
                 throw new InvalidOperationException("сбой соединения с RAS (имитация)");

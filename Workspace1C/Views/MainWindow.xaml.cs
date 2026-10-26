@@ -1394,7 +1394,7 @@ namespace Workspace1C
         /// Панель выбора окна у индикатора загрузок (issue #359). Фон и цвет текста —
         /// как у нижней строки состояния главного окна: <c>StatusBarBorder</c>
         /// (MainWindow.xaml) залит кистью <c>SidebarBrush</c>, текст в строке —
-        /// <c>TextOnAccentBrush</c>; рамка, скругление 6 и тень остаются от стиля
+        /// <c>SidebarTextBrush</c>; рамка, скругление 6 и тень остаются от стиля
         /// <c>ModernContextMenu</c>. Панель ограничена по ширине и высоте размером окна
         /// (не шире главного окна), а позицию считает callback для <c>Placement=Custom</c>:
         /// панель стоит над индикатором, X зажат в границах окна — иначе меню, открытое у
@@ -1413,7 +1413,7 @@ namespace Workspace1C
 
             if (TryFindResource("SidebarBrush") is Brush background)
                 menu.Background = background;
-            if (TryFindResource("TextOnAccentBrush") is Brush foreground)
+            if (TryFindResource("SidebarTextBrush") is Brush foreground)
                 menu.Foreground = foreground;
 
             menu.MaxWidth = Math.Max(menu.MinWidth, PopupBoundsMath.MaxPopupSize(ActualWidth, margin));
@@ -1452,7 +1452,7 @@ namespace Workspace1C
 
         /// <summary>
         /// Цвета пунктов панели выбора окна (issue #359): текст — как в строке состояния
-        /// (<c>TextOnAccentBrush</c>), подсветка — <c>SidebarHoverBrush</c>. Пункты лежат на
+        /// (<c>SidebarTextBrush</c>), подсветка — <c>SidebarHoverBrush</c>. Пункты лежат на
         /// тёмном фоне <c>SidebarBrush</c>, поэтому <c>TextPrimaryBrush</c> светлой темы
         /// (чёрный) и <c>ItemHoverBrush</c> светлой темы (бледно-жёлтый) не годятся.
         /// Подсветка в шаблоне пункта красится <c>{DynamicResource ItemHoverBrush}</c>, а цвет
@@ -1462,7 +1462,7 @@ namespace Workspace1C
         /// </summary>
         private void ApplyDownloadsPickerItemTheme(MenuItem item)
         {
-            if (TryFindResource("TextOnAccentBrush") is Brush text)
+            if (TryFindResource("SidebarTextBrush") is Brush text)
                 item.Resources["TextPrimaryBrush"] = text;
             if (TryFindResource("SidebarHoverBrush") is Brush hover)
                 item.Resources["ItemHoverBrush"] = hover;

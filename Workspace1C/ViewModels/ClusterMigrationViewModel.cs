@@ -509,7 +509,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         private set => SetProperty(ref _currentBaseName, value);
     }
 
-    /// <summary>Номер обрабатываемой базы (счётчик «1 из 10», 1-based).</summary>
+    /// <summary>Порядковый номер обрабатываемой базы в текущем прогоне (счётчик «1 из K», 1-based).</summary>
     public int ProgressIndex
     {
         get => _progressIndex;
@@ -520,7 +520,7 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Общее число баз к переносу.</summary>
+    /// <summary>Количество отмеченных баз в текущем прогоне (стабильно в рамках прогона).</summary>
     public int ProgressTotal
     {
         get => _progressTotal;
@@ -532,9 +532,9 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Счётчик фактически обработанных строк (успешно или с ошибкой; issue #41): растёт
-    /// по мере перебора отмеченных баз и НЕ зависит от снятых галочек — это число попыток
-    /// переноса, а не позиция в списке (в отличие от <see cref="ProgressIndex"/>).
+    /// Счётчик фактически обработанных строк в текущем прогоне (успешно или с ошибкой;
+    /// issue #41): растёт по мере перебора отмеченных баз и совпадает с
+    /// <see cref="ProgressIndex"/> (порядковый номер обрабатываемой базы).
     /// </summary>
     public int ProcessedCount
     {
@@ -989,11 +989,12 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     /// СУБД из диалога), затем, если <see cref="KeepInSource"/> НЕ отмечен — удалить базу
     /// из старого кластера БЕЗ удаления БД на сервере СУБД (rac «infobase drop» без
     /// --drop-database). Перенесённые базы добавляются в новую группу (имя кластера —
-    /// приёмник, как в импорте). Фоновый прогресс: <see cref="ProgressIndex"/> — позиция
-    /// обрабатываемой строки в ПОЛНОМ списке (не смещается при снятии галочек и повторном
-    /// запуске, issue #41 «починить индексы»), <see cref="ProgressTotal"/> — число строк
-    /// списка, <see cref="CurrentBaseName"/>, <see cref="ProcessedCount"/> — счётчик
-    /// обработанных. При ошибке ОДНОЙ базы перенос НЕ прерывается: строка помечается
+    /// приёмник, как в импорте). Фоновый прогресс: <see cref="ProgressIndex"/> — порядковый
+    /// номер обрабатываемой базы в текущем прогоне (1-based, «1 из K», «2 из K»…),
+    /// <see cref="ProgressTotal"/> — количество отмеченных баз в текущем прогоне (стабильно
+    /// в рамках прогона), <see cref="CurrentBaseName"/>, <see cref="ProcessedCount"/> —
+    /// счётчик обработанных (совпадает с <see cref="ProgressIndex"/>). При ошибке ОДНОЙ
+    /// базы перенос НЕ прерывается: строка помечается
     /// ошибкой (<see cref="ClusterMigrationRow.MigrationStatus"/>) и сохраняет галочку,
     /// обработка переходит к следующей (continue-on-error). Результат формируется по
     /// фактически успешному списку — перенесённые базы добавляются в список приложения,
@@ -1100,15 +1101,14 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             // UpdateCommandStates), а продолжение после ConfigureAwait(false) —
             // в пуле потоков (issue #41, кросс-потоковая InvalidOperationException).
             //
-            // Индексы статуса «починить индексы» (issue #41, комментарий 7OH):
-            // ProgressTotal — число строк ВИДИМОГО списка (стабильно при снятии галочек
-            // и повторном запуске); ProgressIndex — позиция обрабатываемой строки в
-            // ПОЛНОМ списке SourceRows (1-based), поэтому при снятой галочке у первой
-            // базы третья покажет «3», а не «2»; ProcessedCount — счётчик фактически
-            // обработанных строк (растёт независимо от позиции в списке).
+            // Счётчик прогресса (issue #41, комментарий 7OH): ProgressTotal — количество
+            // отмеченных баз в текущем прогоне (rows.Count, стабильно в рамках прогона);
+            // ProgressIndex — порядковый номер обрабатываемой базы в текущем прогоне
+            // (1-based, «1 из K», «2 из K»…); ProcessedCount — счётчик обработанных строк
+            // (совпадает с ProgressIndex).
             Dispatch(() =>
             {
-                ProgressTotal = SourceRows.Count;
+                ProgressTotal = rows.Count;
                 ProgressIndex = 0;
                 ProcessedCount = 0;
                 CurrentBaseName = string.Empty;
@@ -1117,12 +1117,11 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             for (var i = 0; i < rows.Count; i++)
             {
                 var row = rows[i];
-                var listIndex = SourceRows.IndexOf(row) + 1; // позиция в полном списке (1-based)
-                var processed = i + 1;
+                var processed = i + 1; // порядковый номер обрабатываемой базы в текущем прогоне
                 var name = row.Name;
                 Dispatch(() =>
                 {
-                    ProgressIndex = listIndex;
+                    ProgressIndex = processed;
                     CurrentBaseName = name;
                     ProcessedCount = processed;
                     // Свежий прогон переноса: сбрасываем маркер ошибки предыдущего запуска.

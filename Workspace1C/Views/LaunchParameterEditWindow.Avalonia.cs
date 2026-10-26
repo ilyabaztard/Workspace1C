@@ -103,7 +103,7 @@ namespace Workspace1C
         private static Control MakeFieldRow(string label, Control editor)
         {
             var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
-            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(140, GridUnitType.Pixel)));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto) { MinWidth = 130 });
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
 
             var caption = new TextBlock

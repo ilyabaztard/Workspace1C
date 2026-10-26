@@ -202,7 +202,7 @@ namespace Workspace1C
             });
             var langBox = new ComboBox
             {
-                Width = 280,
+                MinWidth = 280,
                 Height = 34,
                 Margin = new Thickness(10, 0, 0, 0),
                 HorizontalAlignment = HorizontalAlignment.Left
@@ -469,7 +469,7 @@ namespace Workspace1C
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0)
             });
-            var afterLaunchBox = new ComboBox { Width = 230, Height = 30 };
+            var afterLaunchBox = new ComboBox { MinWidth = 230, Height = 30 };
             afterLaunchBox.ItemsSource = new[]
             {
                 LocalizationManager.T("Settings.General.AfterLaunchAction.None"),
@@ -528,7 +528,7 @@ namespace Workspace1C
             var comTemplateBox = new TextBox
             {
                 Text = _viewModel.ComConnectorNameTemplate,
-                Width = 280,
+                MinWidth = 280,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -554,7 +554,7 @@ namespace Workspace1C
             var previewVersionBox = new TextBox
             {
                 Text = "8.3.45.6789",
-                Width = 120,
+                MinWidth = 120,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch
@@ -614,7 +614,7 @@ namespace Workspace1C
             var detectTimeoutBox = new TextBox
             {
                 Text = _viewModel.ComDetectTimeoutMs.ToString(),
-                Width = 120,
+                MinWidth = 120,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch
@@ -661,7 +661,7 @@ namespace Workspace1C
                 },
                 HorizontalAlignment = HorizontalAlignment.Left,
                 // Числа из разметки (SettingsWindow.xaml:1151).
-                Width = 250,
+                MinWidth = 250,
                 Height = 36,
                 Margin = new Thickness(0, 18, 0, 0)
             };
@@ -729,7 +729,7 @@ namespace Workspace1C
             var entCommonAuthUserBox = new TextBox
             {
                 Text = entCommonAuth?.User ?? string.Empty,
-                Width = 260,
+                MinWidth = 260,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center
             }.Styled(ControlThemes.ModernTextBox);
@@ -750,7 +750,7 @@ namespace Workspace1C
             var entCommonAuthPasswordBox = new PasswordBox
             {
                 Password = entCommonAuth?.Password ?? string.Empty,
-                Width = 260,
+                MinWidth = 260,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center
             }.Styled(ControlThemes.ModernPasswordBox);
@@ -807,7 +807,7 @@ namespace Workspace1C
             var cfgCommonAuthUserBox = new TextBox
             {
                 Text = cfgCommonAuth?.User ?? string.Empty,
-                Width = 260,
+                MinWidth = 260,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center
             }.Styled(ControlThemes.ModernTextBox);
@@ -828,7 +828,7 @@ namespace Workspace1C
             var cfgCommonAuthPasswordBox = new PasswordBox
             {
                 Password = cfgCommonAuth?.Password ?? string.Empty,
-                Width = 260,
+                MinWidth = 260,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center
             }.Styled(ControlThemes.ModernPasswordBox);
@@ -855,6 +855,7 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = settings,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     // Отступы прокрутки из разметки (SettingsWindow.xaml:1085).
                     Margin = new Thickness(4, 12, 4, 0),
@@ -1092,7 +1093,7 @@ namespace Workspace1C
             };
             var archBox = new ComboBox
             {
-                Width = 200,
+                MinWidth = 200,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -1117,12 +1118,13 @@ namespace Workspace1C
 
             // Нижний блок прокручивается при нехватке высоты окна (issue #55):
             // группировки статуса, путей и разрядности становятся доступны
-            // прокруткой, а не обрезаются. Горизонтальная полоса не нужна.
+            // прокруткой, а не обрезаются. Горизонтальная полоса - fallback:
+            // при узком окне элементы не режутся правым краем.
             var platformsBottomScroll = new ScrollViewer
             {
                 Content = platformsBottom,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
             };
             Grid.SetRow(platformsBottomScroll, 2);
             platforms.Children.Add(platformsBottomScroll);
@@ -1529,7 +1531,7 @@ namespace Workspace1C
             displayFont.Children.Add(fontScopeBox);
 
             var fontGrid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            fontGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(160)));
+            fontGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto) { MinWidth = 150 });
             fontGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             for (var i = 0; i < 3; i++)
                 fontGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
@@ -1831,7 +1833,7 @@ namespace Workspace1C
             // Список схем 280 на 34 с левым полем 10 (SettingsWindow.xaml:829).
             var schemeBox = new ComboBox
             {
-                Width = 240,
+                MinWidth = 240,
                 Height = 34,
                 Margin = new Thickness(10, 0, 0, 0),
                 HorizontalAlignment = HorizontalAlignment.Left
@@ -2201,7 +2203,7 @@ namespace Workspace1C
                 {
                     Content = _preview.Shell,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                     MaxHeight = 520
                 },
                 new Thickness(8), bottom: 0);
@@ -2219,7 +2221,7 @@ namespace Workspace1C
             {
                 Content = schemeColumn,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                 Padding = new Thickness(0, 0, 12, 0)
             };
             schemeColumn.VerticalAlignment = VerticalAlignment.Top;
@@ -2516,7 +2518,7 @@ namespace Workspace1C
             var historyDepthBox = new TextBox
             {
                 Text = _viewModel.MaxLaunchHistoryPerBase.ToString(),
-                Width = 120,
+                MinWidth = 120,
                 VerticalContentAlignment = VerticalAlignment.Center
             }.Styled(ControlThemes.ModernTextBox);
             historyDepthRow.Children.Add(historyDepthBox);
@@ -2542,7 +2544,7 @@ namespace Workspace1C
             });
             var dblClickBox = new ComboBox
             {
-                Width = 200,
+                MinWidth = 200,
                 VerticalContentAlignment = VerticalAlignment.Center
             };
             dblClickBox.ItemsSource = new[]
@@ -2646,7 +2648,7 @@ namespace Workspace1C
             var freeSpaceWarningBox = new TextBox
             {
                 Text = _viewModel.MaintenanceFreeSpaceWarningGb.ToString(),
-                Width = 70,
+                MinWidth = 70,
                 Height = 30,
                 VerticalContentAlignment = VerticalAlignment.Center
             }.Styled(ControlThemes.ModernTextBox);
@@ -2845,12 +2847,12 @@ namespace Workspace1C
             var intervalLabel = new TextBlock { Text = LocalizationManager.T("Settings.Ibases.Interval"), VerticalAlignment = VerticalAlignment.Center };
             ThemeBrushes.Bind(intervalLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
             intervalRow.Children.Add(intervalLabel);
-            var intervalBox = new TextBox { Text = _viewModel.IbasesSyncIntervalMinutes.ToString(), Width = 80 }.Styled(ControlThemes.ModernTextBox);
+            var intervalBox = new TextBox { Text = _viewModel.IbasesSyncIntervalMinutes.ToString(), MinWidth = 80 }.Styled(ControlThemes.ModernTextBox);
             intervalRow.Children.Add(intervalBox);
             var scheduleLabel = new TextBlock { Text = LocalizationManager.T("Settings.Ibases.ScheduleTime"), VerticalAlignment = VerticalAlignment.Center };
             ThemeBrushes.Bind(scheduleLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
             intervalRow.Children.Add(scheduleLabel);
-            var scheduleBox = new TextBox { Text = _viewModel.IbasesSyncScheduleTime, Width = 80 }.Styled(ControlThemes.ModernTextBox);
+            var scheduleBox = new TextBox { Text = _viewModel.IbasesSyncScheduleTime, MinWidth = 80 }.Styled(ControlThemes.ModernTextBox);
             intervalRow.Children.Add(scheduleBox);
             bases.Children.Add(intervalRow);
 
@@ -2937,7 +2939,7 @@ namespace Workspace1C
             var keepLabel = new TextBlock { Text = LocalizationManager.T("Settings.Ibases.BackupKeepCount"), VerticalAlignment = VerticalAlignment.Center };
             ThemeBrushes.Bind(keepLabel, TextBlock.ForegroundProperty, "FormLabelBrush");
             keepRow.Children.Add(keepLabel);
-            var keepBox = new TextBox { Text = _viewModel.IbasesBackupKeepCount.ToString(), Width = 80 }.Styled(ControlThemes.ModernTextBox);
+            var keepBox = new TextBox { Text = _viewModel.IbasesBackupKeepCount.ToString(), MinWidth = 80 }.Styled(ControlThemes.ModernTextBox);
             keepRow.Children.Add(keepBox);
             bases.Children.Add(keepRow);
             bases.Children.Add(Hint(LocalizationManager.T("Settings.Ibases.BackupNote")));
@@ -2955,10 +2957,10 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = bases,
-                    // Горизонтальная прокрутка отключена, чтобы элементы растягивались
-                    // по ширине окна (Stretch). При изменении размера окна реквизиты
-                    // сжимаются вслед за ним; строки уже адаптивны (Grid со Star-колонкой).
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    // Горизонтальная полоса - fallback (issue #55): элементы растягиваются
+                    // по ширине окна, а при нехватке ширины не обрезаются, а прокручиваются;
+                    // строки уже адаптивны (Grid со Star-колонкой).
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto
                 });
 
@@ -3081,7 +3083,7 @@ namespace Workspace1C
             // (SettingsWindow.Profile.cs:37 берёт BackupRestore); прежде здесь
             // был самодельный контур.
             var tabProfile = MainTab("IconBackupRestore", "Settings.TabProfile",
-                new ScrollViewer { Content = profile, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+                new ScrollViewer { Content = profile, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto });
 
             // ===== Клавиши =====
             // Spacing не задаётся: в Avalonia он складывается с полями соседей,
@@ -3286,6 +3288,7 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = hotkeys,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     // Отступы прокрутки из разметки (SettingsWindow.xaml:943).
                     Margin = new Thickness(4, 12, 4, 0),
@@ -3298,6 +3301,7 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = utilitiesMenu,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     // Отступ прокрутки из разметки (SettingsWindow.xaml:1486).
                     Margin = new Thickness(4, 12, 4, 0)
@@ -3310,6 +3314,7 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = about,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     // Отступ прокрутки из разметки (SettingsWindow.xaml:1486).
                     Margin = new Thickness(4, 12, 4, 0)
@@ -3956,8 +3961,8 @@ namespace Workspace1C
             themesPanel.Children.Add(GroupTitle(LocalizationManager.T("Settings.FullTheme")));
 
             var gallery = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 4) };
-            var iconCombo = new ComboBox { Width = 240, Margin = new Thickness(10, 0, 0, 6) };
-            var buttonCombo = new ComboBox { Width = 240, Margin = new Thickness(10, 0, 0, 0) };
+            var iconCombo = new ComboBox { MinWidth = 240, Margin = new Thickness(10, 0, 0, 6) };
+            var buttonCombo = new ComboBox { MinWidth = 240, Margin = new Thickness(10, 0, 0, 0) };
             var suppressOverrides = false;
 
             // Кнопки «Предпросмотр»/«Применить»/«Отмена» под галереей (issue #378):
@@ -4133,7 +4138,7 @@ namespace Workspace1C
                 {
                     Content = themesPanel,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
                 });
         }
 

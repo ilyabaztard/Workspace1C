@@ -535,6 +535,16 @@ namespace Workspace1C.Themes
             // и в пользовательских схемах с тёмным янтарём.
             SetContrastBrush(app, scheme, dark, "FavoriteTextBrush", "FavoriteColor");
 
+            // Текст на акцентных кнопках и плитках (issue #26): из палитры TextOnAccentColor
+            // приходит фиксированный белый и теряет читаемость на тёмных акцентах
+            // пользовательских схем (например #AF6B1D — белый даёт лишь 4.25:1).
+            // Пересчитываем по WCAG, как AccentTextBrush.
+            SetContrastBrush(app, scheme, dark, "TextOnAccentBrush", "AccentColor");
+            // Текст на тёмных панелях (статус-бар, меню выбора окна): контраст по WCAG
+            // к фактическому SidebarColor — SidebarBrush всегда тёмный, но пользовательская
+            // схема может его осветлить (issue #26).
+            SetContrastBrush(app, scheme, dark, "SidebarTextBrush", "SidebarColor");
+
             ApplyFluentAccent(app, scheme, dark);
         }
 

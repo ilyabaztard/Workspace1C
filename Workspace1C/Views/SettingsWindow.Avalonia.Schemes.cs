@@ -300,10 +300,12 @@ namespace Workspace1C
         {
             string V(string key) => scheme.PaletteValue(dark, key);
 
-            // Окно: подложка-карточка с рамкой и акцентная шапка.
+            // Окно: подложка-карточка с рамкой и акцентная шапка. Заголовок на шапке —
+            // контрастный к акценту цвет (TextOnAccentBrush пересчитывается по WCAG
+            // в ThemeManager, issue #26), иначе предпросмотр расходится с реальностью.
             PaintBorder(p.Shell, V("CardBackgroundColor"), V("BorderColor"));
             PaintSolid(p.TitleBar, V("AccentColor"));
-            PaintText(p.TitleText, V("TextOnAccentColor"));
+            PaintTextBrush(p.TitleText, new SolidColorBrush(ContrastColor(Color.Parse(V("AccentColor")))));
 
             // Боковая панель: фон, контрастный текст, подсветка пунктов.
             var sidebar = Color.Parse(V("SidebarColor"));

@@ -482,7 +482,14 @@ namespace Workspace1C
         {
             var tab = new TabItem
             {
-                Content = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }
+                // Горизонтальная полоса - fallback (issue #55): при узком окне
+                // содержимое не обрезается правым краем, а прокручивается.
+                Content = new ScrollViewer
+                {
+                    Content = content,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+                }
             };
             tab.Styled(ControlThemes.ConnTabItem);
 
@@ -996,7 +1003,7 @@ namespace Workspace1C
             };
             var dblBox = new ComboBox
             {
-                Width = 220,
+                MinWidth = 220,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 0, 0, 4)
             };
