@@ -2254,6 +2254,8 @@
     "ServerMonitor.Infobase.Drop.BlockScheduledJobs": "Set the scheduled jobs restriction",
     "ServerMonitor.Infobase.Drop.BlockedFormat": "The scheduled jobs restriction for the infobase has been set.",
     "ServerMonitor.Infobase.Drop.BlockFailed": "Failed to set the scheduled jobs restriction.",
+    "ServerMonitor.Infobase.Drop.BlockRetryFailedFormat": "The retry attempt to remove the infobase failed: {0}. Failed to set the scheduled jobs restriction: {1}",
+    "ServerMonitor.Infobase.Drop.BlockNoDbParams": "Could not determine the DB connection parameters (DBMS type, DB server, database name).",
     "ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat": "The retry attempt to terminate sessions failed: {0}",
     "ServerMonitor.Servers.Add": "Add",
     "ServerMonitor.Servers.Edit": "Edit",

@@ -772,12 +772,15 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                     StatusText = blockDetail;
                     if (!blockOk)
                     {
-                        // Блокировка не удалась — цикл НЕ прерывается: предупреждение,
-                        // следующий диалог повтора позволит повторить либо отменить.
-                        ShowWarningOnUi(
-                            LocalizationManager.T("ServerMonitor.Infobase.Drop.BlockFailed")
-                            + "\n" + blockDetail,
-                            LocalizationManager.T("ServerMonitor.Infobase.DropTitle"));
+                        // issue #69, комментарий 7OH от 2026-10-26: отдельного окна об
+                        // ошибке блокировки быть НЕ должно — детали показываются строкой
+                        // в следующем диалоге повтора (готовое сообщение «Повторная
+                        // попытка удаления не удалась: …не удалось установить блокировку
+                        // регламентных заданий…»). Цикл НЕ прерывается: пользователь может
+                        // повторить попытку либо отменить.
+                        retryNote = string.Format(
+                            LocalizationManager.T("ServerMonitor.Infobase.Drop.BlockRetryFailedFormat"),
+                            detail, blockDetail);
                         continue;
                     }
                 }
@@ -795,10 +798,12 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                         // issue #69, комментарий 7OH от 2026-10-26: НЕ выходить после
                         // первой неудачной попытки завершения сеансов — иногда соединение
                         // просто не успело закрыться. Снова диалог повтора с пометкой
-                        // «Повторная попытка завершения сеансов не удалась…»; пользователь
-                        // может нажать «Завершить сеансы и повторить» ещё раз, «Отмена»
-                        // прерывает удаление.
-                        retryNote = LocalizationManager.T("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat");
+                        // «Повторная попытка завершения сеансов не удалась…» (готовое
+                        // сообщение, detail применяется здесь); пользователь может нажать
+                        // «Завершить сеансы и повторить» ещё раз, «Отмена» прерывает удаление.
+                        retryNote = string.Format(
+                            LocalizationManager.T("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat"),
+                            termDetail);
                         continue;
                     }
                 }
@@ -839,14 +844,18 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// детали rac; повторные показы помечаются «Повторная попытка удаления не
     /// удалась: ...», чтобы пользователь видел, что креды применены, но rac снова
     /// вернул ошибку (комментарий 7OH от 2026-10-26). После неудачного завершения
-    /// сеансов — подготовленная пометка <paramref name="retryNote"/> («Повторная
-    /// попытка завершения сеансов не удалась: ...», комментарий 7OH от 2026-10-26).
-    /// Логин и пароль с прошлой попытки передаются в диалог предзаполненными (пароль
-    /// сохраняется между попытками — комментарий 7OH от 2026-10-26). Если колбэк
-    /// диалога не назначен (тесты/окно без поддержки) — прежнее поведение:
-    /// предупреждение с одной кнопкой OK, повтор не выполняется. Модальное окно
-    /// открывается через dispatch-маршалер (как <see cref="ShowWarningOnUi"/>),
-    /// рабочий поток ждёт результат диалога.
+    /// сеансов или установки блокировки регламентных заданий — подготовленная
+    /// пометка <paramref name="retryNote"/> — уже готовое сообщение с подставленным
+    /// текстом ошибки («Повторная попытка завершения сеансов не удалась: ...»,
+    /// «Повторная попытка удаления не удалась: ... не удалось установить блокировку
+    /// регламентных заданий ...», комментарии 7OH от 2026-10-26): отдельного
+    /// окна-предупреждения при этом НЕ показывается. Логин и пароль с прошлой
+    /// попытки передаются в диалог предзаполненными (пароль сохраняется между
+    /// попытками — комментарий 7OH от 2026-10-26). Если колбэк диалога не назначен
+    /// (тесты/окно без поддержки) — прежнее поведение: предупреждение с одной
+    /// кнопкой OK, повтор не выполняется. Модальное окно открывается через
+    /// dispatch-маршалер (как <see cref="ShowWarningOnUi"/>), рабочий поток ждёт
+    /// результат диалога.
     /// </summary>
     private DropRetryResult AskDropRetryOnUi(
         string detail, string? login, string? password, int attempts, string? retryNote = null)
@@ -854,11 +863,12 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         // Заголовок диалога повтора: на исходной неудаче — «Не удалось удалить
         // информационную базу.» + детали rac; на повторной — «Повторная попытка
         // удаления не удалась: <детали rac>» (issue #69, комментарий 7OH). После
-        // неудачного завершения сеансов — «Повторная попытка завершения сеансов не
-        // удалась: <детали rac>» (комментарий 7OH от 2026-10-26: не выходить после
+        // неудачного завершения сеансов / установки блокировки регламентных заданий
+        // retryNote — уже готовое сообщение (показывается как есть, без отдельного
+        // окна-предупреждения; комментарий 7OH от 2026-10-26: не выходить после
         // первой попытки, дать нажать «Завершить сеансы и повторить» ещё раз).
         var message = retryNote is not null
-            ? string.Format(retryNote, detail)
+            ? retryNote
             : attempts > 1
                 ? string.Format(
                     LocalizationManager.T("ServerMonitor.Infobase.Drop.RetryFailedFormat"), detail)
@@ -955,19 +965,35 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// --scheduled-jobs-deny=on». Выполняется ДО завершения сеансов — «сначала ставить
     /// блокировку, а потом снимать сеансы». Учётные данные администратора кластера —
     /// из <see cref="BuildParams"/> (как у всех действий уровня кластера); параметры
-    /// СУБД берутся из строки summary базы (команда «infobase update» их требует).
-    /// Возвращает текст статуса об успехе либо текст ошибки.
+    /// СУБД — из строки summary базы, а при пустых — догружаются через rac «infobase
+    /// info» (<see cref="EnsureDbParametersAsync"/>, комментарий 7OH от 2026-10-26:
+    /// «Тип СУБД в удаляемой базе явно же прописан?»). Возвращает текст статуса об
+    /// успехе либо текст ошибки.
     /// </summary>
     private async Task<(bool Ok, string Detail)> SetScheduledJobsBlockAsync(
         RacInfobaseRow row, Guid clusterId)
     {
         try
         {
+            // issue #69, комментарий 7OH от 2026-10-26: «infobase update --scheduled-jobs-deny=on»
+            // требует параметры СУБД; сводка summary их может не содержать — догружаем через
+            // rac «infobase info» (метод уже есть; у интерфейса default-реализация для тестов).
+            var (dbms, dbServer, dbName) = await EnsureDbParametersAsync(row, clusterId)
+                .ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(dbms) || string.IsNullOrWhiteSpace(dbServer) ||
+                string.IsNullOrWhiteSpace(dbName))
+            {
+                // Ни summary, ни «infobase info» не дали параметров СУБД — блокировку не
+                // ставим; текст (понятная ошибка) попадает в диалог повтора строкой, без
+                // исключения и без отдельного окна-предупреждения.
+                return (false, LocalizationManager.T("ServerMonitor.Infobase.Drop.BlockNoDbParams"));
+            }
+
             var request = new RacInfobaseUpdateRequest
             {
-                Dbms = row.Dbms,
-                DbServer = row.DbServer,
-                DbName = row.DbName,
+                Dbms = dbms,
+                DbServer = dbServer,
+                DbName = dbName,
                 ScheduledJobsDeny = true
             };
             var ok = await _rac.UpdateInfobaseAsync(
@@ -980,6 +1006,45 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         {
             return (false, BuildErrorMessage(ex));
         }
+    }
+
+    /// <summary>
+    /// Гарантированное получение параметров СУБД информационной базы для rac «infobase
+    /// update» (issue #69): значения из строки summary используются как есть, а при
+    /// пустом хотя бы одном из них (типично для summary) догружаются полные свойства
+    /// через rac «infobase info» (<see cref="IRacClient.GetInfobaseInfoAsync"/>; команда
+    /// требует учётные данные администратора ИБ для защищённых баз — здесь достаточно
+    /// администратора кластера, как у остальных действий уровня кластера). Метод не
+    /// бросает исключений: при неудаче догрузки возвращаются уже известные значения
+    /// (возможно, пустые) — вызывающий код обрабатывает их понятным текстом.
+    /// </summary>
+    private async Task<(string Dbms, string DbServer, string DbName)> EnsureDbParametersAsync(
+        RacInfobaseRow row, Guid clusterId)
+    {
+        var dbms = row.Dbms?.Trim() ?? string.Empty;
+        var dbServer = row.DbServer?.Trim() ?? string.Empty;
+        var dbName = row.DbName?.Trim() ?? string.Empty;
+        if (dbms.Length > 0 && dbServer.Length > 0 && dbName.Length > 0)
+            return (dbms, dbServer, dbName);
+
+        RacInfobaseInfo? info = null;
+        try
+        {
+            info = await _rac.GetInfobaseInfoAsync(
+                BuildParams(), clusterId, row.InfobaseId, null, null).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Заглушки тестов и сетевая ошибка не должны ронять цикл удаления.
+        }
+
+        if (info is null)
+            return (dbms, dbServer, dbName);
+
+        return (
+            dbms.Length > 0 ? dbms : info.Dbms?.Trim() ?? string.Empty,
+            dbServer.Length > 0 ? dbServer : info.DbServer?.Trim() ?? string.Empty,
+            dbName.Length > 0 ? dbName : info.DbName?.Trim() ?? string.Empty);
     }
 
     /// <summary>

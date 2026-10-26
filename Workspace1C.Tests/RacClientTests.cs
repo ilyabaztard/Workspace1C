@@ -1275,17 +1275,30 @@ public sealed class RacClientTests
     }
 
     [Fact]
-    public void InfobaseUpdateArgs_MissingDbFields_Throw()
+    public void InfobaseUpdateArgs_MissingDbFields_AreOmittedInsteadOfThrowing()
     {
-        Assert.Throws<ArgumentException>(() =>
-            RacClient.InfobaseUpdateArgs(Guid.NewGuid(), Guid.NewGuid(), new RacInfobaseUpdateRequest
-            {
-                Dbms = "MSSQLServer",
-                DbServer = "",
-                DbName = "newbase"
-            }));
+        // issue #69, комментарий 7OH от 2026-10-26: «infobase update» с пустым «--dbms=»
+        // раньше давал ArgumentException из сборщика аргументов → блокировка регламентных
+        // заданий не ставилась («удаляет, но не каждый раз»). Пустые параметры СУБД теперь
+        // НЕ попадают в аргументы: rac сам вернёт понятную ошибку, а VM догружает параметры
+        // через «infobase info» перед запросом блокировки.
+        var args = RacClient.InfobaseUpdateArgs(Guid.NewGuid(), Guid.NewGuid(), new RacInfobaseUpdateRequest
+        {
+            // Dbms модели по умолчанию равен "MSSQLServer" — явно обнуляем, как при
+            // отсутствии параметров СУБД в summary удаляемой базы (issue #69).
+            Dbms = string.Empty,
+            DbServer = string.Empty,
+            DbName = string.Empty,
+            ScheduledJobsDeny = true
+        });
+
+        Assert.DoesNotContain(args, a => a.StartsWith("--dbms=", StringComparison.Ordinal));
+        Assert.DoesNotContain(args, a => a.StartsWith("--db-server=", StringComparison.Ordinal));
+        Assert.DoesNotContain(args, a => a.StartsWith("--db-name=", StringComparison.Ordinal));
+        Assert.Contains(args, a => a == "--scheduled-jobs-deny=on");
+
         Assert.Throws<ArgumentNullException>(() =>
-            RacClient.InfobaseUpdateArgs(Guid.NewGuid(), Guid.NewGuid(), null));
+            RacClient.InfobaseUpdateArgs(Guid.NewGuid(), Guid.NewGuid(), null!));
     }
 
     [Fact]

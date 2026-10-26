@@ -146,6 +146,23 @@ IncludeOptional built_in.conf
     }
 
     [Fact]
+    public void ParseListenPorts_ExpandsConcatenatedLiteralsAndVariable_80PlusOneCPort()
+    {
+        // Listen "80${OneCPort}" (реальные фикстуры TestData/Apache27Conf): кавычки
+        // снимаются, литерал «80» и переменная OneCPort раскрываются вместе → 8027
+        // (issue #63, компонент 7OH 2026-10-26: «порт тоже не подставился»).
+        const string conf = """
+        Define OneCPort 27
+        Listen "80${OneCPort}"
+        Listen "192.168.2.11:80${OneCPort}"
+        """;
+
+        var ports = ApacheConfIncludeParser.ParseListenPorts(conf);
+
+        Assert.Equal(new[] { 8027 }, ports);
+    }
+
+    [Fact]
     public void ParseListenPorts_WithoutDefines_UnresolvedVariableIsSkipped()
     {
         // Без двигателя Define порт из ${...} не извлекается — конфиг без Define
@@ -195,6 +212,25 @@ IncludeOptional built_in.conf
         var targets = ApacheConfIncludeParser.ParseIncludeTargets(confText, @"C:\Apache\Apache24\conf");
 
         Assert.Contains(Path.GetFullPath(@"C:\Apache\Apache24\conf\1c8Aliases27.conf"), targets);
+        Assert.DoesNotContain("${", targets, System.StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void ParseIncludeTargets_ExpandsVariablesInMiddleOfTarget()
+    {
+        // Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf" — литералы и переменная
+        // в середине строки раскрываются вместе (реальные фикстуры TestData/Apache27Conf,
+        // issue #63): путь без ${...} — это и есть используемый файл алиасов.
+        const string confText = """
+        Define SRVROOT "C:/Apache/Apache24"
+        Define OneCPort 27
+        Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf"
+        """;
+
+        var targets = ApacheConfIncludeParser.ParseIncludeTargets(confText, @"C:\Apache\Apache24\conf");
+
+        Assert.Single(targets);
+        Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\conf\1c8Aliases27.conf"), targets[0]);
         Assert.DoesNotContain("${", targets, System.StringComparer.Ordinal);
     }
 }

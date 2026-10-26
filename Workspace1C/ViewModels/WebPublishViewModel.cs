@@ -124,6 +124,12 @@ public sealed class WebPublishViewModel : ViewModelBase
                 return;
             if (_confTargetIndex >= 0 && _confTargetIndex < _confTargetPaths.Count)
                 ApacheConfPath = _confTargetPaths[_confTargetIndex];
+            // Issue #63: при смене файла webinst пересчитываем каталог публикации и
+            // порт/URL — значения по умолчанию берутся только из конфига службы и его
+            // include-графа (DocumentRoot/Listen инстанса), выбор файла их не «сбрасывает».
+            RebuildPhysicalForCurrent();
+            OnPropertyChanged(nameof(PhysicalDirectory));
+            OnPropertyChanged(nameof(Url));
         }
     }
 
@@ -263,7 +269,7 @@ public sealed class WebPublishViewModel : ViewModelBase
         _confTargets.Clear();
 
         // Файлы для webinst: основной конфиг службы (из -f) и включаемые файлы графа
-        // Include (в т.ч. файл алиасов 1c8Aliases*.conf) — issue #63.
+        // Include (в т.ч. используемый файл алиасов 1c8Aliases*.conf) — issue #63.
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrWhiteSpace(instance.ConfPath))
         {
@@ -273,6 +279,7 @@ public sealed class WebPublishViewModel : ViewModelBase
                 LocalizationManager.T("WebPublish.ConfTargetMain"),
                 Path.GetFileName(instance.ConfPath)));
         }
+        var aliasFileInGraph = false;
         foreach (var include in instance.IncludeFiles ?? Array.Empty<string>())
         {
             if (string.IsNullOrWhiteSpace(include))
@@ -283,20 +290,22 @@ public sealed class WebPublishViewModel : ViewModelBase
             _confTargets.Add(string.Format(
                 LocalizationManager.T("WebPublish.ConfTargetInclude"),
                 Path.GetFileName(include)));
+            aliasFileInGraph |= IsAliasFileName(include);
         }
 
         // Fallback (issue #63, «файл алиаса по-прежнему не вернулся»): файл алиасов
         // 1c8Aliases*.conf может подключаться через IncludeOptional вне графа Include или
         // маску каталога (conf\aliases\*.conf), которую не удалось раскрыть. Если его нет
-        // в списке — ищем рядом с основным конфигом службы (conf\1c8Aliases*.conf,
-        // conf\aliases\1c8Aliases*.conf и т.п.), чтобы пункт «Include: 1c8Aliases27.conf»
-        // всегда был доступен для webinst.
-        if (!HasAliasFile(_confTargetPaths))
+        // в Include-графе — добавляем РОВНО ОДИН файл, совпадающий с include-строкой
+        // конфига службы («Include ${SRVROOT}/conf/1c8Aliases${OneCPort}.conf» — по имени
+        // из DocumentRoot/Listen/имени конфига), а НЕ все 1c8Aliases*.conf каталога
+        // (комментарий 7OH 2026-10-26: «Зачем мне все файлы алиасов? … вот его и ожидаем
+        // увидеть — только тот, который используется»).
+        if (!aliasFileInGraph)
         {
-            foreach (var alias in FindAliasFilesNear(instance.ConfPath))
+            var alias = FindUsedAliasFileNear(instance);
+            if (alias is not null && seen.Add(NormalizeTargetKey(alias)))
             {
-                if (!seen.Add(NormalizeTargetKey(alias)))
-                    continue;
                 _confTargetPaths.Add(alias);
                 _confTargets.Add(string.Format(
                     LocalizationManager.T("WebPublish.ConfTargetInclude"),
@@ -308,22 +317,126 @@ public sealed class WebPublishViewModel : ViewModelBase
         _apacheConfPath = _confTargetPaths.Count > 0 ? _confTargetPaths[0] : string.Empty;
     }
 
-    /// <summary>Есть ли среди целей webinst файл алиасов 1С (1c8Aliases*.conf).</summary>
-    private static bool HasAliasFile(IReadOnlyList<string> paths)
-        => paths.Any(IsAliasFileName);
-
     /// <summary>Имя файла алиасов 1С: «1c8Aliases27.conf» и т.п.</summary>
     private static bool IsAliasFileName(string? path)
         => !string.IsNullOrWhiteSpace(path)
            && Path.GetFileName(path).StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Существующие файлы алиасов (1c8Aliases*.conf) рядом с конфигом службы: каталог
-    /// конфига, conf\aliases, ServerRoot\conf\aliases и ServerRoot\aliases. Только реально
-    /// существующие файлы; пути с неразрешёнными ${...} пропускаются; дубликаты отсекаются
-    /// вызывающим кодом (seen).
+    /// Fallback (issue #63): единственный используемый файл алиасов 1С «1c8Aliases<n>.conf»,
+    /// если он не подключён через Include-граф (IncludeOptional вне графа / маска каталога не
+    /// раскрылась). Номер <n> (OneCPort) выводится из DocumentRoot («…\htdocs\27»), имени
+    /// конфига службы («httpd27.conf» → «27») и портов Listen («80${OneCPort}» → 8027 → «27»).
+    /// Остальные 1c8Aliases*.conf каталога в список НЕ попадают. null — файл не найден.
     /// </summary>
-    private static IEnumerable<string> FindAliasFilesNear(string? confPath)
+    private static string? FindUsedAliasFileNear(ApacheInstance instance)
+    {
+        foreach (var suffix in CandidateAliasSuffixes(instance))
+        {
+            var file = FindExistingAliasFile(instance.ConfPath, "1c8Aliases" + suffix + ".conf");
+            if (file is not null)
+                return file;
+        }
+        return null;
+    }
+
+    /// <summary>Кандидаты номера инстанса «n» для имени файла «1c8Aliases<n>.conf».</summary>
+    private static IEnumerable<string> CandidateAliasSuffixes(ApacheInstance instance)
+    {
+        var suffixes = new List<string>();
+        void Add(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+            text = text.Trim();
+            if (text.Length == 0 || !text.All(c => c is >= '0' and <= '9'))
+                return;
+            if (!suffixes.Contains(text, StringComparer.Ordinal))
+                suffixes.Add(text);
+        }
+
+        // DocumentRoot «…\htdocs\27» → «27».
+        if (!string.IsNullOrWhiteSpace(instance.DocumentRoot))
+        {
+            try
+            {
+                Add(Path.GetFileName(instance.DocumentRoot.TrimEnd('\\', '/')));
+            }
+            catch
+            {
+                // Невалидный путь — пропускаем кандидат.
+            }
+        }
+
+        // Имя конфига службы «httpd27.conf» → цифровой хвост «27».
+        if (!string.IsNullOrWhiteSpace(instance.ConfPath))
+        {
+            try
+            {
+                var name = Path.GetFileNameWithoutExtension(instance.ConfPath);
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    var digitStart = name.IndexOfAny(new[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' });
+                    if (digitStart >= 0)
+                        Add(name.Substring(digitStart));
+                }
+            }
+            catch
+            {
+                // Невалидное имя — пропускаем кандидат.
+            }
+        }
+
+        // Listen «80${OneCPort}» → 8027 → «27»; «${OneCPort}» → 8027 или 27 → «27».
+        foreach (var port in instance.ListenPorts ?? Array.Empty<int>())
+        {
+            if (port is < 1 or > 65535)
+                continue;
+            var text = port.ToString();
+            if (text.Length >= 4 && text.StartsWith("80", StringComparison.Ordinal))
+                Add(text.Substring(2));
+            else if (text.Length >= 3 && text.StartsWith("8", StringComparison.Ordinal))
+                Add(text.Substring(1));
+            else
+                Add(text);
+        }
+
+        return suffixes;
+    }
+
+    /// <summary>
+    /// Существующий файл с указанным именем рядом с конфигом службы: каталог конфига,
+    /// conf\aliases, ServerRoot\conf\aliases и ServerRoot\aliases. Пути с неразрешёнными
+    /// ${...} пропускаются. null — файл не найден.
+    /// </summary>
+    private static string? FindExistingAliasFile(string? confPath, string fileName)
+    {
+        foreach (var dir in AliasSearchDirs(confPath))
+        {
+            string path;
+            try
+            {
+                path = Path.Combine(dir, fileName);
+            }
+            catch
+            {
+                continue;
+            }
+            try
+            {
+                if (File.Exists(path))
+                    return path;
+            }
+            catch
+            {
+                // Файл недоступен — пробуем следующий каталог.
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Каталоги поиска файлов алиасов рядом с конфигом службы.</summary>
+    private static IEnumerable<string> AliasSearchDirs(string? confPath)
     {
         if (string.IsNullOrWhiteSpace(confPath))
             yield break;
@@ -356,25 +469,7 @@ public sealed class WebPublishViewModel : ViewModelBase
         }
 
         foreach (var dir in dirs.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            string[] files;
-            try
-            {
-                if (!Directory.Exists(dir))
-                    continue;
-                files = Directory.GetFiles(dir, "1c8Aliases*.conf");
-            }
-            catch
-            {
-                continue;
-            }
-            foreach (var file in files)
-            {
-                if (file.IndexOf("${", StringComparison.Ordinal) >= 0)
-                    continue;
-                yield return file;
-            }
-        }
+            yield return dir;
     }
 
     /// <summary>Ключ сравнения путей конфиг-файлов: без учёта регистра и разделителей пути.</summary>

@@ -620,12 +620,12 @@ public sealed class RacClient : IRacClient
     {
         if (request is null)
             throw new ArgumentNullException(nameof(request));
-        if (string.IsNullOrWhiteSpace(request.Dbms))
-            throw new ArgumentException("Не указан тип СУБД.", nameof(request));
-        if (string.IsNullOrWhiteSpace(request.DbServer))
-            throw new ArgumentException("Не указан сервер СУБД.", nameof(request));
-        if (string.IsNullOrWhiteSpace(request.DbName))
-            throw new ArgumentException("Не указано имя базы данных.", nameof(request));
+        // Параметры СУБД «--dbms/--db-server/--db-name» добавляются ТОЛЬКО непустыми:
+        // «infobase update» с пустым значением («--dbms=») rac отклоняет малопонятной
+        // ошибкой, а отсутствующие ключи дают его же внятный текст. VM догружает
+        // параметры через «infobase info» перед блокировкой регламентных заданий
+        // (issue #69, комментарий 7OH от 2026-10-26: «Тип СУБД в удаляемой базе явно
+        // же прописан?») — ArgumentException здесь исключён.
 
         // Ключи по справке rac «infobase update» (issue #3, 7OH 17.10): имя, локаль и уровень
         // безопасности командой update не меняются (раньше передавались «--name/--locale/
@@ -643,9 +643,12 @@ public sealed class RacClient : IRacClient
             if (!string.IsNullOrEmpty(request.InfobasePassword))
                 args.Add($"--infobase-pwd={request.InfobasePassword}");
         }
-        args.Add($"--dbms={request.Dbms}");
-        args.Add($"--db-server={request.DbServer}");
-        args.Add($"--db-name={request.DbName}");
+        if (!string.IsNullOrWhiteSpace(request.Dbms))
+            args.Add($"--dbms={request.Dbms}");
+        if (!string.IsNullOrWhiteSpace(request.DbServer))
+            args.Add($"--db-server={request.DbServer}");
+        if (!string.IsNullOrWhiteSpace(request.DbName))
+            args.Add($"--db-name={request.DbName}");
         if (!string.IsNullOrWhiteSpace(request.DbUser))
             args.Add($"--db-user={request.DbUser}");
         if (!string.IsNullOrEmpty(request.DbPassword))

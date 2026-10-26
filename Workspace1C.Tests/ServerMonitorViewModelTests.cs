@@ -1422,6 +1422,151 @@ public sealed class ServerMonitorViewModelTests
     }
 
     [Fact]
+    public async Task DropSelectedInfobase_BlockScheduledJobs_EmptyDbmsInSummary_LoadsFromInfobaseInfo()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «Тип СУБД в удаляемой базе явно же
+        // прописан?». Сводка summary может не содержать параметров СУБД (пустые Dbms/
+        // DbServer/DbName) — перед rac «infobase update --scheduled-jobs-deny=on» VM
+        // догружает их через «infobase info» и использует для запроса блокировки.
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 1,
+            DropInfobaseFailureError = "rac: информационная база используется активными сеансами",
+            InfobaseSummaryOverride = new RacInfobaseSummary
+            {
+                InfobaseId = FakeRacClient.FirstInfobaseId,
+                Name = "Бухгалтерия",
+                Dbms = string.Empty,
+                DbServer = string.Empty,
+                DbName = string.Empty
+            },
+            InfobaseInfoResult = new RacInfobaseInfo
+            {
+                InfobaseId = FakeRacClient.FirstInfobaseId,
+                Name = "Бухгалтерия",
+                Dbms = "PostgreSQL",
+                DbServer = "pg-02",
+                DbName = "buh_prod"
+            }
+        };
+        var dialogs = new RecordingDialogs();
+        var retryShown = 0;
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login, password) =>
+            {
+                retryShown++;
+                return new DropRetryResult(true, "ИБ-админ", "секрет",
+                    TerminateSessions: true, BlockScheduledJobs: true);
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Параметры СУБД догружены через «infobase info» и попали в «infobase update».
+        var blockCall = Assert.Single(client.UpdateInfobaseCalls);
+        Assert.Equal("PostgreSQL", blockCall.request.Dbms);
+        Assert.Equal("pg-02", blockCall.request.DbServer);
+        Assert.Equal("buh_prod", blockCall.request.DbName);
+        Assert.True(blockCall.request.ScheduledJobsDeny);
+        Assert.True(client.InfobaseInfoCalls >= 1,
+            "пустые параметры СУБД в summary должны догружаться через «infobase info»");
+        // Цикл «блокировка → снять сеансы → drop» отработал без лишних диалогов и
+        // предупреждений (повторная попытка удаления автоматически) — «удаляет не каждый
+        // раз» устранено.
+        Assert.Equal(1, retryShown);
+        Assert.Empty(dialogs.Warnings);
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_BlockFails_NoSeparateWarning_CycleContinues()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «Диалог появился (с ошибкой блокировки
+        // заданий)... Этого диалога вообще быть не должно». Неудача установки блокировки
+        // регламентных заданий НЕ показывает отдельное окно-предупреждение — детали
+        // попадают строкой в следующий диалог повтора, цикл НЕ прерывается.
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 2,
+            DropInfobaseFailureError = "rac: информационная база используется активными сеансами",
+            UpdateInfobaseFailuresLeft = 1
+        };
+        var dialogs = new RecordingDialogs();
+        var errors = new List<string>();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login, password) =>
+            {
+                errors.Add(error);
+                return new DropRetryResult(true, "ИБ-админ", "секрет",
+                    TerminateSessions: true, BlockScheduledJobs: true);
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Первая блокировка не удалась, вторая (после повторного диалога) — успешна.
+        Assert.Equal(2, client.UpdateInfobaseCalls.Count);
+        // drop: исходный fail → повторный диалог → повторный (успех после блокировки).
+        Assert.Equal(3, client.DropInfobaseCalls.Count);
+        Assert.Equal(2, errors.Count);
+        // Пометка о неудачной блокировке — строкой во втором диалоге повтора
+        // («Повторная попытка удаления не удалась: …»).
+        Assert.Contains("ServerMonitor.Infobase.Drop.BlockRetryFailedFormat", errors[1]);
+        // Отдельного окна-предупреждения об ошибке блокировки НЕТ.
+        Assert.Empty(dialogs.Warnings);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_BlockNoDbParamsFromSummaryOrInfo_ContinuesWithoutException()
+    {
+        // issue #69, риски: ни summary, ни «infobase info» не дали параметров СУБД
+        // (защищённая база / нет прав). Блокировка не ставится с понятным текстом,
+        // ArgumentException из сборки аргументов исключён: цикл продолжается, пометка
+        // видна в диалоге повтора, «Отмена» прерывает удаление.
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 2,
+            DropInfobaseFailureError = "rac: информационная база используется активными сеансами",
+            InfobaseSummaryOverride = new RacInfobaseSummary
+            {
+                InfobaseId = FakeRacClient.FirstInfobaseId,
+                Name = "Бухгалтерия",
+                Dbms = string.Empty,
+                DbServer = string.Empty,
+                DbName = string.Empty
+            }
+            // InfobaseInfoResult = null — «infobase info» недоступен/не дал параметров.
+        };
+        var dialogs = new RecordingDialogs();
+        var errors = new List<string>();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (error, login, password) =>
+            {
+                errors.Add(error);
+                return errors.Count == 1
+                    ? new DropRetryResult(true, "ИБ-админ", "секрет",
+                        TerminateSessions: true, BlockScheduledJobs: true)
+                    : DropRetryResult.Cancel;
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // «infobase update» не вызывался: параметров СУБД нет — блокировку ставить нечем.
+        Assert.Empty(client.UpdateInfobaseCalls);
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+        Assert.Equal(2, errors.Count);
+        Assert.Contains("ServerMonitor.Infobase.Drop.BlockRetryFailedFormat", errors[1]);
+        Assert.Empty(dialogs.Warnings);
+    }
+
+    [Fact]
     public async Task DropSelectedInfobase_TerminateFails_ShowsDialogAgain_WithRetryNote_ThenSucceeds()
     {
         // issue #69, комментарий 7OH от 2026-10-26: «Не выходить после первой попытки
@@ -2096,17 +2241,22 @@ public sealed class ServerMonitorViewModelTests
             // issue #69: для блокировки регламентных заданий («infobase update
             // --scheduled-jobs-deny=on») команда требует параметры СУБД — в фикстуре
             // возвращаем их, как это делает реальный вывод «infobase summary list».
-            return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(new[]
-            {
-                new RacInfobaseSummary
-                {
-                    InfobaseId = FirstInfobaseId,
-                    Name = "Бухгалтерия",
-                    Dbms = "MSSQLServer",
-                    DbServer = "sql-01",
-                    DbName = "buho"
-                }
-            });
+            // Тест «пустых параметров СУБД в summary» переопределяет сводку целиком
+            // (InfobaseSummaryOverride) — VM догружает их через «infobase info».
+            return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(
+                InfobaseSummaryOverride is { } overrideRow
+                    ? new[] { overrideRow }
+                    : new[]
+                    {
+                        new RacInfobaseSummary
+                        {
+                            InfobaseId = FirstInfobaseId,
+                            Name = "Бухгалтерия",
+                            Dbms = "MSSQLServer",
+                            DbServer = "sql-01",
+                            DbName = "buho"
+                        }
+                    });
         }
 
         public Task<IReadOnlyList<RacJobInfo>> GetJobsAsync(
@@ -2223,6 +2373,21 @@ public sealed class ServerMonitorViewModelTests
         /// <summary>Вызовы «infobase update»: (clusterId, infobaseId, запрос).</summary>
         public List<(Guid clusterId, Guid infobaseId, RacInfobaseUpdateRequest request)> UpdateInfobaseCalls { get; } = new();
 
+        /// <summary>Сколько ближайших вызовов «infobase update» завершаются неудачей
+        /// (issue #69: неудачная установка блокировки регламентных заданий).</summary>
+        public int UpdateInfobaseFailuresLeft { get; set; }
+
+        /// <summary>Сводка кластера вместо фиксированной фикстуры (issue #69: тест
+        /// пустых параметров СУБД в summary — догрузка через «infobase info»).</summary>
+        public RacInfobaseSummary? InfobaseSummaryOverride { get; set; }
+
+        /// <summary>Результат rac «infobase info» для догрузки параметров СУБД (issue #69:
+        /// summary пуст, а полные свойства базы знает только «infobase info»).</summary>
+        public RacInfobaseInfo? InfobaseInfoResult { get; set; }
+
+        /// <summary>Сколько раз запрошены полные свойства базы («infobase info»).</summary>
+        public int InfobaseInfoCalls { get; private set; }
+
         /// <summary>«infobase create»: фиксирует вызов; «неудача» настраивается, как у остальных действий.</summary>
         public Task<bool> CreateInfobaseAsync(
             RacConnectionParams parameters, Guid clusterId, RacInfobaseCreateRequest request,
@@ -2247,12 +2412,30 @@ public sealed class ServerMonitorViewModelTests
             UpdateInfobaseCalls.Add((clusterId, infobaseId, request));
             if (_throwOnAction)
                 throw new RacClientException("нет прав администратора");
+            if (UpdateInfobaseFailuresLeft > 0)
+            {
+                // issue #69: неудачная установка блокировки регламентных заданий.
+                UpdateInfobaseFailuresLeft--;
+                LastActionError = "rac: у пользователя нет прав на изменение списка баз";
+                return Task.FromResult(false);
+            }
             if (_actionFails)
             {
                 LastActionError = "rac: у пользователя нет прав на изменение списка баз";
                 return Task.FromResult(false);
             }
             return Task.FromResult(true);
+        }
+
+        /// <summary>rac «infobase info» (issue #69): возвращает настроенный
+        /// <see cref="InfobaseInfoResult"/> для догрузки параметров СУБД; по умолчанию null
+        /// (как реализация по умолчанию интерфейса).</summary>
+        public Task<RacInfobaseInfo?> GetInfobaseInfoAsync(
+            RacConnectionParams parameters, Guid clusterId, Guid infobaseId,
+            string? infobaseUser, string? infobasePassword, CancellationToken cancellationToken = default)
+        {
+            InfobaseInfoCalls++;
+            return Task.FromResult(InfobaseInfoResult);
         }
 
         /// <summary>Сколько ближайших вызовов «infobase drop» завершаются неудачей (issue #69,

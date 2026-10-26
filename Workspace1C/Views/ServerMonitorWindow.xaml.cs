@@ -75,7 +75,13 @@ namespace Workspace1C
                 serverListStore,
                 (errorText, login, password) =>
                 {
-                    var retry = new RacInfobaseDropRetryWindow(errorText, login, password) { Owner = this };
+                    // issue #69: диалог повтора открывается поверх активного окна
+                    // приложения — сама «Серверы 1С», если она активна (обычный случай),
+                    // иначе запасной вариант MainWindow (WindowOwnerResolver, issue #41).
+                    var retry = new RacInfobaseDropRetryWindow(errorText, login, password)
+                    {
+                        Owner = WindowOwnerResolver.ActiveOrMain() ?? this
+                    };
                     return retry.ShowDialog() == true
                         ? new ViewModels.DropRetryResult(
                             retry.Retry, retry.User, retry.Password,

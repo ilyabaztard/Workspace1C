@@ -176,6 +176,15 @@ public sealed class Apache27ConfRegressionTests
         Assert.Contains(vm.ConfTargetPaths, p => p.EndsWith("httpd27.conf", System.StringComparison.OrdinalIgnoreCase));
         Assert.Contains(vm.ConfTargetPaths, p => p.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase));
         Assert.True(vm.ConfTargets.Count >= 2, "В списке webinst должны быть основной конфиг и include-файлы");
+        // Issue #63 (последний комментарий 7OH 2026-10-26: «Зачем мне все файлы алиасов?»):
+        // в списке ровно ОДИН файл алиасов — используемый из Include-графа (включён строкой
+        // «Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf"»), а не все 1c8Aliases*.conf
+        // из каталога конфига.
+        var aliasTargets = vm.ConfTargetPaths
+            .Where(p => Path.GetFileName(p).StartsWith("1c8Aliases", System.StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        Assert.Single(aliasTargets);
+        Assert.EndsWith("1c8Aliases27.conf", aliasTargets[0], System.StringComparison.OrdinalIgnoreCase);
         // По умолчанию выбран основной конфиг — конфиг, указанный в службе.
         Assert.Equal(0, vm.ConfTargetIndex);
         Assert.Equal(Path.GetFullPath(Path.Combine(ServerRootDir, "conf", "httpd27.conf")),

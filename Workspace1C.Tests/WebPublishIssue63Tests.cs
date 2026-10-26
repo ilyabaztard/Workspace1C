@@ -17,6 +17,8 @@ namespace Workspace1C.Tests;
 /// </summary>
 public sealed class WebPublishIssue63Tests
 {
+    private const string ServerRootDir = @"C:\Apache\Apache24";
+
     // ---------- Перенос пункта в контекстное меню ----------
 
     [Fact]
@@ -315,10 +317,164 @@ public sealed class WebPublishIssue63Tests
 
         Assert.True(vm.HasConfTargets);
         Assert.Contains(vm.ConfTargetPaths, p => p.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase));
+        // Issue #63 (комментарий 7OH 2026-10-26): fallback добавляет РОВНО ОДИН файл
+        // алиасов — используемый (по имени из конфига службы), а не все 1c8Aliases*.conf.
+        Assert.Single(vm.ConfTargetPaths, p =>
+            Path.GetFileName(p).StartsWith("1c8Aliases", System.StringComparison.OrdinalIgnoreCase));
         Assert.True(vm.ConfTargets.Count >= 2, "В списке webinst должны быть основной конфиг и include-файл алиасов");
         // Основной конфиг службы — первый пункт (значения по умолчанию из него).
         Assert.Equal(0, vm.ConfTargetIndex);
     }
+
+    // ---------- Issue #63 (комментарий 7OH 2026-10-26): в списке ровно один файл
+    // алиасов — используемый; каталог публикации «…\htdocs\27», URL с портом 8027 ----------
+
+    [Fact]
+    public void ViewModel_RealFixtures_ConfTargetsShowOnlyUsedAliasesFile_Issue63()
+    {
+        // Реальные фикстуры TestData/Apache27Conf: главный httpd27.conf → Include
+        // conf/httpd.conf → Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf". В списке
+        // webinst ровно один файл алиасов — используемый 1c8Aliases27.conf; каталог
+        // публикации «…\htdocs\27» (DocumentRoot "${SRVROOT}/htdocs/${OneCPort}"), URL
+        // с портом 8027 («Listen "80${OneCPort}"»).
+        var testData = Path.Combine(FindRepoRoot(), "Workspace1C.Tests", "TestData", "Apache27Conf");
+        var instance = new ApacheInstance
+        {
+            Id = "httpd27",
+            Name = "Apache 2.4 (httpd-27)",
+            ConfPath = Path.Combine(ServerRootDir, "conf", "httpd27.conf"),
+            ServerRoot = ServerRootDir,
+            Htdocs = Path.Combine(ServerRootDir, "htdocs"),
+            Kind = WebServerKind.Apache24
+        };
+        ApacheInstanceDetector.PopulateIncludes(instance,
+            File.ReadAllText(Path.Combine(testData, "httpd27.conf")),
+            Path.Combine(ServerRootDir, "conf"),
+            path =>
+            {
+                var fixture = Path.Combine(testData, Path.GetFileName(path));
+                return File.Exists(fixture) ? File.ReadAllText(fixture) : null;
+            });
+
+        var infobase = new Infobase
+        {
+            Name = "Тестовая база",
+            Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+        };
+        var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+        vm.ServerIndex = vm.ServerIndexFor(instance);
+        vm.VirtualDirectory = "demo_27";
+
+        // Ровно один файл алиасов — используемый 1c8Aliases27.conf из Include-графа.
+        var aliasTargets = vm.ConfTargetPaths
+            .Where(p => Path.GetFileName(p).StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        Assert.Single(aliasTargets);
+        Assert.EndsWith("1c8Aliases27.conf", aliasTargets[0], StringComparison.OrdinalIgnoreCase);
+
+        // Каталог публикации из DocumentRoot «${SRVROOT}/htdocs/${OneCPort}» → …\htdocs\27.
+        Assert.Equal(Path.Combine(ServerRootDir, "htdocs", "27", "demo_27"),
+            vm.PhysicalDirectory, ignoreCase: true);
+        // URL с портом из Listen "80${OneCPort}" → 8027.
+        Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+
+        // Смена файла webinst (например, на файл алиасов) не «сбрасывает» каталог и порт.
+        var aliasIndex = vm.ConfTargetPaths
+            .Select((p, i) => (p, i))
+            .First(t => t.p.EndsWith("1c8Aliases27.conf", StringComparison.OrdinalIgnoreCase)).i;
+        vm.ConfTargetIndex = aliasIndex;
+        Assert.Equal(Path.Combine(ServerRootDir, "htdocs", "27", "demo_27"),
+            vm.PhysicalDirectory, ignoreCase: true);
+        Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+    }
+
+    [Fact]
+    public void ViewModel_Fallback_AddsOnlyUsedAliasFile_NotAllNearby_Issue63()
+    {
+        // Include-граф НЕ содержит файла алиасов (IncludeOptional вне графа / маска
+        // каталога не раскрылась), но в каталоге конфига лежат НЕСКОЛЬКО файлов
+        // алиасов. Fallback добавляет РОВНО ОДИН — совпадающий с include-строкой
+        // конфига службы («1c8Aliases${OneCPort}.conf» → 1c8Aliases27.conf), а не все
+        // 1c8Aliases*.conf каталога (issue #63).
+        var tempDir = Path.Combine(Path.GetTempPath(), "W1C_Issue63_Fallback_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var confDir = Path.Combine(tempDir, "conf");
+            var htdocsDir = Path.Combine(tempDir, "htdocs");
+            Directory.CreateDirectory(confDir);
+            Directory.CreateDirectory(htdocsDir);
+
+            var serverRootFwd = tempDir.Replace('\\', '/');
+            var mainPath = Path.Combine(confDir, "httpd27.conf");
+            File.WriteAllText(mainPath,
+                "Define OneCPort 27\r\n" +
+                "Include conf/httpd.conf\r\n");
+            File.WriteAllText(Path.Combine(confDir, "httpd.conf"),
+                "Define SRVROOT \"" + serverRootFwd + "\"\r\n" +
+                "DocumentRoot \"${SRVROOT}/htdocs/${OneCPort}\"\r\n" +
+                "Listen \"80${OneCPort}\"\r\n");
+
+            // В каталоге конфига несколько файлов алиасов — конфиг службы использует 27-й.
+            File.WriteAllText(Path.Combine(confDir, "1c8Aliases25.conf"), AliasContent(htdocsDir, 25));
+            File.WriteAllText(Path.Combine(confDir, "1c8Aliases27.conf"), AliasContent(htdocsDir, 27));
+            File.WriteAllText(Path.Combine(confDir, "1c8Aliases29.conf"), AliasContent(htdocsDir, 29));
+
+            var instance = new ApacheInstance
+            {
+                Id = "httpd27",
+                Name = "Apache 2.4 (httpd-27)",
+                ConfPath = mainPath,
+                ServerRoot = tempDir,
+                Htdocs = htdocsDir,
+                Kind = WebServerKind.Apache24
+            };
+            ApacheInstanceDetector.PopulateIncludes(instance, File.ReadAllText(mainPath), confDir);
+
+            // Значения по умолчанию — только из конфига службы и его include-графа.
+            Assert.Equal(Path.Combine(htdocsDir, "27"), instance.DocumentRoot, ignoreCase: true);
+            Assert.Equal(new[] { 8027 }, instance.ListenPorts);
+            // Алиасы в Include-графе отсутствуют — срабатывает fallback.
+            Assert.DoesNotContain(instance.IncludeFiles, p =>
+                Path.GetFileName(p).StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase));
+
+            var infobase = new Infobase
+            {
+                Name = "Тестовая база",
+                Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+            };
+            var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+            vm.ServerIndex = vm.ServerIndexFor(instance);
+            vm.VirtualDirectory = "demo_27";
+
+            // В списке webinst РОВНО ОДИН файл алиасов — используемый (1c8Aliases27.conf),
+            // а не все 1c8Aliases*.conf каталога.
+            var aliasTargets = vm.ConfTargetPaths
+                .Where(p => Path.GetFileName(p).StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            Assert.Single(aliasTargets);
+            Assert.EndsWith("1c8Aliases27.conf", aliasTargets[0], StringComparison.OrdinalIgnoreCase);
+
+            // Каталог публикации «…\htdocs\27» и порт 8027 подставились из конфига службы.
+            Assert.Equal(Path.Combine(htdocsDir, "27", "demo_27"), vm.PhysicalDirectory, ignoreCase: true);
+            Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+
+            // Смена файла webinst на файл алиасов не теряет каталог/порт (issue #63).
+            var aliasIndex = vm.ConfTargetPaths
+                .Select((p, i) => (p, i))
+                .First(t => t.p.EndsWith("1c8Aliases27.conf", StringComparison.OrdinalIgnoreCase)).i;
+            vm.ConfTargetIndex = aliasIndex;
+            Assert.Equal(Path.Combine(htdocsDir, "27", "demo_27"), vm.PhysicalDirectory, ignoreCase: true);
+            Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); }
+            catch { /* временный каталог не влияет на результат теста */ }
+        }
+    }
+
+    private static string AliasContent(string htdocs, int n)
+        => "# 1c publication\nAlias \"/Demo\" \"" + htdocs.Replace('\\', '/') + "/" + n + "/Demo/\"\n";
 
     private static string FindRepoRoot()
     {

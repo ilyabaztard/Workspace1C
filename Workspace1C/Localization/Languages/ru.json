@@ -2254,6 +2254,8 @@
     "ServerMonitor.Infobase.Drop.BlockScheduledJobs": "Установить блокировку регламентных заданий",
     "ServerMonitor.Infobase.Drop.BlockedFormat": "Блокировка регламентных заданий информационной базы установлена.",
     "ServerMonitor.Infobase.Drop.BlockFailed": "Не удалось установить блокировку регламентных заданий.",
+    "ServerMonitor.Infobase.Drop.BlockRetryFailedFormat": "Повторная попытка удаления не удалась: {0}. Не удалось установить блокировку регламентных заданий: {1}",
+    "ServerMonitor.Infobase.Drop.BlockNoDbParams": "Не удалось определить параметры подключения к СУБД (тип СУБД, сервер, база данных).",
     "ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat": "Повторная попытка завершения сеансов не удалась: {0}",
     "ServerMonitor.Servers.Add": "Добавить",
     "ServerMonitor.Servers.Edit": "Изменить",

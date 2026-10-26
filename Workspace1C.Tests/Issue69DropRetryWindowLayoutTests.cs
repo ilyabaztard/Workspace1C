@@ -294,4 +294,64 @@ public sealed class Issue69DropRetryWindowLayoutTests
         Assert.Contains("{0}",
             strings.GetProperty("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat").GetString());
     }
+
+    [Fact]
+    public void ServerMonitorWindow_RetryDialog_OpensWithOwner()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «Диалог появился ... на заднем плане
+        // (а должен быть по идее поверх текущего)». Диалог повтора открывается с владельцем:
+        // WPF — активное окно приложения (само «Серверы 1С», запасной вариант — MainWindow,
+        // WindowOwnerResolver), Avalonia — само окно монитора (ShowSync(this)).
+        var wpf = ReadProjectFile("Workspace1C", "Views", "ServerMonitorWindow.xaml.cs");
+        var avalonia = ReadProjectFile("Workspace1C", "Views", "ServerMonitorWindow.Avalonia.cs");
+
+        Assert.Contains("WindowOwnerResolver.ActiveOrMain()", wpf, StringComparison.Ordinal);
+        Assert.Contains("Owner = WindowOwnerResolver.ActiveOrMain() ?? this", wpf, StringComparison.Ordinal);
+        Assert.Contains("retry.ShowSync(this)", avalonia, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ServerMonitorViewModel_BlockFailure_HasNoSeparateWarningWindow()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «Этого диалога вообще быть не должно».
+        // Неудача установки блокировки регламентных заданий показывается строкой в диалоге
+        // повтора (готовое сообщение BlockRetryFailedFormat), а не отдельным ShowWarningOnUi.
+        var source = ReadProjectFile("Workspace1C", "ViewModels", "ServerMonitorViewModel.cs");
+
+        Assert.Contains("ServerMonitor.Infobase.Drop.BlockRetryFailedFormat", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"ServerMonitor.Infobase.Drop.BlockFailed\"", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Localization_BlockRetryAndNoDbParamsKeys_ExistInRuAndEn()
+    {
+        var ru = ReadProjectFile("Workspace1C", "Localization", "Languages", "ru.json");
+        var en = ReadProjectFile("Workspace1C", "Localization", "Languages", "en.json");
+
+        foreach (var key in new[]
+        {
+            "ServerMonitor.Infobase.Drop.BlockRetryFailedFormat",
+            "ServerMonitor.Infobase.Drop.BlockNoDbParams"
+        })
+        {
+            Assert.Contains($"\"{key}\"", ru, StringComparison.Ordinal);
+            Assert.Contains($"\"{key}\"", en, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Localization_RussianBlockRetryFormat_IsReadableWithTwoPlaceholders()
+    {
+        using var doc = JsonDocument.Parse(
+            ReadProjectFile("Workspace1C", "Localization", "Languages", "ru.json"));
+        var strings = doc.RootElement.GetProperty("strings");
+
+        var format = strings.GetProperty("ServerMonitor.Infobase.Drop.BlockRetryFailedFormat").GetString();
+        Assert.Contains("Повторная попытка удаления не удалась", format);
+        Assert.Contains("{0}", format);
+        Assert.Contains("{1}", format);
+        Assert.Contains("блокировку", format);
+        Assert.Contains("Не удалось определить параметры",
+            strings.GetProperty("ServerMonitor.Infobase.Drop.BlockNoDbParams").GetString());
+    }
 }
