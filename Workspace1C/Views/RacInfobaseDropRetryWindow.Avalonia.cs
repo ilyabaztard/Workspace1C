@@ -72,9 +72,10 @@ namespace Workspace1C
                 Password = password ?? string.Empty
             }.Styled(ControlThemes.ModernPasswordBox);
             // issue #69, комментарий 7OH от 2026-10-26: галочка «Установить блокировку
-            // регламентных заданий» — появляется вместе с кнопкой «Завершить сеансы
-            // и повторить»; при повторном нажатии сначала ставится блокировка
-            // (--scheduled-jobs-deny=on), затем снимаются сеансы.
+            // регламентных заданий» — видна с ПЕРВОГО показа диалога (сразу при запросе
+            // логина/пароля); при отмеченной галочке перед завершением сеансов/повторным
+            // «infobase drop» сначала ставится блокировка (--scheduled-jobs-deny=on),
+            // затем снимаются сеансы.
             _blockScheduledJobsCheckBox = new CheckBox
             {
                 Content = T("ServerMonitor.Infobase.Drop.BlockScheduledJobs"),
@@ -177,10 +178,10 @@ namespace Workspace1C
             form.Children.Add(passwordLabel);
             form.Children.Add(_passwordBox);
 
-            // Галочка блокировки регламентных заданий видна только для занятой базы
-            // (там же, где кнопка «Завершить сеансы и повторить», issue #69).
-            if (kind != ServerMonitorViewModel.RacDropErrorKind.Sessions)
-                _blockScheduledJobsCheckBox.IsVisible = false;
+            // Галочка блокировки регламентных заданий видна с ПЕРВОГО показа диалога —
+            // сразу при запросе логина/пароля (комментарий 7OH от 2026-10-26: «И может
+            // быть сразу галочку показывать - ещё при первом запросе логина и пароля?»);
+            // кнопка «Завершить сеансы и повторить» (выше) — только для занятой базы.
             form.Children.Add(_blockScheduledJobsCheckBox);
 
             root.Children.Add(form);

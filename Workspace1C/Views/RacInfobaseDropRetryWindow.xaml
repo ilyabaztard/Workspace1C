@@ -87,12 +87,12 @@
                          PasswordChar="●"/>
 
             <!-- Галочка «Установить блокировку регламентных заданий» (issue #69, комментарий
-                 7OH от 2026-10-26): показывается вместе с кнопкой «Завершить сеансы и
-                 повторить», когда базу занимают активные сеансы/соединения. При повторном
-                 «Завершить сеансы и повторить» сначала выполняется rac «infobase update»
-                 с параметром «scheduled-jobs-deny=on», затем разрыв соединений/сеансов. -->
-            <CheckBox x:Name="BlockScheduledJobsCheckBox" Margin="0,10,0,0"
-                      Visibility="Collapsed">
+                 7OH от 2026-10-26): видна с ПЕРВОГО показа диалога — сразу при запросе
+                 логина/пароля («И может быть сразу галочку показывать - ещё при первом
+                 запросе логина и пароля?»). Если отмечается, перед завершением сеансов /
+                 повторным «infobase drop» сначала выполняется rac «infobase update»
+                 с параметром «scheduled-jobs-deny=on». -->
+            <CheckBox x:Name="BlockScheduledJobsCheckBox" Margin="0,10,0,0">
                 <TextBlock Text="{loc:Loc ServerMonitor.Infobase.Drop.BlockScheduledJobs}"
                            TextWrapping="Wrap"/>
             </CheckBox>

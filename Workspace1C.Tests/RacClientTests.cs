@@ -1125,6 +1125,48 @@ public sealed class RacClientTests
         Assert.DoesNotContain(args, a => a.StartsWith("--security-level="));
         Assert.DoesNotContain(args, a => a == "--create-database");
         Assert.DoesNotContain(args, a => a.StartsWith("--scheduled-jobs-deny"));
+        Assert.DoesNotContain(args, a => a.StartsWith("--sessions-deny"));
+    }
+
+    [Fact]
+    public void InfobaseCreateArgs_SessionsDeny_OnlyWhenOn()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «при переносе/копировании — копировать
+        // флаги блокировок» — rac «infobase create --sessions-deny=on» передаётся ТОЛЬКО
+        // для фактически выставленной блокировки начала сеансов источника; false/null —
+        // ключ не добавляется (новая база и так без блокировки).
+        var clusterId = Guid.NewGuid();
+
+        var on = RacClient.InfobaseCreateArgs(clusterId, new RacInfobaseCreateRequest
+        {
+            Name = "Блокированная",
+            Dbms = "MSSQLServer",
+            DbServer = "sql-01",
+            DbName = "blocked",
+            ScheduledJobsDeny = true,
+            SessionsDeny = true
+        });
+        Assert.Contains(on, a => a == "--scheduled-jobs-deny=on");
+        Assert.Contains(on, a => a == "--sessions-deny=on");
+
+        var off = RacClient.InfobaseCreateArgs(clusterId, new RacInfobaseCreateRequest
+        {
+            Name = "Свободная",
+            Dbms = "MSSQLServer",
+            DbServer = "sql-01",
+            DbName = "free",
+            SessionsDeny = false
+        });
+        Assert.DoesNotContain(off, a => a.StartsWith("--sessions-deny"));
+
+        var unknown = RacClient.InfobaseCreateArgs(clusterId, new RacInfobaseCreateRequest
+        {
+            Name = "По умолчанию",
+            Dbms = "MSSQLServer",
+            DbServer = "sql-01",
+            DbName = "default"
+        });
+        Assert.DoesNotContain(unknown, a => a.StartsWith("--sessions-deny"));
     }
 
     [Fact]

@@ -824,7 +824,12 @@ public static class RacOutputParser
                     DbUser = Unquote(Get(block, "db-user")),
                     Locale = Unquote(Get(block, "locale")),
                     SecurityLevel = ParseInt(GetAny(block, "security-level", "securityLevel")),
-                    Licensed = ParseBool(Get(block, "licensed"))
+                    Licensed = ParseBool(Get(block, "licensed")),
+                    // Флаги блокировок (issue #69, комментарий 7OH от 2026-10-26): блочный
+                    // формат 8.5.x может содержать scheduled-jobs-deny/sessions-deny
+                    // (camelCase-алиасы учтены) — они переносятся при миграции/копировании.
+                    ScheduledJobsDeny = ParseOptionalOn(GetAny(block, "scheduled-jobs-deny", "scheduledJobsDeny")),
+                    SessionsDeny = ParseOptionalOn(GetAny(block, "sessions-deny", "sessionsDeny"))
                 });
             }
         }
@@ -1007,6 +1012,28 @@ public static class RacOutputParser
             return false;
         return false;
     }
+
+    /// <summary>
+    /// Разбор признака rac «on/off» в nullable-значение (issue #69): «on»/«yes»/«allow»/
+    /// «true»/«1» → true; «off»/«no»/«deny»/«false»/«0» → false; пусто — null
+    /// (в выводе rac ключа не было — флаг неизвестен, а не снят).
+    /// </summary>
+    private static bool? ParseOptionalOn(string value)
+    {
+        var v = Unquote(value);
+        if (v.Length == 0)
+            return null;
+        return IsOnFlag(v);
+    }
+
+    /// <summary>Значение признака rac «on»/«off» (регистронезависимо): true для
+    /// «on»/«yes»/«allow»/«true»/«1», иначе false.</summary>
+    private static bool IsOnFlag(string value) =>
+        value.Equals("on", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("allow", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+        value == "1";
 
     private static int ParseInt(string value) =>
         int.TryParse(value.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)

@@ -354,4 +354,32 @@ public sealed class Issue69DropRetryWindowLayoutTests
         Assert.Contains("Не удалось определить параметры",
             strings.GetProperty("ServerMonitor.Infobase.Drop.BlockNoDbParams").GetString());
     }
+
+    [Fact]
+    public void WpfWindow_BlockScheduledJobsCheckbox_VisibleFromFirstPrompt()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «И может быть сразу галочку показывать -
+        // ещё при первом запросе логина и пароля?». Галочка «Установить блокировку
+        // регламентных заданий» видна с ПЕРВОГО показа диалога: в разметке у неё НЕТ
+        // Visibility="Collapsed", и code-behind не прячет/не показывает её по типу ошибки.
+        var xaml = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.xaml");
+        var codeBehind = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.xaml.cs");
+
+        // Открывающий тег галочки не содержит атрибута видимости (видима по умолчанию).
+        Assert.Contains("BlockScheduledJobsCheckBox\" Margin=\"0,10,0,0\">", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("BlockScheduledJobsCheckBox.Visibility", codeBehind, StringComparison.Ordinal);
+        // Кнопка «Завершить сеансы и повторить» по-прежнему только для занятой базы.
+        Assert.Contains("TerminateSessionsButton.Visibility = Visibility.Visible", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AvaloniaWindow_BlockScheduledJobsCheckbox_VisibleFromFirstPrompt()
+    {
+        // Аналог WPF-стража для Avalonia: галочка блокировки РЗ не скрывается по типу
+        // ошибки и всегда добавляется в форму (видна уже при первом запросе логина/пароля).
+        var source = ReadProjectFile("Workspace1C", "Views", "RacInfobaseDropRetryWindow.Avalonia.cs");
+
+        Assert.DoesNotContain("_blockScheduledJobsCheckBox.IsVisible", source, StringComparison.Ordinal);
+        Assert.Contains("form.Children.Add(_blockScheduledJobsCheckBox)", source, StringComparison.Ordinal);
+    }
 }

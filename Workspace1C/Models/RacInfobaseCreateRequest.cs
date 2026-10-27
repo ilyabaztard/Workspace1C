@@ -45,4 +45,9 @@ public sealed class RacInfobaseCreateRequest
 
     /// <summary>Запретить выполнение регламентных заданий (параметр rac «--scheduled-jobs-deny»).</summary>
     public bool ScheduledJobsDeny { get; set; }
+
+    /// <summary>Блокировка начала сеансов (параметр rac «--sessions-deny=on»; null — не
+    /// передаётся, база создаётся без блокировки). Переносится из базы-источника при
+    /// миграции/копировании, только когда флаг фактически выставлен (issue #69).</summary>
+    public bool? SessionsDeny { get; set; }
 }

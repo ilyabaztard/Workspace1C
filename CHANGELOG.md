@@ -66,6 +66,37 @@
   Покрыто тестами `Issue71SettingsWindowLayoutTests` (+8), обновлены
   `Issue55AdaptiveLayoutTests` и `Issue55WindowLayoutTests`.
 
+- **Удаление из кластера: разрыв соединений и сеансов перед каждым drop, галочка
+  блокировки РЗ при первом запросе, копирование флагов блокировок при миграции
+  (issue #69, Windows и Linux; по последним трём комментариям 7OH)** — 1) перед
+  КАЖДЫМ `infobase drop` (и при повторе) гарантированно выполняется разрыв текущих
+  соединений и завершение сеансов именно этой базы: списки `connection list`/
+  `session list` запрашиваются заново до трёх проходов (race-free), чтобы rac не
+  возвращал «Информационная база имеет непустой список соединений»; сводка шагов
+  остаётся в статус-строке (в логе 7OH: drop → «непустой список соединений» →
+  `infobase info` → снова drop → опять «непустой список соединений»). 2) Галочка
+  **«Установить блокировку регламентных заданий»** видна уже при ПЕРВОМ запросе
+  логина/пароля в диалоге повтора («И может быть сразу галочку показывать - ещё при
+  первом запросе логина и пароля?»); логика `scheduled-jobs-deny=on` перед
+  завершением сеансов сохраняется. 3) При переносе/копировании баз между кластерами
+  окна «Миграция между кластерами 1С» копируются флаги блокировок
+  (`scheduled-jobs-deny`/`sessions-deny`) базы-источника: из `infobase summary list`
+  (блочный формат 8.5.x), при их отсутствии — через `infobase info`; в rac
+  `infobase create` передаются ТОЛЬКО фактически выставленные флаги
+  ([`ServerMonitorViewModel.cs`](Workspace1C/ViewModels/ServerMonitorViewModel.cs),
+  [`RacInfobaseDropRetryWindow.xaml`](Workspace1C/Views/RacInfobaseDropRetryWindow.xaml),
+  [`RacInfobaseDropRetryWindow.xaml.cs`](Workspace1C/Views/RacInfobaseDropRetryWindow.xaml.cs),
+  [`RacInfobaseDropRetryWindow.Avalonia.cs`](Workspace1C/Views/RacInfobaseDropRetryWindow.Avalonia.cs),
+  [`ClusterMigrationService.cs`](Workspace1C/Services/ClusterMigrationService.cs),
+  [`ClusterMigrationViewModel.cs`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs),
+  [`RacClient.cs`](Workspace1C/Services/RacClient.cs),
+  [`RacOutputParser.cs`](Workspace1C/Services/RacOutputParser.cs),
+  [`RacModels.cs`](Workspace1C/Models/RacModels.cs),
+  [`RacInfobaseCreateRequest.cs`](Workspace1C/Models/RacInfobaseCreateRequest.cs)).
+  Покрыто тестами `ServerMonitorViewModelTests` (+7), `Issue69DropRetryWindowLayoutTests`
+  (+2), `RacOutputParserTests`, `RacClientTests`, `ClusterMigrationServiceTests`,
+  `ClusterMigrationViewModelTests` (+2).
+
 ---
 
 ## [1.0.0.81] — 2026-10-27

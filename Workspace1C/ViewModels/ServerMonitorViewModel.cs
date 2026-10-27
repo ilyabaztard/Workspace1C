@@ -772,16 +772,19 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// диалог: логин и пароль сохраняются, а текст помечается
     /// «Повторная попытка не удалась»), «Отмена» — выход. Типовая ошибка rac
     /// распознаётся (<see cref="ClassifyDropError"/>): если базу занимают активные
-    /// сеансы/соединения, диалог предлагает «Завершить сеансы и повторить» — перед
-    /// повторным «infobase drop» выполняется «connection disconnect»/«session terminate»
-    /// (учётные данные администратора кластера из <see cref="BuildParams"/>, креды ИБ
-    /// применяются к самому удалению). Галочка «Установить блокировку регламентных
-    /// заданий» (<see cref="DropRetryResult.BlockScheduledJobs"/>, комментарий 7OH от
-    /// 2026-10-26) выполняет rac «infobase update --scheduled-jobs-deny=on» ДО завершения
-    /// сеансов. При неудачном завершении сеансов цикл НЕ прерывается (комментарий 7OH от
-    /// 2026-10-26: «Не выходить после первой попытки... иногда повторная попытка может
-    /// помочь») — снова показывается диалог с пометкой «Повторная попытка завершения
-    /// сеансов не удалась…». Без колбэка диалога (тесты) — прежнее поведение:
+    /// сеансы/соединения, диалог предлагает «Завершить сеансы и повторить».
+    /// Перед КАЖДЫМ «infobase drop» (и при повторе) гарантированно выполняется разрыв
+    /// соединений и завершение сеансов именно этой базы
+    /// (<see cref="ReleaseInfobaseActivityAsync"/>, комментарий 7OH от 2026-10-26:
+    /// «кто-то забыл удалить текущие соединения»); кнопка диалога «Завершить сеансы
+    /// и повторить» делает то же самое заранее, с пометкой «Повторная попытка
+    /// завершения сеансов не удалась…» при неудаче. Галочка «Установить блокировку
+    /// регламентных заданий» (<see cref="DropRetryResult.BlockScheduledJobs"/>, комментарий
+    /// 7OH от 2026-10-26) выполняет rac «infobase update --scheduled-jobs-deny=on» ДО
+    /// завершения сеансов. Неудача любого из подготовительных шагов цикл НЕ прерывает
+    /// (комментарий 7OH от 2026-10-26: «Не выходить после первой попытки... иногда
+    /// повторная попытка может помочь») — снова показывается диалог с соответствующей
+    /// пометкой. Без колбэка диалога (тесты) — прежнее поведение:
     /// предупреждение + статус-строка.
     /// </summary>
     public async Task DropSelectedInfobaseAsync(bool dropDatabase = false)
@@ -859,8 +862,12 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                 {
                     // issue #69: rac не удаляет базу, пока её занимают активные сеансы
                     // (соединения, HTTP-сервисы). Кнопка диалога «Завершить сеансы и
-                    // повторить» — явное согласие пользователя на разрыв сеансов.
-                    var (termOk, termDetail) = await TerminateInfobaseActivityAsync(
+                    // повторить» — явное согласие пользователя на разрыв сеансов; сам
+                    // повторный «infobase drop» разрывает соединения/сеансы ВСЕГДА
+                    // (комментарий 7OH от 2026-10-26: «кто-то забыл удалить текущие
+                    // соединения») — здесь это делается заранее, с готовой пометкой
+                    // в диалоге при неудаче.
+                    var (termOk, termDetail, _, _) = await ReleaseInfobaseActivityAsync(
                         row.InfobaseId, clusterId).ConfigureAwait(false);
                     StatusText = termDetail;
                     if (!termOk)
@@ -895,6 +902,25 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     {
         try
         {
+            // issue #69, комментарий 7OH от 2026-10-26: перед КАЖДЫМ «infobase drop»
+            // (и при повторе) гарантированно разрываем соединения и завершаем сеансы
+            // именно этой базы — иначе rac возвращает «Информационная база имеет
+            // непустой список соединений» (в логе: drop → «непустой список соединений»
+            // → infobase info → снова drop → опять «непустой список соединений»).
+            // Список соединений/сеансов запрашивается ЗАНОВО до трёх проходов
+            // (race-free) — новые соединения, появившиеся между «connection list»
+            // и «connection disconnect», добиваются следующей итерацией.
+            var (releaseOk, releaseDetail, disconnected, terminated) = await ReleaseInfobaseActivityAsync(
+                row.InfobaseId, clusterId).ConfigureAwait(false);
+            if (!releaseOk)
+                return (false, releaseDetail);
+            if (disconnected > 0 || terminated > 0)
+            {
+                // Сводка шагов остаётся в статус-строке: «Перед удалением завершено
+                // соединений: N, сеансов: M.»
+                StatusText = releaseDetail;
+            }
+
             var ok = await _rac.DropInfobaseAsync(
                 BuildParams(), clusterId, row.InfobaseId, dropDatabase,
                 infobaseUser, infobasePassword).ConfigureAwait(false);
@@ -971,63 +997,87 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Разрыв активных соединений и завершение сеансов информационной базы перед
-    /// повторным «infobase drop» (issue #69): rac не удаляет базу, пока её используют
-    /// сеансы/соединения (включая HTTP-сервисы). Порядок — сначала «connection
-    /// disconnect», затем «session terminate» (соединения указывают на сеансы).
-    /// Учётные данные администратора кластера берутся из <see cref="BuildParams"/>
-    /// (как у всех действий уровня кластера); креды администратора ИБ применяются
-    /// к самому удалению. Возвращает текст статуса об успехе либо текст ошибки.
+    /// «infobase drop» (issue #69): rac не удаляет базу, пока её используют
+    /// сеансы/соединения (включая HTTP-сервисы). Комментарий 7OH от 2026-10-26:
+    /// «кто-то забыл удалить текущие соединения» — перед drop соединения базы должны
+    /// быть разорваны, иначе rac возвращает «Информационная база имеет непустой
+    /// список соединений». Порядок в каждом проходе — сначала «connection disconnect»,
+    /// затем «session terminate» (соединения указывают на сеансы). Списки запрашиваются
+    /// ЗАНОВО на каждом проходе (до <see cref="MaxReleasePasses"/> проходов,
+    /// race-free): между «connection list» и «connection disconnect» могут появиться
+    /// новые соединения — повторные проходы их добивают. Учётные данные администратора
+    /// кластера берутся из <see cref="BuildParams"/> (как у всех действий уровня
+    /// кластера); креды администратора ИБ применяются к самому удалению. Возвращает
+    /// текст статуса об успехе либо текст ошибки, а также суммарное число разорванных
+    /// соединений и завершённых сеансов (для сводки в статус-строке).
     /// </summary>
-    private async Task<(bool Ok, string Detail)> TerminateInfobaseActivityAsync(
+    private async Task<(bool Ok, string Detail, int Disconnected, int Terminated)> ReleaseInfobaseActivityAsync(
         Guid infobaseId, Guid clusterId)
     {
         try
         {
             var parameters = BuildParams();
-            var connections = await _rac.GetConnectionsAsync(parameters, clusterId, infobaseId)
-                .ConfigureAwait(false);
-            foreach (var connection in connections)
+            var disconnected = 0;
+            var terminated = 0;
+            for (var pass = 0; pass < MaxReleasePasses; pass++)
             {
-                // issue #69, комментарий 7OH от 2026-10-26 («повторить — ошибка»): rac 8.5.4
-                // отклоняет «connection disconnect» без параметра --process=<pid> («Ошибка
-                // разбора параметра: process»); pid — рабочий процесс из «connection list».
-                if (!await _rac.DisconnectConnectionAsync(
-                        parameters, clusterId, connection.Id, connection.ProcessId)
-                        .ConfigureAwait(false))
-                    return (false, BuildActionError(_rac.LastActionError));
-            }
+                var connections = await _rac.GetConnectionsAsync(parameters, clusterId, infobaseId)
+                    .ConfigureAwait(false);
+                var sessions = await _rac.GetSessionsAsync(parameters, clusterId, infobaseId)
+                    .ConfigureAwait(false);
+                if (connections.Count == 0 && sessions.Count == 0)
+                    break;
 
-            var sessions = await _rac.GetSessionsAsync(parameters, clusterId, infobaseId)
-                .ConfigureAwait(false);
-            // Рабочий процесс сеанса — из соединения, которое его обслуживает
-            // (в выводе «session list» номера процесса нет). После разрыва всех соединений
-            // такие сеансы уже не активны; сеансы без найденного процесса не терминируем.
-            var processByConnectionId = new Dictionary<Guid, Guid>(connections.Count);
-            foreach (var connection in connections)
-            {
-                if (connection.ProcessId != Guid.Empty)
-                    processByConnectionId[connection.Id] = connection.ProcessId;
-            }
+                foreach (var connection in connections)
+                {
+                    // issue #69, комментарий 7OH от 2026-10-26 («повторить — ошибка»):
+                    // rac 8.5.4 отклоняет «connection disconnect» без параметра
+                    // --process=<pid> («Ошибка разбора параметра: process»); pid — рабочий
+                    // процесс из «connection list».
+                    if (!await _rac.DisconnectConnectionAsync(
+                            parameters, clusterId, connection.Id, connection.ProcessId)
+                            .ConfigureAwait(false))
+                        return (false, BuildActionError(_rac.LastActionError), disconnected, terminated);
+                    disconnected++;
+                }
 
-            foreach (var session in sessions)
-            {
-                var processId = processByConnectionId.TryGetValue(session.ConnectionId, out var pid)
-                    ? pid
-                    : (Guid?)null;
-                if (!await _rac.TerminateSessionAsync(parameters, clusterId, session.Id, processId)
-                        .ConfigureAwait(false))
-                    return (false, BuildActionError(_rac.LastActionError));
+                // Рабочий процесс сеанса — из соединения, которое его обслуживает
+                // (в выводе «session list» номера процесса нет). После разрыва соединений
+                // такие сеансы уже не активны; сеансы без найденного процесса не терминируем.
+                var processByConnectionId = new Dictionary<Guid, Guid>(connections.Count);
+                foreach (var connection in connections)
+                {
+                    if (connection.ProcessId != Guid.Empty)
+                        processByConnectionId[connection.Id] = connection.ProcessId;
+                }
+
+                foreach (var session in sessions)
+                {
+                    var processId = processByConnectionId.TryGetValue(session.ConnectionId, out var pid)
+                        ? pid
+                        : (Guid?)null;
+                    if (!await _rac.TerminateSessionAsync(parameters, clusterId, session.Id, processId)
+                            .ConfigureAwait(false))
+                        return (false, BuildActionError(_rac.LastActionError), disconnected, terminated);
+                    terminated++;
+                }
             }
 
             return (true, string.Format(
                 LocalizationManager.T("ServerMonitor.Infobase.Drop.TerminatedFormat"),
-                connections.Count, sessions.Count));
+                disconnected, terminated), disconnected, terminated);
         }
         catch (Exception ex)
         {
-            return (false, BuildErrorMessage(ex));
+            return (false, BuildErrorMessage(ex), 0, 0);
         }
     }
+
+    /// <summary>Максимальное число проходов разрыва соединений/сеансов базы перед
+    /// «infobase drop» (issue #69): списки запрашиваются заново на каждом проходе
+    /// (race-free), чтобы соединения, появившиеся между «connection list» и
+    /// «connection disconnect», не оставили rac-ошибку «непустой список соединений».</summary>
+    private const int MaxReleasePasses = 3;
 
     /// <summary>
     /// Блокировка регламентных заданий информационной базы перед повторным удалением

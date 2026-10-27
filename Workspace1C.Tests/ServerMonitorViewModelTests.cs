@@ -1352,10 +1352,13 @@ public sealed class ServerMonitorViewModelTests
 
         await vm.DropSelectedInfobaseAsync(dropDatabase: false);
 
-        // Списки соединений и сеансов запрошены С фильтром по удаляемой базе
-        // (автообновление в finally запрашивает их целиком, с null — не в счёт).
-        Assert.Equal(1, client.FilteredConnectionsListCalls);
-        Assert.Equal(1, client.FilteredSessionsListCalls);
+        // Списки соединений и сеансов запрошены С фильтром по удаляемой базе: перед первым
+        // drop (2 прохода: непустой + контрольный пустой), в явном «Завершить сеансы и
+        // повторить» и перед повторным drop (автообновление в finally запрашивает их
+        // целиком, с null — не в счёт). Фикстура после успешного разрыва возвращает
+        // пустой список — как реальный rac.
+        Assert.Equal(4, client.FilteredConnectionsListCalls);
+        Assert.Equal(4, client.FilteredSessionsListCalls);
         // Фикстура возвращает одно соединение и один сеанс — оба разорваны/завершены.
         // issue #69 («повторить — ошибка», «Ошибка разбора параметра: process»): рабочий
         // процесс передаётся обеим rac-командам (8.5.4 без --process их отклоняет).
@@ -1408,9 +1411,10 @@ public sealed class ServerMonitorViewModelTests
         Assert.Equal("MSSQLServer", blockCall.request.Dbms);
         Assert.Equal("sql-01", blockCall.request.DbServer);
         Assert.Equal("buho", blockCall.request.DbName);
-        // Соединения и сеансы сняты после блокировки (порядок «блокировка → сеансы»).
-        Assert.Equal(1, client.FilteredConnectionsListCalls);
-        Assert.Equal(1, client.FilteredSessionsListCalls);
+        // Соединения и сеансы сняты после блокировки (порядок «блокировка → сеансы»):
+        // кроме явного прохода — ещё перед ПЕРВЫМ и ПОВТОРНЫМ drop (2+1+1 списка-запроса).
+        Assert.Equal(4, client.FilteredConnectionsListCalls);
+        Assert.Equal(4, client.FilteredSessionsListCalls);
         Assert.Single(client.DisconnectCalls);
         Assert.Single(client.TerminateCalls);
         // Первый «infobase drop» без кредов упал (активные сеансы), второй — с кредами
@@ -1571,15 +1575,17 @@ public sealed class ServerMonitorViewModelTests
     {
         // issue #69, комментарий 7OH от 2026-10-26: «Не выходить после первой попытки
         // с завершением... иногда повторная попытка может помочь, просто соединение не
-        // успело закрыться». Первый «connection disconnect» падает → цикл НЕ прерывается:
+        // успело закрыться». Перед КАЖДЫМ drop разрыв соединений обязателен; неудача и
+        // штатного, и явного («Завершить сеансы и повторить») прохода цикл НЕ прерывает:
         // снова диалог (с пометкой «Повторная попытка завершения сеансов не удалась…»),
-        // пользователь снова жмёт «Завершить сеансы и повторить» → разрыв/завершение
-        // успешны → повторный drop с кредами → успех.
+        // затем разрыв/завершение успешны → повторные drop с кредами → успех.
         var client = new FakeRacClient
         {
             DropInfobaseFailuresLeft = 2,
             DropInfobaseFailureError = "rac: информационная база используется активными сеансами",
-            DisconnectFailuresLeft = 1
+            // 1-й разрыв падает в release перед первым drop, 2-й — в явном проходе
+            // «Завершить сеансы и повторить» (готовится пометка TerminateRetryFailedFormat).
+            DisconnectFailuresLeft = 2
         };
         var dialogs = new RecordingDialogs();
         var errors = new List<string>();
@@ -1597,21 +1603,25 @@ public sealed class ServerMonitorViewModelTests
 
         await vm.DropSelectedInfobaseAsync(dropDatabase: false);
 
-        // «infobase drop»: исходный — fail; после неудачного завершения сеансов — снова
-        // fail (уже с кредами из первого диалога); третий — успех.
+        // Первый drop-цикл: release падает → drop НЕ выполняется; затем перед повторными
+        // drop соединение/сеанс успешно снимаются → 3 «infobase drop» (2 неудачи + успех).
         Assert.Equal(3, client.DropInfobaseCalls.Count);
-        // Диалог показан дважды; логин и пароль из первого ответа предзаполнены во втором.
-        Assert.Equal(2, errors.Count);
-        Assert.Equal(2, retryShown.Count);
+        // Диалог показан трижды; логин и пароль из первого ответа предзаполнены дальше.
+        Assert.Equal(3, errors.Count);
+        Assert.Equal(3, retryShown.Count);
         Assert.Null(retryShown[0].login);
         Assert.Equal("ИБ-админ", retryShown[1].login);
         Assert.Equal("секрет", retryShown[1].password);
-        // Второй показ помечен «Повторная попытка завершения сеансов не удалась…».
+        Assert.Equal("ИБ-админ", retryShown[2].login);
+        Assert.Equal("секрет", retryShown[2].password);
+        // Пометка о неудачном явном «Завершить сеансы и повторить» — строкой во втором
+        // диалоге; третий (после успешного снятия) — обычная «повторная попытка не удалась».
         Assert.DoesNotContain("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat", errors[0]);
         Assert.Contains("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat", errors[1]);
-        // Разрыв соединений пробовался дважды (первый — неудача, второй — успех);
-        // завершение сеансов — один раз (после успешного разрыва).
-        Assert.Equal(2, client.DisconnectCalls.Count);
+        Assert.DoesNotContain("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat", errors[2]);
+        // Разрыв соединений: два отказа + один успешный (после него соединение исчезает —
+        // фикстура ведёт себя как реальный rac); завершение сеансов — до успеха разрыва.
+        Assert.Equal(3, client.DisconnectCalls.Count);
         Assert.Single(client.TerminateCalls);
         // Никаких лишних предупреждений: вместо окна-предупреждения пометка
         // показывается самим диалогом повтора.
@@ -1648,17 +1658,115 @@ public sealed class ServerMonitorViewModelTests
 
         await vm.DropSelectedInfobaseAsync(dropDatabase: false);
 
-        // Первый drop — исходная неудача; второй — после неудачного завершения сеансов
-        // (уже с кредами); «Отмена» во втором диалоге прерывает — третьего drop нет.
-        Assert.Equal(2, client.DropInfobaseCalls.Count);
+        // Первый drop-цикл НЕ добрался до drop: release перед ним упал («соединение не
+        // успело закрыться»); второй drop — после успешного явного «Завершить сеансы и
+        // повторить» (уже с кредами, это и есть первая неудача rac); «Отмена» во втором
+        // диалоге прерывает — третьего drop нет.
+        Assert.Single(client.DropInfobaseCalls);
         Assert.Equal(2, shown);
-        Assert.Single(client.DisconnectCalls);
-        Assert.Empty(client.TerminateCalls);
+        Assert.Equal(2, client.DisconnectCalls.Count);
+        Assert.Single(client.TerminateCalls);
         Assert.Empty(dialogs.Warnings);
         // Статус-строка после finally → Refresh() переустановлена на «загружено» — проверяем
         // лишь, что она непустая (как в остальных drop-тестах); прерывание подтверждено
         // количеством вызовов rac выше.
         Assert.NotEmpty(vm.StatusText);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_BeforeFirstDrop_ConnectionsReleased_ThenDrop()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «кто-то забыл удалить текущие
+        // соединения» — перед КАЖДЫМ «infobase drop» гарантированно разрываются
+        // соединения и завершаются сеансы именно этой базы (иначе rac возвращает
+        // «Информационная база имеет непустой список соединений»).
+        var client = new FakeRacClient();
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            // «Отмена» при неудаче — здесь нажата не будет: первый drop успешен.
+            dropRetryDialog: (_, _, _) => DropRetryResult.Cancel);
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Успешный «infobase drop» предваряется разрывом соединения и завершением
+        // сеанса фикстуры (по одному) — с фильтром по удаляемой базе.
+        Assert.Single(client.DropInfobaseCalls);
+        Assert.Single(client.DisconnectCalls);
+        Assert.Single(client.TerminateCalls);
+        Assert.True(client.ConnectionReleased);
+        Assert.True(client.SessionReleased);
+        Assert.True(client.FilteredConnectionsListCalls >= 1);
+        Assert.True(client.FilteredSessionsListCalls >= 1);
+        Assert.Empty(dialogs.Warnings);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_RetryDrop_ReleasesConnectionsBeforeEveryDrop()
+    {
+        // issue #69: разрыв соединений/сеансов выполняется перед ПЕРВЫМ drop и перед
+        // каждым ПОВТОРНЫМ drop — списки с фильтром по базе запрашиваются заново.
+        // Диалог повтора здесь отвечает простым «Повторить попытку» (без специальной
+        // кнопки «Завершить сеансы и повторить») — release перед повторным drop и есть
+        // гарантия того, что rac не вернёт «непустой список соединений».
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 1,
+            DropInfobaseFailureError = "rac: информационная база имеет непустой список соединений"
+        };
+        var retryShown = 0;
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (_, _, _) =>
+            {
+                retryShown++;
+                return new DropRetryResult(true, "ИБ-админ", "секрет");
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Первый drop: release (2 списка: непустой + контрольный) → неудача rac.
+        // Повторный drop: release снова (списки уже пусты — фикстура как реальный rac).
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+        Assert.Equal(1, retryShown);
+        Assert.Single(client.DisconnectCalls);
+        Assert.Single(client.TerminateCalls);
+        Assert.Equal(3, client.FilteredConnectionsListCalls);
+        Assert.Equal(3, client.FilteredSessionsListCalls);
+        Assert.Empty(dialogs.Warnings);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_ReleaseLimitedToThreePasses_WhenListNeverEmpties()
+    {
+        // issue #69: «при необходимости итеративно 2–3 раза со сбросом списка». Если
+        // соединения/сеансы не исчезают (гонка «не успело закрыться»), release-цикл
+        // ограничен тремя проходами и НЕ зависает; drop всё равно выполняется.
+        var client = new FakeRacClient
+        {
+            // Списки всегда непустые — цикл упирается в максимум проходов.
+            KeepConnectionsAfterDisconnect = true,
+            KeepSessionsAfterTerminate = true
+        };
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (_, _, _) => DropRetryResult.Cancel);
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Ровно 3 прохода (по одному соединению и сеансу в каждом), drop выполнен.
+        Assert.Equal(3, client.DisconnectCalls.Count);
+        Assert.Equal(3, client.TerminateCalls.Count);
+        Assert.Single(client.DropInfobaseCalls);
+        Assert.Empty(dialogs.Warnings);
     }
 
     [Theory]
@@ -2326,6 +2434,12 @@ public sealed class ServerMonitorViewModelTests
             if (infobaseId is not null)
                 FilteredSessionsListCalls++; // issue #69: заказы с фильтром по базе.
             LastSessionsInfobaseId = infobaseId;
+            // issue #69: после успешного «session terminate» сеанс пропадает из списка базы
+            // (как в реальном rac) — release-цикл перед «infobase drop» завершается досрочно;
+            // KeepSessionsAfterTerminate имитирует гонку «сеанс не успел закрыться» — цикл
+            // упирается в максимум проходов.
+            if (infobaseId is not null && SessionReleased && !KeepSessionsAfterTerminate)
+                return Task.FromResult<IReadOnlyList<RacSessionInfo>>(Array.Empty<RacSessionInfo>());
             // issue #3: фильтр по базе — rac «--infobase=...»; сеансы другой базы не возвращаются.
             if (infobaseId is Guid filter && filter != FirstInfobaseId)
                 return Task.FromResult<IReadOnlyList<RacSessionInfo>>(Array.Empty<RacSessionInfo>());
@@ -2359,6 +2473,11 @@ public sealed class ServerMonitorViewModelTests
             if (infobaseId is not null)
                 FilteredConnectionsListCalls++; // issue #69: запрос с фильтром по базе.
             LastConnectionsInfobaseId = infobaseId;
+            // issue #69: после успешного «connection disconnect» соединение пропадает из
+            // списка базы (как в реальном rac) — release-цикл завершается досрочно;
+            // KeepConnectionsAfterDisconnect имитирует гонку «соединение не успело закрыться».
+            if (infobaseId is not null && ConnectionReleased && !KeepConnectionsAfterDisconnect)
+                return Task.FromResult<IReadOnlyList<RacConnectionInfo>>(Array.Empty<RacConnectionInfo>());
             return Task.FromResult<IReadOnlyList<RacConnectionInfo>>(new[]
             {
                 new RacConnectionInfo
@@ -2515,6 +2634,7 @@ public sealed class ServerMonitorViewModelTests
                 LastActionError = "rac: у пользователя нет прав на завершение сеанса";
                 return Task.FromResult(false);
             }
+            SessionReleased = true;
             return Task.FromResult(true);
         }
 
@@ -2536,8 +2656,25 @@ public sealed class ServerMonitorViewModelTests
                 LastActionError = "rac: у пользователя нет прав на разрыв соединения";
                 return Task.FromResult(false);
             }
+            ConnectionReleased = true;
             return Task.FromResult(true);
         }
+
+        /// <summary>Соединение базы разорвано (issue #69): после успешного «connection
+        /// disconnect» «connection list» этой базы возвращает пустой список — как реальный
+        /// rac; release-цикл перед «infobase drop» останавливается.</summary>
+        public bool ConnectionReleased { get; private set; }
+
+        /// <summary>Сеанс базы завершён (аналогично «session terminate»).</summary>
+        public bool SessionReleased { get; private set; }
+
+        /// <summary>True — «connection list» возвращает соединение, даже если оно уже
+        /// разорвано (имитация гонки «соединение не успело закрыться»): release-цикл
+        /// упирается в максимум проходов (issue #69, «итеративно 2–3 раза»).</summary>
+        public bool KeepConnectionsAfterDisconnect { get; set; }
+
+        /// <summary>Аналогично для «session list».</summary>
+        public bool KeepSessionsAfterTerminate { get; set; }
 
         // ===================== Базы кластера (issue #3) =====================
 

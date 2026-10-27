@@ -243,6 +243,76 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
+    public async Task Migrate_CopiesSourceLockFlags_FromSummaryToCreatedRequest()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «при переносе/копировании — копировать
+        // флаги блокировок». Блочный формат «infobase summary list» источника отдал
+        // scheduled-jobs-deny/sessions-deny — они передаются в rac «infobase create»
+        // приёмника; «infobase info» не требуется.
+        var client = new FakeRacClient(sourceScheduledJobsDeny: true, sourceSessionsDeny: true);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        vm.DbUser = "db-user";
+        vm.DbPassword = "db-pass";
+        vm.KeepInSource = false;
+
+        await vm.MigrateAsync();
+
+        Assert.True(vm.MigrationCompleted);
+        Assert.False(vm.IsBusy);
+        Assert.Equal(2, client.Created.Count);
+        // Флаги блокировок копируются из базы-источника в запрос создания приёмника.
+        Assert.All(client.Created, c => Assert.True(c.Request.ScheduledJobsDeny));
+        Assert.All(client.Created, c => Assert.True(c.Request.SessionsDeny));
+        // Сводка флаги отдала — догрузка через «infobase info» не потребовалась.
+        Assert.Equal(0, client.InfobaseInfoCalls);
+    }
+
+    [Fact]
+    public async Task Migrate_CopiesSourceLockFlags_FromInfobaseInfo_WhenSummaryLacks()
+    {
+        // issue #69: «Если флаги недоступны в summary — догружать через infobase info».
+        // Табличный формат источника флагов не отдал (null) — VM запрашивает полные
+        // свойства базы и передаёт фактические флаги в запрос создания приёмника.
+        var client = new FakeRacClient
+        {
+            InfobaseInfoResult = new RacInfobaseInfo
+            {
+                Name = "База1",
+                ScheduledJobsDeny = true,
+                SessionsDeny = true
+            }
+        };
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        vm.DbUser = "db-user";
+        vm.DbPassword = "db-pass";
+        vm.KeepInSource = false;
+
+        await vm.MigrateAsync();
+
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(2, client.Created.Count);
+        Assert.All(client.Created, c => Assert.True(c.Request.ScheduledJobsDeny));
+        Assert.All(client.Created, c => Assert.True(c.Request.SessionsDeny));
+        Assert.True(client.InfobaseInfoCalls >= 1);
+    }
+
+    [Fact]
     public async Task Migrate_KeepInSource_CreateOnly_NoDrop()
     {
         var client = new FakeRacClient();
@@ -1169,11 +1239,16 @@ public sealed class ClusterMigrationViewModelTests
         // Число баз источника («База1»…«БазаN»; по умолчанию 2 — совместимость с прежними
         // тестами; для сценария «3 базы» из комментария 7OH issue #41 передаётся 3).
         private readonly int _sourceBaseCount;
+        // Флаги блокировок источника (issue #69, комментарий 7OH: копировать флаги
+        // блокировок при переносе/копировании) — если заданы, «infobase summary list»
+        // источника их возвращает (блочный формат 8.5.x).
+        private readonly bool? _sourceScheduledJobsDeny;
+        private readonly bool? _sourceSessionsDeny;
 
         public FakeRacClient(bool singleCluster = true, bool failCreate = false, bool failDrop = false,
             string[]? targetBaseNames = null, string? sourceDbms = null, string? sourceDbName = null,
             string? sourceLocale = null, int? failCreateOnIndex = null, bool throwOnCreate = false,
-            int sourceBaseCount = 2)
+            int sourceBaseCount = 2, bool? sourceScheduledJobsDeny = null, bool? sourceSessionsDeny = null)
         {
             _singleCluster = singleCluster;
             _failCreateOnIndex = failCreate ? 1 : failCreateOnIndex;
@@ -1184,6 +1259,8 @@ public sealed class ClusterMigrationViewModelTests
             _sourceDbName = sourceDbName;
             _sourceLocale = sourceLocale;
             _sourceBaseCount = sourceBaseCount;
+            _sourceScheduledJobsDeny = sourceScheduledJobsDeny;
+            _sourceSessionsDeny = sourceSessionsDeny;
         }
 
         public RacConnectionParams? LastParams { get; private set; }
@@ -1247,7 +1324,11 @@ public sealed class ClusterMigrationViewModelTests
                         Dbms = _sourceDbms,
                         DbServer = "sql-01",
                         DbName = _sourceDbName ?? "база" + n,
-                        Locale = _sourceLocale ?? string.Empty
+                        Locale = _sourceLocale ?? string.Empty,
+                        // Флаги блокировок источника (issue #69): null — rac их не отдал —
+                        // догружаются через «infobase info».
+                        ScheduledJobsDeny = _sourceScheduledJobsDeny,
+                        SessionsDeny = _sourceSessionsDeny
                     };
                 }
                 return Task.FromResult<IReadOnlyList<RacInfobaseSummary>>(source);
@@ -1291,6 +1372,21 @@ public sealed class ClusterMigrationViewModelTests
             }
             LastActionError = string.Empty;
             return Task.FromResult(true);
+        }
+
+        /// <summary>Результат rac «infobase info» для догрузки флагов блокировок источника
+        /// (issue #69: summary флагов не отдал — VM запрашивает полные свойства базы).</summary>
+        public RacInfobaseInfo? InfobaseInfoResult { get; set; }
+
+        /// <summary>Сколько раз запрашивались полные свойства базы-источника.</summary>
+        public int InfobaseInfoCalls { get; private set; }
+
+        public Task<RacInfobaseInfo?> GetInfobaseInfoAsync(
+            RacConnectionParams parameters, Guid clusterId, Guid infobaseId,
+            string? infobaseUser, string? infobasePassword, CancellationToken cancellationToken = default)
+        {
+            InfobaseInfoCalls++;
+            return Task.FromResult(InfobaseInfoResult);
         }
 
         // ---- Неиспользуемые методы интерфейса ----

@@ -1141,8 +1141,15 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                     // Локаль с формы (issue #41): автозаполнена из первой базы источника; при
                     // необходимости пользователь меняет списком выбора, значение передаётся
                     // в запрос создания с приоритетом над данными источника.
+                    // issue #69, комментарий 7OH от 2026-10-26: «при переносе/копировании
+                    // — копировать флаги блокировок» (scheduled-jobs-deny/sessions-deny из
+                    // базы-источника; если rac не отдал их в «infobase summary list» — флаги
+                    // догружаются через «infobase info»).
+                    var (scheduledJobsDeny, sessionsDeny) = await EnsureSourceLockFlagsAsync(
+                        sourceParams, sourceClusterId, row.Source!).ConfigureAwait(false);
                     var request = ClusterMigrationService.BuildCreateRequest(
-                        row.Source!, DbUser, DbPassword, Dbms, DbServer, Locale);
+                        row.Source!, DbUser, DbPassword, Dbms, DbServer, Locale,
+                        scheduledJobsDeny, sessionsDeny);
                     var created = await _rac.CreateInfobaseAsync(targetParams, targetClusterId, request).ConfigureAwait(false);
                     if (!created)
                     {
@@ -1297,6 +1304,36 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             "oracledatabase" => RacDbms.OracleDatabase,
             _ => RacDbms.MssqlServer
         };
+    }
+
+    /// <summary>
+    /// Флаги блокировок базы-источника для создания в приёмнике (issue #69, комментарий
+    /// 7OH от 2026-10-26: «при переносе/копировании — копировать флаги блокировок»).
+    /// Значения берутся из «infobase summary list» (блочный формат 8.5.x), а если rac их
+    /// не отдал (табличный формат) — догружаются полные свойства через «infobase info».
+    /// Сбой догрузки перенос не блокирует: флаги остаются null и в запросе создания
+    /// не передаются («переносим только фактически выставленные»).
+    /// </summary>
+    private async Task<(bool? ScheduledJobsDeny, bool? SessionsDeny)> EnsureSourceLockFlagsAsync(
+        RacConnectionParams sourceParams, Guid sourceClusterId, RacInfobaseSummary source)
+    {
+        if (source.ScheduledJobsDeny is not null && source.SessionsDeny is not null)
+            return (source.ScheduledJobsDeny, source.SessionsDeny);
+
+        RacInfobaseInfo? info = null;
+        try
+        {
+            info = await _rac.GetInfobaseInfoAsync(
+                sourceParams, sourceClusterId, source.InfobaseId, null, null).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Сбой «infobase info» не блокирует перенос — флаги остаются null.
+        }
+
+        return (
+            source.ScheduledJobsDeny ?? info?.ScheduledJobsDeny,
+            source.SessionsDeny ?? info?.SessionsDeny);
     }
 
     /// <summary>Запуск загрузки кластеров источника без ожидания (fire-and-forget).</summary>

@@ -605,6 +605,12 @@ public sealed class RacClient : IRacClient
             args.Add("--create-database");
         if (request.ScheduledJobsDeny)
             args.Add("--scheduled-jobs-deny=on");
+        // issue #69, комментарий 7OH от 2026-10-26: «при переносе/копировании — копировать
+        // флаги блокировок». Только фактически выставленная блокировка начала сеансов
+        // (== true) передаётся ключом «--sessions-deny=on»; off/null — ключ не добавляется
+        // (rac и так создаёт базу без блокировки).
+        if (request.SessionsDeny == true)
+            args.Add("--sessions-deny=on");
         return args.ToArray();
     }
 

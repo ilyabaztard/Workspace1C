@@ -1019,6 +1019,46 @@ public sealed class RacOutputParserTests
     }
 
     [Fact]
+    public void ToInfobaseSummaries_ParsesLockFlags_FromKeyValueBlocks()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «при переносе/копировании — копировать
+        // флаги блокировок». Блочный формат «infobase summary list» может содержать
+        // scheduled-jobs-deny/sessions-deny (с дефисом и camelCase) — парсер обязан их
+        // прочитать; отсутствующие ключи оставляют null (флаг неизвестен, не «снят»).
+        const string output =
+            "infobase           : 99999999-aaaa-bbbb-cccc-ddddeeeeffff\n" +
+            "name               : \"Бухгалтерия\"\n" +
+            "dbms               : MSSQLServer\n" +
+            "db-server          : SQL-SRV-01\n" +
+            "db-name            : base_1c\n" +
+            "scheduled-jobs-deny : on\n" +
+            "sessions-deny      : off\n";
+
+        var infobase = Assert.Single(RacOutputParser.ToInfobaseSummaries(output));
+
+        Assert.Equal("Бухгалтерия", infobase.Name);
+        Assert.True(infobase.ScheduledJobsDeny);
+        Assert.False(infobase.SessionsDeny);
+
+        const string camelCaseOutput =
+            "infobase-summary-id : 99999999-aaaa-bbbb-cccc-ddddeeeeffff\n" +
+            "name                : \"Бухгалтерия 8.5\"\n" +
+            "scheduledJobsDeny   : yes\n" +
+            "sessionsDeny        : on\n";
+
+        var infobase85 = Assert.Single(RacOutputParser.ToInfobaseSummaries(camelCaseOutput));
+        Assert.True(infobase85.ScheduledJobsDeny);
+        Assert.True(infobase85.SessionsDeny);
+
+        // Без ключей флагов (табличный формат) — null, а не false: «флаг не известен».
+        const string noFlagsOutput =
+            "99999999-aaaa-bbbb-cccc-ddddeeeeffff\tБухгалтерия\t\tMSSQLServer\tsql-01\tbase_1c\n";
+        var noFlags = Assert.Single(RacOutputParser.ToInfobaseSummaries(noFlagsOutput));
+        Assert.Null(noFlags.ScheduledJobsDeny);
+        Assert.Null(noFlags.SessionsDeny);
+    }
+
+    [Fact]
     public void ToInfobaseSummaries_KeyValueBlocks_QuotedDbms_Unquoted()
     {
         // issue #3, часть 1: блочный формат (те же версии rac, что отдают summary

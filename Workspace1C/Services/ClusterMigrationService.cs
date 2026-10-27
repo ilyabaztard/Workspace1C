@@ -80,7 +80,9 @@ public static class ClusterMigrationService
         string dbPassword,
         string overrideDbms = "",
         string overrideDbServer = "",
-        string overrideLocale = "")
+        string overrideLocale = "",
+        bool? scheduledJobsDeny = null,
+        bool? sessionsDeny = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -104,7 +106,13 @@ public static class ClusterMigrationService
             SecurityLevel = source.SecurityLevel,
             // БД на сервере СУБД уже существует — только регистрируем базу в новом кластере.
             CreateDb = false,
-            ScheduledJobsDeny = false
+            // issue #69, комментарий 7OH от 2026-10-26: «при переносе/копировании — копировать
+            // флаги блокировок». Переносятся ТОЛЬКО фактически выставленные флаги (== true):
+            // false/null — в rac «infobase create» не передаётся ничего (off у новой базы и есть
+            // состояние по умолчанию). Значения берутся из «infobase summary list» (блочный
+            // формат 8.5.x) либо догружаются через «infobase info» в ClusterMigrationViewModel.
+            ScheduledJobsDeny = scheduledJobsDeny == true,
+            SessionsDeny = sessionsDeny == true ? true : (bool?)null
         };
     }
 

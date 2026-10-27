@@ -58,7 +58,10 @@ namespace Workspace1C
             // issue #69, комментарий 7OH от 2026-10-26: пользователь ввёл логин/пароль,
             // нажал «Повторить попытку» — и не знает, что делать дальше. По типовой
             // ошибке rac показываем подсказку и (для занятой базы) кнопку «Завершить
-            // сеансы и повторить».
+            // сеансы и повторить». Галочка «Установить блокировку регламентных заданий»
+            // видна УЖЕ при первом запросе логина/пароля (комментарий 7OH от 2026-10-26:
+            // «И может быть сразу галочку показывать - ещё при первом запросе логина и
+            // пароля?»); кнопка «Завершить сеансы и повторить» — только для занятой базы.
             var kind = ServerMonitorViewModel.ClassifyDropError(errorText);
             var hint = ServerMonitorViewModel.BuildDropRetryHint(kind);
             if (!string.IsNullOrEmpty(hint))
@@ -69,11 +72,6 @@ namespace Workspace1C
             if (kind == ServerMonitorViewModel.RacDropErrorKind.Sessions)
             {
                 TerminateSessionsButton.Visibility = Visibility.Visible;
-                // issue #69, комментарий 7OH от 2026-10-26: вместе с кнопкой «Завершить
-                // сеансы и повторить» предлагается галочка «Установить блокировку
-                // регламентных заданий» — при повторном «Завершить сеансы и повторить»
-                // сначала ставится блокировка, потом снимаются сеансы.
-                BlockScheduledJobsCheckBox.Visibility = Visibility.Visible;
             }
         }
 

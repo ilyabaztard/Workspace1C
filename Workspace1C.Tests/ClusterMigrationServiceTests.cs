@@ -66,6 +66,51 @@ public sealed class ClusterMigrationServiceTests
     }
 
     [Fact]
+    public void BuildCreateRequest_CopiesLockFlags_WhenSetInSource()
+    {
+        // issue #69, комментарий 7OH от 2026-10-26: «при переносе/копировании — копировать
+        // флаги блокировок». Фактически выставленные scheduled-jobs-deny/sessions-deny
+        // базы-источника переносятся в rac «infobase create» приёмника.
+        var source = new RacInfobaseSummary
+        {
+            Name = "Бухгалтерия",
+            ScheduledJobsDeny = true,
+            SessionsDeny = true
+        };
+
+        var request = ClusterMigrationService.BuildCreateRequest(
+            source, "user", "pass", scheduledJobsDeny: true, sessionsDeny: true);
+
+        Assert.True(request.ScheduledJobsDeny);
+        Assert.True(request.SessionsDeny);
+    }
+
+    [Fact]
+    public void BuildCreateRequest_DoesNotCopyLockFlags_WhenOffOrUnknown()
+    {
+        // «Переносим только фактически выставленные»: false/null флаги источника НЕ
+        // добавляют фиктивные ключи — новая база и так создаётся без блокировок
+        // (ScheduledJobsDeny=false, SessionsDeny=null → rac-аргументы не добавляются).
+        var source = new RacInfobaseSummary
+        {
+            Name = "Зарплата",
+            ScheduledJobsDeny = false,
+            SessionsDeny = false
+        };
+
+        var request = ClusterMigrationService.BuildCreateRequest(source, "user", "pass");
+
+        Assert.False(request.ScheduledJobsDeny);
+        Assert.Null(request.SessionsDeny);
+
+        // Неизвестные флаги (null у источника) — тоже не передаются.
+        var unknownFlags = ClusterMigrationService.BuildCreateRequest(
+            new RacInfobaseSummary { Name = "Кадры" }, "user", "pass");
+        Assert.False(unknownFlags.ScheduledJobsDeny);
+        Assert.Null(unknownFlags.SessionsDeny);
+    }
+
+    [Fact]
     public void BuildCreateRequest_UsesOverrideDbmsAndDbServer_WhenProvided()
     {
         // issue #41, комментарий 7OH: rac «infobase create» требует тип СУБД и сервер СУБД;

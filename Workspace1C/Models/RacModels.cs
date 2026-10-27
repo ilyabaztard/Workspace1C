@@ -396,6 +396,19 @@ public sealed class RacInfobaseSummary
 
     /// <summary>Признак лицензированной информационной базы (колонка «licensed», «0»/«1»).</summary>
     public bool Licensed { get; set; }
+
+    // ---- Флаги блокировок (issue #69, комментарий 7OH от 2026-10-26: «при переносе/
+    // копировании — копировать флаги блокировок») — доступны не во всех форматах вывода
+    // «infobase summary list» (блочный формат 8.5.x их содержит; табличный — нет).
+    // null — значение rac неизвестно (догружается через «infobase info»). ----
+
+    /// <summary>Блокировка регламентных заданий включена («scheduled-jobs-deny» = on);
+    /// null — в выводе «infobase summary list» значение отсутствует.</summary>
+    public bool? ScheduledJobsDeny { get; set; }
+
+    /// <summary>Блокировка начала сеансов включена («sessions-deny» = on);
+    /// null — в выводе «infobase summary list» значение отсутствует.</summary>
+    public bool? SessionsDeny { get; set; }
 }
 
 /// <summary>
