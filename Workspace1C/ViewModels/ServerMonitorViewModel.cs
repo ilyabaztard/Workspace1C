@@ -29,6 +29,21 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     private readonly IServerListStore? _serverListStore;
 
     /// <summary>
+    /// Получение установленных программных лицензий (п.5 «Мониторинг лицензий»,
+    /// выпуск 1.0.0.87: «ring license list» / licensetool на Linux). null — сервис
+    /// недоступен (тесты) — вкладка «Лицензии» показывает только занятые сеансами
+    /// лицензии без сводки «всего/свободно».
+    /// </summary>
+    private readonly IRingLicenseService? _ringLicenses;
+
+    /// <summary>
+    /// Оповещения о нехватке лицензий (п.5, 1.0.0.87): при загрузке данных кластера
+    /// проверяется порог «свободно меньше N» из настроек уведомлений. null — недоступно
+    /// (тесты) — проверка порога пропускается.
+    /// </summary>
+    private readonly LicenseManager? _licenseAlerts;
+
+    /// <summary>
     /// Показ диалога повтора удаления базы из кластера (issue #69): реализует окно
     /// монитора (WPF/Avalonia), чтобы VM оставалась тестируемой. Получает текст
     /// ошибки, логин и пароль администратора ИБ с прошлой попытки (пароль сохраняется
@@ -53,6 +68,8 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     private bool _hasConnected;
     private RacClusterInfo? _clusterInfo;
     private string _clusterInfoText = string.Empty;
+    private string _licenseSummaryText = string.Empty;
+    private string _licenseStatusText = string.Empty;
     private RacSessionRow? _selectedSession;
     private RacConnectionRow? _selectedConnection;
 
@@ -106,14 +123,65 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         IDialogService dialogs,
         Action<Action>? dispatchToUi = null,
         IServerListStore? serverListStore = null,
-        Func<string, string?, string?, DropRetryResult>? dropRetryDialog = null)
+        Func<string, string?, string?, DropRetryResult>? dropRetryDialog = null,
+        IRingLicenseService? ringLicenses = null,
+        LicenseManager? licenseAlerts = null,
+        int licenseFreeThreshold = 0,
+        int licenseAlertRepeatHours = 24)
     {
         _rac = rac ?? throw new ArgumentNullException(nameof(rac));
         _dialogs = dialogs ?? throw new ArgumentNullException(nameof(dialogs));
         _dispatchToUi = dispatchToUi;
         _serverListStore = serverListStore;
         _dropRetryDialog = dropRetryDialog;
+        _ringLicenses = ringLicenses;
+        _licenseAlerts = licenseAlerts;
+        _licenseFreeThreshold = licenseFreeThreshold;
+        _licenseAlertRepeatHours = licenseAlertRepeatHours;
         LoadServers();
+    }
+
+    // ===================== Лицензии (п.5, выпуск 1.0.0.87) =====================
+
+    /// <summary>Порог «свободно меньше N» из настроек уведомлений (0 — отключено).</summary>
+    private readonly int _licenseFreeThreshold;
+
+    /// <summary>Не повторять оповещение о лицензиях чаще, чем раз в N часов (настройка уведомлений).</summary>
+    private readonly int _licenseAlertRepeatHours;
+
+    /// <summary>
+    /// Текст сводки вкладки «Лицензии»: «Всего: N, занято: N, свободно: N» — по
+    /// установленным программным лицензиям и сеансам («session list --licenses»);
+    /// если установленные лицензии недоступны (нет ring/licensetool) — «Занято
+    /// сеансами: N». Internal — для юнит-тестов форматирования.
+    /// </summary>
+    internal static string BuildLicenseSummaryText(
+        IReadOnlyList<RacSessionInfo> licensedSessions, IReadOnlyList<ProgramLicense> installed)
+    {
+        var snapshot = LicenseCalculator.ComputeSnapshot(licensedSessions, installed);
+        if (snapshot.TotalFree is not int free)
+        {
+            return string.Format(
+                LocalizationManager.T("ServerMonitor.Licenses.UsedOnlyFormat"),
+                snapshot.TotalUsed);
+        }
+        return string.Format(
+            LocalizationManager.T("ServerMonitor.Licenses.SummaryFormat"),
+            snapshot.TotalInstalled, snapshot.TotalUsed, free);
+    }
+
+    /// <summary>
+    /// Проверка порога «свободно меньше N» при загрузке данных кластера (п.5, 1.0.0.87):
+    /// оповещение через <see cref="LicenseManager"/> уходит не чаще раза в N часов.
+    /// </summary>
+    private void CheckLicenseThresholdAlert(
+        IReadOnlyList<RacSessionInfo> licensedSessions, IReadOnlyList<ProgramLicense> installed)
+    {
+        if (_licenseAlerts is null || _licenseFreeThreshold <= 0)
+            return;
+        var snapshot = LicenseCalculator.ComputeSnapshot(licensedSessions, installed);
+        var label = $"{ServerAddress}{(ServerPort > 0 ? ":" + ServerPort.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty)}";
+        _licenseAlerts.CheckAndNotify(label, snapshot, _licenseFreeThreshold, DateTime.Now, _licenseAlertRepeatHours);
     }
 
     // ===================== Подключение =====================
@@ -446,6 +514,20 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// <summary>Блокировки объектов данных кластера.</summary>
     public ObservableCollection<RacLockRow> Locks { get; } = new();
 
+    /// <summary>
+    /// Занятые лицензии по сеансам кластера (п.5 «Мониторинг лицензий», выпуск 1.0.0.87):
+    /// данные rac «session list --licenses». Заполняется только распознанными типами
+    /// лицензий (сеансы без lic-type не попадают в коллекцию).
+    /// </summary>
+    public ObservableCollection<RacLicensedSessionRow> LicensedSessions { get; } = new();
+
+    /// <summary>
+    /// Установленные программные лицензии (п.5, 1.0.0.87): разбор «ring license list» /
+    /// «licensetool». Если утилиты нет — коллекция пуста, причина — в
+    /// <see cref="LicenseStatusText"/>.
+    /// </summary>
+    public ObservableCollection<ProgramLicense> InstalledLicenses { get; } = new();
+
     /// <summary>Сеансы с учётом фильтра по базе (таблица биндится сюда, issue #3).</summary>
     public ObservableCollection<RacSessionRow> FilteredSessions { get; } = new();
 
@@ -469,6 +551,12 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// <summary>Заголовок вкладки «Блокировки» с количеством показываемых строк.</summary>
     public string LocksTabText => TabHeader("ServerMonitor.Tabs.Locks", FilteredLocks.Count);
 
+    /// <summary>
+    /// Заголовок вкладки «Лицензии» с количеством строк («Лицензии (3)»): число —
+    /// суммарно занятых лицензий в учётных строках (п.5, 1.0.0.87).
+    /// </summary>
+    public string LicensesTabText => TabHeader("ServerMonitor.Tabs.Licenses", LicensedSessions.Count);
+
     /// <summary>Заголовок списка информационных баз с количеством строк («Базы (35)»).</summary>
     public string InfobasesHeaderText => TabHeader("ServerMonitor.Tabs.Infobases", Infobases.Count);
 
@@ -488,6 +576,7 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(SessionsTabText));
         OnPropertyChanged(nameof(ConnectionsTabText));
         OnPropertyChanged(nameof(LocksTabText));
+        OnPropertyChanged(nameof(LicensesTabText));
         OnPropertyChanged(nameof(InfobasesHeaderText));
     }
 
@@ -514,6 +603,27 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     {
         get => _clusterInfoText;
         private set => SetProperty(ref _clusterInfoText, value);
+    }
+
+    /// <summary>
+    /// Сводка лицензий вкладки «Лицензии» (п.5, 1.0.0.87):
+    /// «Всего: 10, занято: 7, свободно: 3» (по установленным лицензиям и сеансам);
+    /// если установленные лицензии недоступны — «Занято сеансами: N».
+    /// </summary>
+    public string LicenseSummaryText
+    {
+        get => _licenseSummaryText;
+        private set => SetProperty(ref _licenseSummaryText, value);
+    }
+
+    /// <summary>
+    /// Статус источника установленных лицензий (п.5, 1.0.0.87): предупреждение при
+    /// недоступности «ring license list»/«licensetool»/каталога лицензий; пусто — штатно.
+    /// </summary>
+    public string LicenseStatusText
+    {
+        get => _licenseStatusText;
+        private set => SetProperty(ref _licenseStatusText, value);
     }
 
     /// <summary>Выбранный сеанс на вкладке «Сеансы» (кнопка «Завершить сеанс»).</summary>
@@ -1661,8 +1771,57 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                 () => _rac.GetInfobasesAsync(parameters, clusterId, cancellationToken));
             var infoTask = LoadInfoAsync();
 
+            // п.5 «Мониторинг лицензий» (1.0.0.87): сеансы с лицензиями (rac «session list
+            // --licenses») и установленные программные лицензии («ring license list»).
+            // Загрузка изолирована от остальных вкладок: недоступность ring/licensetool
+            // не роняет общий цикл — вкладка покажет занятые сеансами лицензии, а
+            // предупреждение source будет в LicenseStatusText.
+            IReadOnlyList<RacSessionInfo> licensedSessions = Array.Empty<RacSessionInfo>();
+            IReadOnlyList<ProgramLicense> installedLicenses = Array.Empty<ProgramLicense>();
+            string? licenseWarning = null;
+            async Task LoadLicensesTabAsync()
+            {
+                try
+                {
+                    licensedSessions = await _rac.GetLicensedSessionsAsync(
+                        parameters, clusterId, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(
+                        $"{LocalizationManager.T("ServerMonitor.Tabs.Licenses")}: {BuildErrorMessage(ex)}");
+                    return;
+                }
+
+                try
+                {
+                    // Установленные программные лицензии (ring/licensetool/каталог).
+                    var ringResult = _ringLicenses is not null
+                        ? await _ringLicenses.GetInstalledLicensesAsync(cancellationToken).ConfigureAwait(false)
+                        : null;
+                    installedLicenses = ringResult?.Licenses ?? Array.Empty<ProgramLicense>();
+                    licenseWarning = ringResult?.Warning;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Недоступность утилиты лицензий — не ошибка вкладки (запасной режим).
+                    licenseWarning = BuildErrorMessage(ex);
+                }
+            }
+
+            var licensesTask = LoadLicensesTabAsync();
+
             await Task.WhenAll(
-                processesTask, sessionsTask, connectionsTask, locksTask, infobasesTask, infoTask)
+                processesTask, sessionsTask, connectionsTask, locksTask, infobasesTask, infoTask,
+                licensesTask)
                 .ConfigureAwait(false);
 
             var processes = await processesTask.ConfigureAwait(false);
@@ -1672,7 +1831,9 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
             var infobases = await infobasesTask.ConfigureAwait(false);
             var info = await infoTask.ConfigureAwait(false);
 
-            ApplyClusterData(processes, sessions, connections, locks, infobases, info);
+            ApplyClusterData(
+                processes, sessions, connections, locks, infobases, info,
+                licensedSessions, installedLicenses, licenseWarning);
 
             if (errors.Count > 0)
             {
@@ -2042,7 +2203,10 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         IReadOnlyList<RacConnectionInfo> connections,
         IReadOnlyList<RacLockInfo> locks,
         IReadOnlyList<RacInfobaseSummary> infobases,
-        RacClusterInfo? info)
+        RacClusterInfo? info,
+        IReadOnlyList<RacSessionInfo> licensedSessions = null!,
+        IReadOnlyList<ProgramLicense> installedLicenses = null!,
+        string? licenseWarning = null)
     {
         void Apply()
         {
@@ -2073,6 +2237,18 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
             ClusterInfo = info;
             ClusterInfoText = FormatClusterInfo(info);
             ReplaceRows(ClusterProperties, BuildClusterPropertyRows(info));
+
+            // п.5 «Мониторинг лицензий» (1.0.0.87): занятые сеансами лицензии
+            // (только сеансы с распознанным типом) + установленные программные лицензии.
+            var curatedSessions = licensedSessions ?? Array.Empty<RacSessionInfo>();
+            var curatedInstalled = installedLicenses ?? Array.Empty<ProgramLicense>();
+            ReplaceRows(LicensedSessions, curatedSessions
+                .Where(s => !string.IsNullOrWhiteSpace(s.LicType))
+                .Select(s => new RacLicensedSessionRow(s, SessionInfobaseName(s))));
+            ReplaceRows(InstalledLicenses, curatedInstalled);
+            LicenseStatusText = licenseWarning ?? string.Empty;
+            LicenseSummaryText = BuildLicenseSummaryText(curatedSessions, curatedInstalled);
+            CheckLicenseThresholdAlert(curatedSessions, curatedInstalled);
 
             // Вкладка «Базы» (issue #3): строки из «infobase summary list». Выбор
             // восстанавливается по Id; если база исчезла (например, удалена) — выбор

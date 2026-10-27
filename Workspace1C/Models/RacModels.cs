@@ -185,6 +185,31 @@ public sealed class RacSessionInfo
 
     /// <summary>Состояние сеанса (колонка «state», например «active», «sleep», «dead»).</summary>
     public string State { get; set; } = string.Empty;
+
+    // ---- Поля лицензий (команда rac «session list --licenses», п.5 «Мониторинг
+    // лицензий», выпуск 1.0.0.87). Не заполнены, если seансы получены обычной
+    // командой «session list» (без параметра). Допускаются разные варианты вывода
+    // rac 8.3/8.5 (табличные колонки и блоки «ключ : значение»). ----
+
+    /// <summary>
+    /// Тип лицензии сеанса (поле «lic-type» вывода «session list --licenses»:
+    /// <c>server</c> — серверная (лицензия на сервер), <c>client</c>/<c>web</c> —
+    /// клиентские/сессионные и т.п.); пустая строка — rac не вернул информацию.
+    /// </summary>
+    public string LicType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Максимальное число лицензий, доступное сеансу (поле «max-licenses»
+    /// вывода «session list --licenses»); 0 — не указано.
+    /// </summary>
+    public int MaxLicenses { get; set; }
+
+    /// <summary>
+    /// Число лицензий, занятых сеансом (поле «licenses» / «used-licenses»
+    /// вывода «session list --licenses»); 0 — не указано (считается равным 1
+    /// для сеанса с непустым <see cref="LicType"/> при расчёте сводки).
+    /// </summary>
+    public int Licenses { get; set; }
 }
 
 /// <summary>

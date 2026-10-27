@@ -69,6 +69,21 @@ public sealed class NotificationChannelSettings
     /// <summary>Отправлять только ошибки и предупреждения (успешные операции пропускаются).</summary>
     public bool OnlyProblems { get; set; }
 
+    // ---------- Лицензии (п.5 «Мониторинг лицензий», выпуск 1.0.0.87) ----------
+
+    /// <summary>
+    /// Порог «свободных программных лицензий осталось меньше N»: при достижении
+    /// отправляется оповещение в каналы мониторинга (Telegram/email/системное).
+    /// 0 — проверка отключена.
+    /// </summary>
+    public int LicenseFreeThreshold { get; set; }
+
+    /// <summary>
+    /// Не повторять оповещение о нехватке лицензий одного сервера чаще, чем раз в N часов
+    /// (защита от спама на каждом цикле мониторинга); по умолчанию 24 ч.
+    /// </summary>
+    public int LicenseAlertRepeatHours { get; set; } = 24;
+
     /// <summary>Глубокая копия (для редактирования в окне без изменения исходника).</summary>
     public NotificationChannelSettings Clone() => (NotificationChannelSettings)MemberwiseClone();
 }

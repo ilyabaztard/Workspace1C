@@ -154,12 +154,18 @@ public static class AppServices
         services.AddSingleton<INotificationChannel>(sp => sp.GetRequiredService<TelegramNotificationChannel>());
         services.AddSingleton<INotificationChannel>(sp => sp.GetRequiredService<EmailNotificationChannel>());
         services.AddSingleton<INotificationService, NotificationDispatcher>();
+        // п.5 «Мониторинг лицензий» (1.0.0.87): установленные программные лицензии
+        // (ring license list / licensetool) и оповещения о нехватке лицензий.
+        services.AddSingleton<IRingLicenseService>(sp => new RingLicenseService(sp.GetService<IAppLogger>()));
+        services.AddSingleton<LicenseManager>(sp => new LicenseManager(
+            sp.GetRequiredService<INotificationService>(), sp.GetService<IAppLogger>()));
         // Новые фоновые функции 1.0.0.69: оповещения мониторинга серверов/журналов
         // регистрации и команды Telegram-бота (запускаются BackgroundFeatures.Start).
         services.AddSingleton<ServerAlertsService>(sp => new ServerAlertsService(
             sp.GetRequiredService<IRacClient>(), sp.GetRequiredService<IServerListStore>(),
             sp.GetRequiredService<INotificationService>(), sp.GetService<IInfobaseRepository>(),
-            sp.GetService<IAppLogger>()));
+            sp.GetService<IAppLogger>(),
+            sp.GetService<IRingLicenseService>(), sp.GetService<INotificationSettingsStore>()));
         services.AddSingleton<TelegramBotCommandService>(sp => new TelegramBotCommandService(
             sp.GetRequiredService<INotificationSettingsStore>(), sp.GetRequiredService<IScheduledTaskStore>(),
             sp.GetRequiredService<SchedulerService>(), sp.GetRequiredService<ServerAlertsService>(),

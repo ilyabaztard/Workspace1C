@@ -46,6 +46,10 @@ public partial class NotificationChannelsWindow : Window
         OnScheduledCheck.IsChecked = s.NotifyOnScheduledTasks;
         OnUpdatesCheck.IsChecked = s.NotifyOnUpdates;
         OnlyProblemsCheck.IsChecked = s.OnlyProblems;
+
+        // Порог «свободно меньше N» (п.5 «Мониторинг лицензий», 1.0.0.87).
+        LicenseThresholdBox.Text = s.LicenseFreeThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        LicenseRepeatBox.Text = s.LicenseAlertRepeatHours.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private NotificationChannelSettings Collect()
@@ -68,8 +72,18 @@ public partial class NotificationChannelsWindow : Window
             NotifyOnScheduledTasks = OnScheduledCheck.IsChecked == true,
             NotifyOnUpdates = OnUpdatesCheck.IsChecked == true,
             OnlyProblems = OnlyProblemsCheck.IsChecked == true,
+
+            // Порог «свободно меньше N» (п.5, 1.0.0.87): неотрицательное число, 0 — отключено.
+            LicenseFreeThreshold = ParseNonNegative(LicenseThresholdBox.Text, 0),
+            LicenseAlertRepeatHours = int.TryParse(LicenseRepeatBox.Text?.Trim(), out var repeat) && repeat > 0
+                ? repeat
+                : 24,
         });
     }
+
+    private static int ParseNonNegative(string? text, int fallback) =>
+        int.TryParse(text, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) && v >= 0 ? v : fallback;
 
     private static NotificationMessage TestMessage() => new()
     {

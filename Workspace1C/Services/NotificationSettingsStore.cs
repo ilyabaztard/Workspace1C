@@ -76,7 +76,7 @@ public sealed class NotificationSettingsStore : INotificationSettingsStore
         File.Move(tempPath, FilePath, overwrite: true);
     }
 
-    /// <summary>Нормализует строки (null → пусто, обрезка пробелов) и порт.</summary>
+    /// <summary>Нормализует строки (null → пусто, обрезка пробелов), порт и порог лицензий.</summary>
     internal static NotificationChannelSettings Normalize(NotificationChannelSettings s)
     {
         s.TelegramBotToken = (s.TelegramBotToken ?? "").Trim();
@@ -88,6 +88,12 @@ public sealed class NotificationSettingsStore : INotificationSettingsStore
         s.EmailTo = (s.EmailTo ?? "").Trim();
         if (s.SmtpPort <= 0 || s.SmtpPort > 65535)
             s.SmtpPort = 587;
+        // Порог «свободно меньше N» (п.5, выпуск 1.0.0.87): отрицательные значения —
+        // «отключено» (0). Период повторных оповещений — не меньше 1 часа.
+        if (s.LicenseFreeThreshold < 0)
+            s.LicenseFreeThreshold = 0;
+        if (s.LicenseAlertRepeatHours < 1)
+            s.LicenseAlertRepeatHours = 24;
         return s;
     }
 }

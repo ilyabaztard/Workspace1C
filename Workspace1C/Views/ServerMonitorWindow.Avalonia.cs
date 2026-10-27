@@ -112,6 +112,11 @@ namespace Workspace1C
             var rac = AppServices.GetRequiredService<IRacClient>();
             var dialogs = AppServices.GetRequiredService<IDialogService>();
             var serverListStore = AppServices.GetRequiredService<IServerListStore>();
+            // п.5 «Мониторинг лицензий» (1.0.0.87): установленные программные лицензии
+            // (ring/licensetool) и порог «свободно меньше N» из настроек уведомлений.
+            var ringLicenses = AppServices.GetRequiredService<IRingLicenseService>();
+            var licenseAlerts = AppServices.GetRequiredService<Workspace1C.Services.LicenseManager>();
+            var licenseSettings = AppServices.GetRequiredService<INotificationSettingsStore>().Load();
 
             // issue #69: диалог повтора удаления базы открывается из VM (после неудачного
             // rac «infobase drop») — колбэк реализует окно, чтобы VM оставалась тестируемой.
@@ -128,7 +133,11 @@ namespace Workspace1C
                             retry.Retry, retry.User, retry.Password,
                             retry.TerminateSessions, retry.BlockScheduledJobs)
                         : ViewModels.DropRetryResult.Cancel;
-                });
+                },
+                ringLicenses,
+                licenseAlerts,
+                licenseSettings.LicenseFreeThreshold,
+                licenseSettings.LicenseAlertRepeatHours);
 
             DataContext = _vm;
             _vm.PropertyChanged += OnVmPropertyChanged;
@@ -416,16 +425,21 @@ namespace Workspace1C
                 BuildContent(() => BuildSortableTable(_vm.Processes, ProcessColumns, BuildProcessRow,
                     tabKey: ServerMonitorColumnWidthsStore.ProcessesKey)));
             var infoTab = CreateTab(LocalizationManager.T("ServerMonitor.Tabs.Info"), BuildInfoPane());
+            // п.5 «Мониторинг лицензий» (1.0.0.87): вкладка «Лицензии» (занятые сеансами
+            // лицензии + установленные программные лицензии).
+            var licensesTab = CreateTab(_vm.LicensesTabText, BuildLicensesPane());
             tabs.Items.Add(sessionsTab);
             tabs.Items.Add(connectionsTab);
             tabs.Items.Add(locksTab);
             tabs.Items.Add(processesTab);
             tabs.Items.Add(infoTab);
+            tabs.Items.Add(licensesTab);
             // Заголовки с количеством строк обновляются при изменении коллекций.
             RegisterTabHeader(sessionsTab, nameof(ServerMonitorViewModel.SessionsTabText));
             RegisterTabHeader(connectionsTab, nameof(ServerMonitorViewModel.ConnectionsTabText));
             RegisterTabHeader(locksTab, nameof(ServerMonitorViewModel.LocksTabText));
             RegisterTabHeader(processesTab, nameof(ServerMonitorViewModel.ProcessesTabText));
+            RegisterTabHeader(licensesTab, nameof(ServerMonitorViewModel.LicensesTabText));
 
             // Индикатор фильтра по базе (issue #3, 7OH от 2026-10-17): надпись и кнопка
             // «Сбросить» видны ВСЕГДА; при снятом фильтре — «Без фильтра». Фильтрация
@@ -496,6 +510,177 @@ namespace Workspace1C
             Content = content
         }.Styled(ControlThemes.ServerMonitorTabItem);
 
+        /// <summary>
+        /// Вкладка «Лицензии» (п.5 «Мониторинг лицензий», выпуск 1.0.0.87): сводка,
+        /// занятые сеансами лицензии («session list --licenses») и установленные
+        /// программные лицензии («ring license list» / licensetool). Простые таблицы
+        /// без сортировки — ListBox со строкой-Grid по фиксированным колонкам.
+        /// </summary>
+        private Control BuildLicensesPane()
+        {
+            var summary = new TextBlock { FontSize = 13, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 2, 0, 4) };
+            summary.Bind(TextBlock.TextProperty, new Binding("LicenseSummaryText"));
+            var status = new TextBlock
+            {
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 4),
+                Foreground = new SolidColorBrush(Color.Parse("#D97706"))
+            };
+            status.Bind(TextBlock.TextProperty, new Binding("LicenseStatusText"));
+
+            var headerPanel = new StackPanel { Spacing = 2, Margin = new Thickness(0, 0, 0, 8), Children = { summary, status } };
+
+            var inUseTitle = new TextBlock
+            {
+                Text = LocalizationManager.T("ServerMonitor.Licenses.InUseHeader"),
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 2, 0, 4)
+            };
+            // Ширины колонок: отрицательные — «звёздные» (1 / -w), положительные — пиксели.
+            var inUseWidths = new[] { -1.3, -1.3, -1.0, 110d, 80d, 90d, 90d };
+            var inUseTable = BuildLicenseList(
+                _vm.LicensedSessions,
+                new[] { "User", "InfobaseName", "Host", "LicType", "LicensesUsedText", "MaxLicensesText", "AppId" },
+                inUseWidths,
+                fixedHeight: 240);
+
+            var installedTitle = new TextBlock
+            {
+                Text = LocalizationManager.T("ServerMonitor.Licenses.InstalledHeader"),
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 6, 0, 4)
+            };
+            var installedWidths = new[] { -1.5, 110d, 90d, -1.0, -1.0, 90d, 100d };
+            var installedTable = BuildLicenseList(
+                _vm.InstalledLicenses,
+                new[] { "SerialNumber", "Type", "Version", "Module", "User", "State", "ExpiryDate" },
+                installedWidths,
+                fixedHeight: 200);
+
+            var panel = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
+            DockPanel.SetDock(headerPanel, Dock.Top);
+            panel.Children.Add(headerPanel);
+            DockPanel.SetDock(inUseTitle, Dock.Top);
+            panel.Children.Add(inUseTitle);
+            DockPanel.SetDock(installedTitle, Dock.Bottom);
+            panel.Children.Add(installedTitle);
+            DockPanel.SetDock(inUseTable, Dock.Top);
+            panel.Children.Add(inUseTable);
+            panel.Children.Add(installedTable);
+            return panel;
+        }
+
+        /// <summary>Таблица лицензий: строка-заголовок + ListBox со строками-Grid.</summary>
+        private Control BuildLicenseList<T>(
+            ObservableCollection<T> items, IReadOnlyList<string> propertyPaths,
+            IReadOnlyList<double> widths, double fixedHeight = 0)
+        {
+            var headerCells = propertyPaths.Select(p =>
+            {
+                // Значения T/ProgamLicense отображаются напрямую; лицензионные строки
+                // сеансов локализованы в модели строки. Заголовки — по ключам локализации.
+                return p switch
+                {
+                    "User" => LocalizationManager.T("ServerMonitor.Licenses.Columns.User"),
+                    "InfobaseName" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Infobase"),
+                    "Host" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Host"),
+                    "LicType" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Type"),
+                    "LicensesUsedText" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Used"),
+                    "MaxLicensesText" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Max"),
+                    "AppId" => LocalizationManager.T("ServerMonitor.Licenses.Columns.App"),
+                    "SerialNumber" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Serial"),
+                    "Type" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Type"),
+                    "Version" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Version"),
+                    "Module" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Module"),
+                    "State" => LocalizationManager.T("ServerMonitor.Licenses.Columns.State"),
+                    "ExpiryDate" => LocalizationManager.T("ServerMonitor.Licenses.Columns.Expiry"),
+                    _ => p
+                };
+            }).ToList();
+
+            var list = new ListBox
+            {
+                ItemsSource = items,
+                Margin = new Thickness(0, 0, 0, 4),
+                FontSize = 12.5
+            };
+            // Разная высота двух таблиц задаётся вызывающим кодом (по умолчанию — авто).
+            if (fixedHeight > 0)
+                list.Height = fixedHeight;
+            list.ItemTemplate = new FuncDataTemplate<object>((item, _) =>
+                LicenseRow(
+                    propertyPaths.Select(p => FormatCell(item, p)).ToList(),
+                    widths,
+                    header: false));
+
+            var headerRow = LicenseRow(headerCells, widths, header: true);
+            var root = new StackPanel { Children = { headerRow, list } };
+            return root;
+        }
+
+        /// <summary>Значение ячейки таблицы лицензий (по пути свойства или текст года).</summary>
+        private static string FormatCell(object item, string propertyPath)
+        {
+            if (item is RacLicensedSessionRow row)
+            {
+                return propertyPath switch
+                {
+                    "User" => row.User,
+                    "InfobaseName" => row.InfobaseName,
+                    "Host" => row.Host,
+                    "LicType" => row.LicType,
+                    "LicensesUsedText" => row.LicensesUsedText,
+                    "MaxLicensesText" => row.MaxLicensesText,
+                    "AppId" => row.AppId,
+                    _ => string.Empty
+                };
+            }
+            if (item is ProgramLicense license)
+            {
+                return propertyPath switch
+                {
+                    "SerialNumber" => license.SerialNumber,
+                    "Type" => license.Type,
+                    "Version" => license.Version,
+                    "Module" => license.Module,
+                    "User" => license.User,
+                    "State" => license.State,
+                    "ExpiryDate" => license.ExpiryDate?.ToString("dd.MM.yyyy") ?? "—",
+                    _ => string.Empty
+                };
+            }
+            return Convert.ToString(item) ?? string.Empty;
+        }
+
+        /// <summary>Строка таблицы лицензий: Grid с ячейками по ширинам колонок.</summary>
+        private static Control LicenseRow(IReadOnlyList<string> cells, IReadOnlyList<double> widths, bool header)
+        {
+            var grid = new Grid { Margin = new Thickness(0, 1, 0, 1) };
+            foreach (var width in widths)
+            {
+                grid.ColumnDefinitions.Add(width < 0
+                    ? new ColumnDefinition(new GridLength(1, GridUnitType.Star))
+                    : new ColumnDefinition(new GridLength(width, GridUnitType.Pixel)));
+            }
+            for (var i = 0; i < cells.Count && i < widths.Count; i++)
+            {
+                var cell = new TextBlock
+                {
+                    Text = cells[i],
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    FontWeight = header ? FontWeight.SemiBold : FontWeight.Normal,
+                    FontSize = header ? 12 : 12.5
+                };
+                ThemeBrushes.Bind(cell, TextBlock.ForegroundProperty, "TextPrimaryColorBrush");
+                Grid.SetColumn(cell, i);
+                grid.Children.Add(cell);
+            }
+            return grid;
+        }
+
         /// <summary>Регистрирует заголовок вкладки для обновления при смене количества строк.</summary>
         private void RegisterTabHeader(TabItem tab, string property)
             => _dynamicTabHeaders.Add((tab, property));
@@ -512,6 +697,7 @@ namespace Workspace1C
                     nameof(ServerMonitorViewModel.SessionsTabText) => _vm.SessionsTabText,
                     nameof(ServerMonitorViewModel.ConnectionsTabText) => _vm.ConnectionsTabText,
                     nameof(ServerMonitorViewModel.LocksTabText) => _vm.LocksTabText,
+                    nameof(ServerMonitorViewModel.LicensesTabText) => _vm.LicensesTabText,
                     _ => _vm.ProcessesTabText
                 };
             }

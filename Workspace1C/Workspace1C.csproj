@@ -59,10 +59,10 @@
          поэтому AssemblyVersion/FileVersion/Version ограничены 4 частями, а точная
          пользовательская версия «0.3.1.1» задаётся через InformationalVersion
          и выводится в заголовок окна. -->
-    <Version>1.0.0.86</Version>
-    <AssemblyVersion>1.0.0.86</AssemblyVersion>
-    <FileVersion>1.0.0.86</FileVersion>
-    <InformationalVersion>1.0.0.86</InformationalVersion>
+    <Version>1.0.0.87</Version>
+    <AssemblyVersion>1.0.0.87</AssemblyVersion>
+    <FileVersion>1.0.0.87</FileVersion>
+    <InformationalVersion>1.0.0.87</InformationalVersion>
     <!-- RID/SelfContained только при publish, чтобы обычный dotnet run/build не ломался -->
     <PublishReadyToRun>false</PublishReadyToRun>
     <DebugType>embedded</DebugType>
@@ -608,6 +608,18 @@
     <!-- Анализ технологического журнала (1.0.0.86, п.4): чистая ViewModel окна анализа
          и слой парсера ТЖ (TechLogParser) — обе платформы; на Linux подключаются явно. -->
     <Compile Include="ViewModels\TechLogAnalysisViewModel.cs" />
+    <!-- Мониторинг лицензий (1.0.0.87, п.5): модель программной лицензии, строка
+         вкладки «Лицензии» и сервисы (ring/licensetool, сводка и порог) — чистый .NET
+         без платформенных зависимостей, используются обеими платформами — на Linux
+         подключаются явно паттерном Remove+Include (как TechLogParser). -->
+    <Compile Remove="Models\ProgramLicense.cs" />
+    <Compile Include="Models\ProgramLicense.cs" />
+    <Compile Remove="ViewModels\RacLicensedSessionRow.cs" />
+    <Compile Include="ViewModels\RacLicensedSessionRow.cs" />
+    <Compile Remove="Services\RingLicenseService.cs" />
+    <Compile Include="Services\RingLicenseService.cs" />
+    <Compile Remove="Services\LicenseManager.cs" />
+    <Compile Include="Services\LicenseManager.cs" />
     <Compile Remove="Services\TechLogParser\TechLogEvent.cs" />
     <Compile Include="Services\TechLogParser\TechLogEvent.cs" />
     <Compile Remove="Services\TechLogParser\TechLogQuery.cs" />

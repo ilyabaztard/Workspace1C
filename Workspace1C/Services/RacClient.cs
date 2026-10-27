@@ -229,6 +229,21 @@ public sealed class RacClient : IRacClient
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<RacSessionInfo>> GetLicensedSessionsAsync(
+        RacConnectionParams parameters, Guid clusterId, CancellationToken cancellationToken = default)
+    {
+        // п.5 «Мониторинг лицензий» (1.0.0.87): команда «session list --licenses».
+        // Данные кластера всегда запрашиваются целиком (параметр «--infobase=...» на
+        // платформе пользователя не работает и вызывает зависание — см. комментарий
+        // в LoadClusterDataAsync), поэтому фильтр по базе здесь не применяется.
+        var output = await RunAsync(parameters, cancellationToken, SessionLicensesArgs(clusterId))
+            .ConfigureAwait(false);
+        var sessions = RacOutputParser.ToSessions(output);
+        EnsureParsedOrThrow(output, sessions.Count, "session list --licenses", _logger);
+        return sessions;
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<RacConnectionInfo>> GetConnectionsAsync(
         RacConnectionParams parameters, Guid clusterId, Guid? infobaseId = null,
         CancellationToken cancellationToken = default)
@@ -540,6 +555,18 @@ public sealed class RacClient : IRacClient
     /// </summary>
     internal static string[] SessionListArgs(Guid clusterId, Guid? infobaseId = null) =>
         BuildListArgs("session", "list", clusterId, infobaseId);
+
+    /// <summary>
+    /// Аргументы команды «session list --licenses» (п.5 «Мониторинг лицензий»,
+    /// выпуск 1.0.0.87): та же команда «session list --cluster=...» + параметр
+    /// «--licenses» — rac дополняет вывод колонками/свойствами лицензий
+    /// (lic-type, max-licenses, licenses). Internal — для юнит-тестов.
+    /// </summary>
+    internal static string[] SessionLicensesArgs(Guid clusterId)
+    {
+        var args = new List<string>(5) { "session", "list", $"--cluster={clusterId}", "--licenses" };
+        return args.ToArray();
+    }
 
     /// <summary>
     /// Аргументы команды «connection list» (issue #3): фильтр по базе через

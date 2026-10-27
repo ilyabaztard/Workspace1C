@@ -168,6 +168,26 @@
                 <CheckBox x:Name="OnlyProblemsCheck" Margin="0,8,0,4">
                     <TextBlock Text="{loc:Loc Notifications.OnlyProblems}"/>
                 </CheckBox>
+
+                <!-- ===== Лицензии (п.5 «Мониторинг лицензий», выпуск 1.0.0.87) ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Loc Notifications.LicensesHeader}"/>
+                <TextBlock Style="{StaticResource HintText}" Text="{loc:Loc Notifications.LicensesHint}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="{loc:Loc Notifications.LicenseThreshold}"/>
+                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="LicenseThresholdBox" Style="{StaticResource FieldBox}"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}" Margin="0,4,0,0" Text="{loc:Loc Notifications.LicenseRepeatHours}"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" x:Name="LicenseRepeatBox" Style="{StaticResource FieldBox}"/>
+                </Grid>
+                <TextBlock Style="{StaticResource HintText}" Text="{loc:Loc Notifications.LicenseRepeatHint}"/>
             </StackPanel>
         </ScrollViewer>
 

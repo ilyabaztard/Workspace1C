@@ -11,6 +11,49 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.87] — 2026-10-27
+
+### Добавлено
+
+- **Мониторинг лицензий (п.5, окно «Серверы 1С» → вкладка «Лицензии», Windows и Linux)**:
+  - **сколько лицензий занято на сервере и кем** — команда `rac session list --licenses`
+    (сеансы с полями типа лицензии `lic-type`, максимума `max-licenses` и занятых
+    `licenses`; поддерживаются табличный формат rac 8.3.x и блочный «ключ : значение»
+    rac 8.5.x). На вкладке — строки «пользователь — база — хост — тип — занято — максимум»;
+  - **какие программные лицензии установлены** — `ring license list` (Windows и Linux);
+    на Linux также утилита платформы `/opt/1cv8/<версия>/x86_64/utils/licensetool`; если
+    утилит нет — запасной источник: каталог файлов лицензий
+    (`%ProgramData%\1C\1Cv8\licenses` на Windows, `/etc/1cv8/License` на Linux) с
+    предупреждением о недоступности утилиты;
+  - сводка «Всего: N, занято: N, свободно: N» по сеансам и установленным лицензиям.
+  ([`RacOutputParser.cs`](Workspace1C/Services/RacOutputParser.cs),
+  [`RacClient.cs`](Workspace1C/Services/RacClient.cs),
+  [`RingLicenseService.cs`](Workspace1C/Services/RingLicenseService.cs),
+  [`LicenseManager.cs`](Workspace1C/Services/LicenseManager.cs),
+  [`ServerMonitorViewModel.cs`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)).
+- **Порог «свободных лицензий осталось меньше N»** — настройка в окне «Уведомления в
+  Telegram и по email» (секция «Лицензии», N; 0 — выключено) и период повторных
+  оповещений (по умолчанию — не чаще раза в 24 часа). Проверка выполняется:
+  - при загрузке данных кластера в мониторе серверов;
+  - по расписанию мониторинга (окно «Мониторинг и оповещения») — параллельно с
+    проверкой сеансов/памяти/блокировок.
+  Оповещение уходит в существующие каналы (`NotificationDispatcher` — системное
+  уведомление, Telegram, email) событием мониторинга с защитой от спама.
+  ([`NotificationChannelSettings.cs`](Workspace1C/Models/NotificationChannelSettings.cs),
+  [`NotificationChannelsWindow.xaml`](Workspace1C/Views/NotificationChannelsWindow.xaml),
+  [`ServerAlertsService.cs`](Workspace1C/Services/ServerAlertsService.cs)).
+
+### Тесты
+
+- `LicenseTests` (+20): разбор `rac session list --licenses` (табличный с заголовком и
+  блочный 8.5.x, сеансы без лицензий не ломают разбор), разбор `ring license list`
+  (табличный, свободный текст, пустой/мусорный вывод), расчёт сводки
+  «всего/занято/свободно», логика порога (порог 0 — выключено, свободно < N — оповещение,
+  неизвестные установленные лицензии — тихий пропуск, подавление повторов в N часов,
+  повтор после истечения периода) и отправка через `LicenseManager` с защитой от спама.
+
+---
+
 ## [1.0.0.86] — 2026-10-27
 
 ### Добавлено

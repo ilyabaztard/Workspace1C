@@ -832,6 +832,112 @@
                     </ScrollViewer>
                 </StackPanel>
             </TabItem>
+
+            <!-- Лицензии (п.5 «Мониторинг лицензий», выпуск 1.0.0.87): занятые сеансами
+                 лицензии (rac «session list» с параметром licences) + установленные
+                 программные лицензии («ring license list» / licensetool). Сводка —
+                 LicenseSummaryText, предупреждение о недоступности утилиты —
+                 LicenseStatusText. -->
+            <TabItem Header="{Binding LicensesTabText}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <TextBlock Text="{Binding LicenseSummaryText}" FontWeight="SemiBold"
+                                   FontSize="13" Margin="0,2,0,4"/>
+                        <TextBlock Text="{Binding LicenseStatusText}" FontSize="12"
+                                   Foreground="#D97706" TextWrapping="Wrap" Margin="0,0,0,4">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding LicenseStatusText}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding LicenseStatusText}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" Margin="0,4,0,4"
+                               Text="{loc:Loc ServerMonitor.Licenses.InUseHeader}"/>
+                    <!-- Занятые лицензии по сеансам. -->
+                    <DataGrid x:Name="LicensedSessionsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                              HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
+                              CanUserSortColumns="True" Sorting="OnGridSorting"
+                              ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              SelectionMode="Extended" SelectionUnit="FullRow" GridLinesVisibility="All"
+                              CanUserResizeColumns="True"
+                              HorizontalGridLinesBrush="{DynamicResource BorderBrushColor}"
+                              VerticalGridLinesBrush="{DynamicResource BorderBrushColor}"
+                              RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
+                              Canvas.ZIndex="10" MinHeight="120" BorderThickness="0">
+                        <DataGrid.CellStyle>
+                            <Style TargetType="DataGridCell">
+                                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Padding" Value="0"/>
+                            </Style>
+                        </DataGrid.CellStyle>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Width="1.2*" MinWidth="100" Header="{loc:Loc ServerMonitor.Licenses.Columns.User}"
+                                                Binding="{Binding User}" ElementStyle="{StaticResource CellTextAccent}"/>
+                            <DataGridTextColumn Width="1.2*" MinWidth="130" Header="{loc:Loc ServerMonitor.Licenses.Columns.Infobase}"
+                                                Binding="{Binding InfobaseName}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="1*" MinWidth="90" Header="{loc:Loc ServerMonitor.Licenses.Columns.Host}"
+                                                Binding="{Binding Host}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="110" MinWidth="90" Header="{loc:Loc ServerMonitor.Licenses.Columns.Type}"
+                                                Binding="{Binding LicType}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="90" MinWidth="70" Header="{loc:Loc ServerMonitor.Licenses.Columns.Used}"
+                                                Binding="{Binding LicensesUsedText}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="100" MinWidth="80" Header="{loc:Loc ServerMonitor.Licenses.Columns.Max}"
+                                                Binding="{Binding MaxLicensesText}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="100" MinWidth="80" Header="{loc:Loc ServerMonitor.Licenses.Columns.App}"
+                                                Binding="{Binding AppId}" ElementStyle="{StaticResource CenteredCellText}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock DockPanel.Dock="Bottom" FontWeight="SemiBold" Margin="0,4,0,2"
+                               Text="{loc:Loc ServerMonitor.Licenses.InstalledHeader}"/>
+                    <!-- Установленные программные лицензии (ring/licensetool). -->
+                    <DataGrid x:Name="InstalledLicensesGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                              HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
+                              CanUserSortColumns="True" Sorting="OnGridSorting"
+                              ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              SelectionMode="Extended" SelectionUnit="FullRow" GridLinesVisibility="All"
+                              CanUserResizeColumns="True"
+                              HorizontalGridLinesBrush="{DynamicResource BorderBrushColor}"
+                              VerticalGridLinesBrush="{DynamicResource BorderBrushColor}"
+                              RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
+                              MinHeight="120" BorderThickness="0">
+                        <DataGrid.CellStyle>
+                            <Style TargetType="DataGridCell">
+                                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Padding" Value="0"/>
+                            </Style>
+                        </DataGrid.CellStyle>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Width="1.4*" MinWidth="160" Header="{loc:Loc ServerMonitor.Licenses.Columns.Serial}"
+                                                Binding="{Binding SerialNumber}" ElementStyle="{StaticResource CellTextAccent}"/>
+                            <DataGridTextColumn Width="120" MinWidth="90" Header="{loc:Loc ServerMonitor.Licenses.Columns.Type}"
+                                                Binding="{Binding Type}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="100" MinWidth="80" Header="{loc:Loc ServerMonitor.Licenses.Columns.Version}"
+                                                Binding="{Binding Version}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="1.1*" MinWidth="110" Header="{loc:Loc ServerMonitor.Licenses.Columns.Module}"
+                                                Binding="{Binding Module}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="1.1*" MinWidth="100" Header="{loc:Loc ServerMonitor.Licenses.Columns.User}"
+                                                Binding="{Binding User}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="100" MinWidth="80" Header="{loc:Loc ServerMonitor.Licenses.Columns.State}"
+                                                Binding="{Binding State}" ElementStyle="{StaticResource CenteredCellText}"/>
+                            <DataGridTextColumn Width="110" MinWidth="90" Header="{loc:Loc ServerMonitor.Licenses.Columns.Expiry}"
+                                                Binding="{Binding ExpiryDate}" ElementStyle="{StaticResource CenteredCellText}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
         </TabControl>
 
         <!-- Строка состояния и ошибки (пустой ErrorMessage ничего не показывает) -->

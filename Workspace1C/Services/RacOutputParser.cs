@@ -456,18 +456,53 @@ public static class RacOutputParser
     }
 
     /// <summary>
-    /// Разбирает вывод «session list» в список сеансов.
+    /// Разбирает вывод «session list» в список сеансов (в т.ч. команду
+    /// «session list --licenses» — поля лицензий <see cref="RacSessionInfo.LicType"/>,
+    /// <see cref="RacSessionInfo.MaxLicenses"/>, <see cref="RacSessionInfo.Licenses"/>).
     /// Колонки: cluster, session, infobase, user-name, host, app-id, started-at, last-active-at,
     /// blocked-by-ls, blocked-by-deadlock, db-proc-duration, duration-all, duration-current,
     /// duration-dbms, duration-cpu, duration-wait, memory, bytes, position, read, write,
     /// connection, hibernate, state. Минимальный набор — первые 3 колонки.
+    /// Позиции колонок лицензий в ТАБЛИЧНОМ выводе определяются по строке заголовка
+    /// («lic-type», «max-licenses», «licenses»/«used-licenses»): раc может добавлять их
+    /// в разных местах (версии 8.3.x), поэтому позиционный разбор справа от «state»
+    /// ненадёжен. Если колонок лицензий в заголовке нет — поля остаются по умолчанию.
     /// </summary>
     public static IReadOnlyList<RacSessionInfo> ToSessions(string output)
     {
         const int minColumns = 3;
         var sessions = new List<RacSessionInfo>();
 
-        foreach (var row in ParseTable(output))
+        var tabularRows = ParseTable(output);
+
+        // Индексы колонок лицензий из строки заголовка таблицы («session list --licenses»,
+        // выпуск 1.0.0.87, п.5): ключевые слова rac не зависят от локали («lic-type» и т.п.).
+        // Заголовок обычно — первая строка табуляцией/выравниванием; ищем по имени колонки.
+        var licTypeIndex = -1;
+        var maxLicensesIndex = -1;
+        var licensesIndex = -1;
+        if (tabularRows.Count > 0)
+        {
+            var header = tabularRows[0];
+            for (var i = 0; i < header.Count; i++)
+            {
+                switch (header[i].Trim().ToLowerInvariant())
+                {
+                    case "lic-type":
+                        licTypeIndex = i;
+                        break;
+                    case "max-licenses":
+                        maxLicensesIndex = i;
+                        break;
+                    case "licenses":
+                    case "used-licenses":
+                        licensesIndex = i;
+                        break;
+                }
+            }
+        }
+
+        foreach (var row in tabularRows)
         {
             if (row.Count < minColumns)
                 continue;
@@ -500,13 +535,19 @@ public static class RacOutputParser
                 Write = ParseLong(Col(row, 20)),
                 ConnectionId = ParseGuid(Col(row, 21)),
                 Hibernate = ParseBool(Col(row, 22)),
-                State = Col(row, 23).Trim()
+                State = Col(row, 23).Trim(),
+                LicType = licTypeIndex >= 0 ? Col(row, licTypeIndex).Trim() : string.Empty,
+                MaxLicenses = maxLicensesIndex >= 0 ? ParseInt(Col(row, maxLicensesIndex)) : 0,
+                Licenses = licensesIndex >= 0 ? ParseInt(Col(row, licensesIndex)) : 0
             });
         }
 
         // issue #324: новые версии rac отдают «session list» блоками «ключ : значение».
         // Стартер «session-id» (по аналогии с «conn-id» у connection list 8.5.4.1878)
         // пробуем наравне с «session»; идентификатор — из любого из двух ключей.
+        // В блочном формате поля лицензий приходят теми же ключами («lic-type»,
+        // «max-licenses», «licenses»), независимо от параметра «--licenses» — объединяем
+        // с табличным разбором (выпуск 1.0.0.87, п.5).
         if (sessions.Count == 0 && LooksLikeKeyValueOutput(output))
         {
             foreach (var block in TryParseKeyValueBlocks(
@@ -542,7 +583,10 @@ public static class RacOutputParser
                     Write = ParseLong(Get(block, "write")),
                     ConnectionId = ParseGuid(Get(block, "connection")),
                     Hibernate = ParseBool(Get(block, "hibernate")),
-                    State = Unquote(Get(block, "state"))
+                    State = Unquote(Get(block, "state")),
+                    LicType = Unquote(Get(block, "lic-type")),
+                    MaxLicenses = ParseInt(Get(block, "max-licenses")),
+                    Licenses = ParseInt(GetAny(block, "licenses", "used-licenses"))
                 });
             }
         }

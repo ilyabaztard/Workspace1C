@@ -45,6 +45,12 @@ public sealed class NotificationChannelsWindow : ModalWindowBase
     private readonly CheckBox _onUpdates = new CheckBox().Styled(ControlThemes.CacheCleanCheckBox);
     private readonly CheckBox _onlyProblems = new CheckBox().Styled(ControlThemes.CacheCleanCheckBox);
 
+    /// <summary>Порог «свободных лицензий меньше N» (п.5, 1.0.0.87); 0 — отключено.</summary>
+    private readonly TextBox _licenseThreshold = new TextBox { Width = 110 }.Styled(ControlThemes.ModernTextBox);
+
+    /// <summary>Период повторных оповещений о нехватке лицензий, часов.</summary>
+    private readonly TextBox _licenseRepeat = new TextBox { Width = 110 }.Styled(ControlThemes.ModernTextBox);
+
     public NotificationChannelsWindow()
     {
         Title = T("Notifications.Title");
@@ -162,6 +168,13 @@ public sealed class NotificationChannelsWindow : ModalWindowBase
         panel.Children.Add(_onUpdates);
         panel.Children.Add(_onlyProblems);
 
+        // ===== Лицензии (п.5 «Мониторинг лицензий», выпуск 1.0.0.87) =====
+        panel.Children.Add(Header(T("Notifications.LicensesHeader")));
+        panel.Children.Add(Hint(T("Notifications.LicensesHint")));
+        panel.Children.Add(Row(T("Notifications.LicenseThreshold"), _licenseThreshold));
+        panel.Children.Add(Row(T("Notifications.LicenseRepeatHours"), _licenseRepeat));
+        panel.Children.Add(Hint(T("Notifications.LicenseRepeatHint")));
+
         var bottom = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -229,6 +242,8 @@ public sealed class NotificationChannelsWindow : ModalWindowBase
         _onScheduled.IsChecked = s.NotifyOnScheduledTasks;
         _onUpdates.IsChecked = s.NotifyOnUpdates;
         _onlyProblems.IsChecked = s.OnlyProblems;
+        _licenseThreshold.Text = s.LicenseFreeThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _licenseRepeat.Text = s.LicenseAlertRepeatHours.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private NotificationChannelSettings Collect()
@@ -251,8 +266,16 @@ public sealed class NotificationChannelsWindow : ModalWindowBase
             NotifyOnScheduledTasks = _onScheduled.IsChecked == true,
             NotifyOnUpdates = _onUpdates.IsChecked == true,
             OnlyProblems = _onlyProblems.IsChecked == true,
+            LicenseFreeThreshold = ParseNonNegative(_licenseThreshold.Text, 0),
+            LicenseAlertRepeatHours = int.TryParse(_licenseRepeat.Text?.Trim(), out var repeat) && repeat > 0
+                ? repeat
+                : 24,
         });
     }
+
+    private static int ParseNonNegative(string? text, int fallback) =>
+        int.TryParse(text, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) && v >= 0 ? v : fallback;
 
     private static NotificationMessage TestMessage() => new()
     {

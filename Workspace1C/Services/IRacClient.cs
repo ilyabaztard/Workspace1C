@@ -79,6 +79,17 @@ public interface IRacClient
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Сеансы кластера с информацией о лицензиях (команда «session list --licenses
+    /// --cluster=...», п.5 «Мониторинг лицензий», выпуск 1.0.0.87): у сеансов
+    /// заполняются <see cref="RacSessionInfo.LicType"/>, <see cref="RacSessionInfo.MaxLicenses"/>
+    /// и <see cref="RacSessionInfo.Licenses"/>. Реализация по умолчанию (тестовые
+    /// заглушки) — пустой список.
+    /// </summary>
+    Task<IReadOnlyList<RacSessionInfo>> GetLicensedSessionsAsync(
+        RacConnectionParams parameters, Guid clusterId, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<RacSessionInfo>>(Array.Empty<RacSessionInfo>());
+
+    /// <summary>
     /// Соединения кластера (команда «connection list --cluster=...»). При заданном
     /// <paramref name="infobaseId"/> добавляется параметр «--infobase=...» (issue #3).
     /// </summary>

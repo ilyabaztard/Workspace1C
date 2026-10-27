@@ -78,6 +78,11 @@ namespace Workspace1C
             var rac = AppServices.GetRequiredService<IRacClient>();
             var dialogs = AppServices.GetRequiredService<IDialogService>();
             var serverListStore = AppServices.GetRequiredService<IServerListStore>();
+            // п.5 «Мониторинг лицензий» (1.0.0.87): установленные программные лицензии
+            // (ring/licensetool) и порог «свободно меньше N» из настроек уведомлений.
+            var ringLicenses = AppServices.GetRequiredService<IRingLicenseService>();
+            var licenseAlerts = AppServices.GetRequiredService<LicenseManager>();
+            var licenseSettings = AppServices.GetRequiredService<INotificationSettingsStore>().Load();
 
             // issue #69: диалог повтора удаления базы открывается из VM (после неудачного
             // rac «infobase drop») — колбэк реализует окно, чтобы VM оставалась тестируемой.
@@ -100,7 +105,11 @@ namespace Workspace1C
                             retry.Retry, retry.User, retry.Password,
                             retry.TerminateSessions, retry.BlockScheduledJobs)
                         : ViewModels.DropRetryResult.Cancel;
-                });
+                },
+                ringLicenses,
+                licenseAlerts,
+                licenseSettings.LicenseFreeThreshold,
+                licenseSettings.LicenseAlertRepeatHours);
 
             DataContext = _vm;
             Title = LocalizationManager.T("ServerMonitor.Title");
@@ -115,6 +124,9 @@ namespace Workspace1C
             ConnectionsGrid.ItemsSource = _vm.FilteredConnections;
             LocksGrid.ItemsSource = _vm.FilteredLocks;
             ProcessesGrid.ItemsSource = _vm.Processes;
+            // п.5 «Мониторинг лицензий» (1.0.0.87): вкладка «Лицензии».
+            LicensedSessionsGrid.ItemsSource = _vm.LicensedSessions;
+            InstalledLicensesGrid.ItemsSource = _vm.InstalledLicenses;
 
             // Состояние окна запоминается (issue #3, комментарий 7OH): максимизировано или нет.
             // Ширины колонок вкладок (issue #75): применяем сохранённые (если есть), «минимальные»

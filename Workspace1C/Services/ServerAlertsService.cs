@@ -66,19 +66,29 @@ public sealed class ServerAlertsService : IDisposable
     private readonly INotificationService _notifications;
     private readonly IInfobaseRepository? _infobases;
     private readonly IAppLogger? _logger;
+
+    /// <summary>Установленные программные лицензии («ring license list»/licensetool, п.5, 1.0.0.87).</summary>
+    private readonly IRingLicenseService? _ringLicenses;
+
+    /// <summary>Настройки каналов уведомлений (порог «свободно меньше N», п.5, 1.0.0.87).</summary>
+    private readonly INotificationSettingsStore? _notificationSettings;
+
     private readonly Dictionary<string, DateTime> _lastSent = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> _eventLogChecked = new(StringComparer.Ordinal);
     private Timer? _timer;
     private int _running;
 
     public ServerAlertsService(IRacClient rac, IServerListStore servers, INotificationService notifications,
-        IInfobaseRepository? infobases = null, IAppLogger? logger = null)
+        IInfobaseRepository? infobases = null, IAppLogger? logger = null,
+        IRingLicenseService? ringLicenses = null, INotificationSettingsStore? notificationSettings = null)
     {
         _rac = rac;
         _servers = servers;
         _notifications = notifications;
         _infobases = infobases;
         _logger = logger;
+        _ringLicenses = ringLicenses;
+        _notificationSettings = notificationSettings;
     }
 
     public static ServerAlertSettings Load() => FeatureDataStore.Load<ServerAlertSettings>(FileName);
@@ -149,6 +159,32 @@ public sealed class ServerAlertsService : IDisposable
             }
         }
 
+        // п.5 «Мониторинг лицензий» (1.0.0.87): порог «свободно меньше N» — из настроек
+        // уведомлений (notifications.json); проверяется параллельно с остальными
+        // alert-задачами. При недоступности ring/licensetool проверка тихо пропускается
+        // (сводки нет — оповещать не о чем; логика LicenseCalculator.CheckThreshold).
+        if (_ringLicenses is not null && _notificationSettings is not null)
+        {
+            var notificationSettings = _notificationSettings.Load();
+            var threshold = notificationSettings.LicenseFreeThreshold;
+            if (threshold > 0)
+            {
+                var repeatHours = Math.Max(1, notificationSettings.LicenseAlertRepeatHours);
+                foreach (var server in servers)
+                {
+                    try
+                    {
+                        alerts.AddRange(await CheckLicensesAsync(
+                            server, threshold, repeatHours, ct).ConfigureAwait(false));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.Warn($"ЛИЦЕНЗИИ: {server} — проверка не удалась: {ex.Message}");
+                    }
+                }
+            }
+        }
+
         if (_infobases is not null)
         {
             var all = _infobases.Load();
@@ -166,9 +202,19 @@ public sealed class ServerAlertsService : IDisposable
         if (notify)
         {
             var repeat = TimeSpan.FromMinutes(Math.Max(1, settings.RepeatMinutes));
+            // Период повтора оповещений о лицензиях — из настроек уведомлений (часы).
+            var licenseRepeat = TimeSpan.FromHours(24);
+            if (_notificationSettings is not null)
+            {
+                licenseRepeat = TimeSpan.FromHours(
+                    Math.Max(1, _notificationSettings.Load().LicenseAlertRepeatHours));
+            }
             foreach (var (key, text) in alerts)
             {
-                if (_lastSent.TryGetValue(key, out var last) && DateTime.Now - last < repeat)
+                var effectiveRepeat = key.StartsWith("license:", StringComparison.Ordinal)
+                    ? licenseRepeat
+                    : repeat;
+                if (_lastSent.TryGetValue(key, out var last) && DateTime.Now - last < effectiveRepeat)
                     continue;
                 _lastSent[key] = DateTime.Now;
                 _notifications.Show(LocalizationManager.T("Alerts.NotificationTitle"), text,
@@ -207,6 +253,46 @@ public sealed class ServerAlertsService : IDisposable
             foreach (var text in Evaluate(rule, where, sessions.Count, processes, locks))
                 result.Add(($"{server.Id}:{cluster.Id}:{text.GetHashCode()}", text));
         }
+        return result;
+    }
+
+    /// <summary>
+    /// Проверка порога «свободно меньше N» для сервера (п.5, 1.0.0.87): сеансы с
+    /// лицензиями по всем кластерам сервера + установленные программные лицензии
+    /// (один вызов ring/licensetool на проверку). Порог/период повтора — из настроек
+    /// уведомлений; защита от спама — общий <see cref="_lastSent"/> (ключ
+    /// «license:{имя сервера}»). Возвращает тексты, которые пора отправить.
+    /// </summary>
+    private async Task<List<(string Key, string Text)>> CheckLicensesAsync(
+        ManagementServer server, int threshold, int repeatHours, CancellationToken ct)
+    {
+        var result = new List<(string, string)>();
+        var (host, port) = RacConnectionAddress.Split(server.Address, server.Port);
+        var parameters = new RacConnectionParams
+        {
+            Address = host,
+            Port = port,
+            User = server.User ?? string.Empty,
+            Password = server.Password ?? string.Empty
+        };
+
+        var installed = (await _ringLicenses!.GetInstalledLicensesAsync(ct).ConfigureAwait(false)).Licenses;
+        var clusters = await _rac.GetClustersAsync(parameters, ct).ConfigureAwait(false);
+        var allLicensed = new List<RacSessionInfo>();
+        foreach (var cluster in clusters)
+        {
+            allLicensed.AddRange(
+                await _rac.GetLicensedSessionsAsync(parameters, cluster.Id, ct).ConfigureAwait(false));
+        }
+
+        var snapshot = LicenseCalculator.ComputeSnapshot(allLicensed, installed);
+        // Имя сервера в оповещении: описание из справочника + адрес:порт (как у других алертов).
+        var label = $"{server.Description} ({host}:{port.ToString(CultureInfo.InvariantCulture)})".Trim();
+        var texts = LicenseCalculator.CheckThreshold(
+            label, snapshot.TotalInstalled, snapshot.TotalUsed,
+            snapshot.TotalFree, threshold, DateTime.Now, _lastSent, repeatHours);
+        foreach (var text in texts)
+            result.Add((LicenseCalculator.LicenseAlertKey(label), text));
         return result;
     }
 
