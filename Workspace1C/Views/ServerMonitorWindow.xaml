@@ -489,10 +489,12 @@
             <!-- Сеансы -->
             <TabItem Header="{Binding SessionsTabText}">
                 <DockPanel>
-                    <!-- Действие: завершить выбранный сеанс (подтверждение — в VM). -->
+                    <!-- Действие: завершить выбранные сеансы (подтверждение — в VM;
+                         issue #72 — действует на ВСЕ выделенные строки). -->
                     <Button DockPanel.Dock="Bottom" Style="{StaticResource ModernButton}"
                             Background="{DynamicResource ItemHoverBrush}" Padding="12,5"
                             Margin="0,8,0,0" HorizontalAlignment="Left"
+                            IsEnabled="{Binding CanTerminateSessions}"
                             Click="OnTerminateSession_Click">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="✕" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -504,7 +506,8 @@
                               HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
                               CanUserSortColumns="True" Sorting="OnGridSorting"
                               ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
-                          SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="All" CanUserResizeColumns="True"
+                          SelectionMode="Extended" SelectionUnit="FullRow" GridLinesVisibility="All" CanUserResizeColumns="True"
+                          SelectionChanged="OnSessionsGrid_SelectionChanged"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrushColor}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrushColor}"
                           RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
@@ -574,10 +577,12 @@
             <!-- Соединения -->
             <TabItem Header="{Binding ConnectionsTabText}">
                 <DockPanel>
-                    <!-- Действие: разорвать выбранное соединение (подтверждение — в VM). -->
+                    <!-- Действие: разорвать выбранные соединения (подтверждение — в VM;
+                         issue #72 — действует на ВСЕ выделенные строки). -->
                     <Button DockPanel.Dock="Bottom" Style="{StaticResource ModernButton}"
                             Background="{DynamicResource ItemHoverBrush}" Padding="12,5"
                             Margin="0,8,0,0" HorizontalAlignment="Left"
+                            IsEnabled="{Binding CanDisconnectConnections}"
                             Click="OnDisconnectConnection_Click">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="⛓" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -589,7 +594,8 @@
                               HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
                               CanUserSortColumns="True" Sorting="OnGridSorting"
                               ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
-                          SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="All" CanUserResizeColumns="True"
+                          SelectionMode="Extended" SelectionUnit="FullRow" GridLinesVisibility="All" CanUserResizeColumns="True"
+                          SelectionChanged="OnConnectionsGrid_SelectionChanged"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrushColor}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrushColor}"
                           RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"

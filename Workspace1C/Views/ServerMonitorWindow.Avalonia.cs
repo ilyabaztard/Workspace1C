@@ -362,16 +362,33 @@ namespace Workspace1C
             // Тема вкладок (issue #3, комментарий 7OH 20.10): в тёмном режиме вкладки
             // были белыми и надписи не читались — применяем тему с фоном/текстом из темы.
             tabs.Styled(ControlThemes.ServerMonitorTabControl);
+            // issue #72: мультивыделение сеансов (Ctrl — инверсия, Shift — диапазон) —
+            // ListBox в режиме SelectionMode.Multiple, набор выбранных строк синхронизируется
+            // в ViewModel, кнопка «Завершить сеансы» действует на весь список.
+            var terminateButton = BuildActionButton(
+                LocalizationManager.T("ServerMonitor.TerminateSession"), "✕",
+                () => _vm.TerminateSessionCommand.Execute(null));
+            terminateButton.Bind(Button.IsEnabledProperty, new Binding("CanTerminateSessions"));
             var sessionsTab = CreateTab(_vm.SessionsTabText,
                 BuildTabWithAction(
-                    BuildSortableTable(_vm.FilteredSessions, SessionColumns, BuildSessionRow, "SelectedSession"),
-                    BuildActionButton(LocalizationManager.T("ServerMonitor.TerminateSession"), "✕",
-                        () => _vm.TerminateSessionCommand.Execute(null))));
+                    BuildSortableTable(_vm.FilteredSessions, SessionColumns, BuildSessionRow,
+                        multiSelect: true,
+                        selectionSource: () => _vm.SelectedSessions,
+                        selectionHandler: items => _vm.SelectedSessions = items.OfType<RacSessionRow>().ToList()),
+                    terminateButton));
+
+            // issue #72: то же для соединений («Разорвать соединения» — по всем выбранным).
+            var disconnectButton = BuildActionButton(
+                LocalizationManager.T("ServerMonitor.DisconnectConnection"), "⛓",
+                () => _vm.DisconnectConnectionCommand.Execute(null));
+            disconnectButton.Bind(Button.IsEnabledProperty, new Binding("CanDisconnectConnections"));
             var connectionsTab = CreateTab(_vm.ConnectionsTabText,
                 BuildTabWithAction(
-                    BuildSortableTable(_vm.FilteredConnections, ConnectionColumns, BuildConnectionRow, "SelectedConnection"),
-                    BuildActionButton(LocalizationManager.T("ServerMonitor.DisconnectConnection"), "⛓",
-                        () => _vm.DisconnectConnectionCommand.Execute(null))));
+                    BuildSortableTable(_vm.FilteredConnections, ConnectionColumns, BuildConnectionRow,
+                        multiSelect: true,
+                        selectionSource: () => _vm.SelectedConnections,
+                        selectionHandler: items => _vm.SelectedConnections = items.OfType<RacConnectionRow>().ToList()),
+                    disconnectButton));
             var locksTab = CreateTab(_vm.LocksTabText,
                 BuildSortableTable(_vm.FilteredLocks, LockColumns, BuildLockRow));
             var processesTab = CreateTab(_vm.ProcessesTabText,
@@ -517,7 +534,10 @@ namespace Workspace1C
             ObservableCollection<T> source,
             IReadOnlyList<TableColumn> columns,
             Func<object, Control> rowFactory,
-            string? selectedBinding = null)
+            string? selectedBinding = null,
+            bool multiSelect = false,
+            Func<IEnumerable<object>>? selectionSource = null,
+            Action<IReadOnlyList<object>>? selectionHandler = null)
         {
             // Текущие ширины колонок (issue #3, 7OH 17.10): общие для шапки и всех строк,
             // меняются перетаскиванием границы заголовка. Строки создаются шаблоном и
@@ -562,6 +582,10 @@ namespace Workspace1C
                     return control;
                 })
             };
+            // issue #72: мультивыделение (Ctrl — инверсия, Shift — диапазон) — так же,
+            // как WPF DataGrid SelectionMode=Extended на вкладках «Сеансы»/«Соединения».
+            if (multiSelect)
+                list.SelectionMode = SelectionMode.Multiple;
             // Строка занимает всю высоту контейнера (линии колонок — от края до края),
             // тексты ячеек центрируются сами (issue #324: единая высота строки 36).
             // Нулевой отступ контейнера — чтобы колонки строк совпадали с шапкой.
@@ -581,7 +605,6 @@ namespace Workspace1C
             // Пересобирает ItemsSource с учётом текущей сортировки (или возвращает источник).
             void Rebuild()
             {
-                var previous = list.SelectedItem;
                 IReadOnlyList<object> items;
                 if (sortPath is null)
                 {
@@ -598,10 +621,25 @@ namespace Workspace1C
                 }
 
                 list.ItemsSource = items;
-                // Восстанавливаем выбор, если объект остался в списке (после автообновления
-                // выбор по идентификатору восстанавливает сама ViewModel).
-                if (previous is not null && items.Contains(previous))
+                if (multiSelect)
+                {
+                    // issue #72: множественный выбор восстанавливается из ViewModel (набор
+                    // строк после автообновления) и текущих SelectedItems, оставшихся в списке.
+                    var keep = ((selectionSource?.Invoke() ?? list.SelectedItems.Cast<object>())
+                            .Concat(list.SelectedItems.Cast<object>()))
+                        .Distinct()
+                        .Where(items.Contains)
+                        .ToList();
+                    list.SelectedItems.Clear();
+                    foreach (var item in keep)
+                        list.SelectedItems.Add(item);
+                }
+                else if (list.SelectedItem is { } previous && items.Contains(previous))
+                {
+                    // Восстанавливаем одиночный выбор, если объект остался в списке
+                    // (после автообновления выбор по идентификатору делает сама ViewModel).
                     list.SelectedItem = previous;
+                }
             }
 
             // Заголовки-кнопки: клик сортирует по колонке (повторный клик меняет направление).
@@ -727,19 +765,28 @@ namespace Workspace1C
                 headerGrid.Children.Add(grip);
             }
 
-            // Исходная коллекция меняется (автообновление/переключение баз) — применяем сортировку заново.
+            // Исходная коллекция меняется (автообновление/переключение баз): при сортировке
+            // применяем её заново; при мультивыделении пересборка нужна и без сортировки —
+            // чтобы восстановить выбор по обновлённым строкам (issue #72).
             if (source is INotifyCollectionChanged notify)
             {
                 notify.CollectionChanged += (_, _) =>
                 {
-                    if (sortPath is not null)
+                    if (sortPath is not null || multiSelect)
                         Rebuild();
                 };
             }
 
             list.ItemsSource = source;
-            if (selectedBinding is not null)
+            if (selectedBinding is not null && !multiSelect)
                 list.Bind(ListBox.SelectedItemProperty, new Binding(selectedBinding, BindingMode.TwoWay));
+
+            // issue #72: изменение набора выбранных строк (Ctrl/Shift) синхронизируется в VM.
+            if (multiSelect && selectionHandler is not null)
+            {
+                list.SelectionChanged += (_, _) =>
+                    selectionHandler(list.SelectedItems.Cast<object>().ToList());
+            }
 
             var dock = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(headerGrid, Dock.Top);

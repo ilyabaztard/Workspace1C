@@ -55,6 +55,12 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     private string _clusterInfoText = string.Empty;
     private RacSessionRow? _selectedSession;
     private RacConnectionRow? _selectedConnection;
+
+    /// <summary>Мультивыделение сеансов (issue #72): набор строк вкладки «Сеансы».</summary>
+    private IReadOnlyList<RacSessionRow> _selectedSessions = Array.Empty<RacSessionRow>();
+
+    /// <summary>Мультивыделение соединений (issue #72): набор строк вкладки «Соединения».</summary>
+    private IReadOnlyList<RacConnectionRow> _selectedConnections = Array.Empty<RacConnectionRow>();
     private Guid? _selectedInfobaseId;
     private RacInfobaseRow? _selectedInfobase;
 
@@ -514,15 +520,79 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     public RacSessionRow? SelectedSession
     {
         get => _selectedSession;
-        set => SetProperty(ref _selectedSession, value);
+        set
+        {
+            if (!SetProperty(ref _selectedSession, value))
+                return;
+            // issue #72: доступность действия зависит и от одиночного выбора.
+            OnPropertyChanged(nameof(CanTerminateSessions));
+        }
     }
 
     /// <summary>Выбранное соединение на вкладке «Соединения» (кнопка «Разорвать соединение»).</summary>
     public RacConnectionRow? SelectedConnection
     {
         get => _selectedConnection;
-        set => SetProperty(ref _selectedConnection, value);
+        set
+        {
+            if (!SetProperty(ref _selectedConnection, value))
+                return;
+            // issue #72: доступность действия зависит и от одиночного выбора.
+            OnPropertyChanged(nameof(CanDisconnectConnections));
+        }
     }
+
+    // ===================== Мультивыделение (issue #72) =====================
+
+    /// <summary>
+    /// Выбранные сеансы вкладки «Сеансы» (мультивыделение, issue #72): Ctrl — инверсия
+    /// выбора, Shift — диапазон. Множество ставит форма (WPF DataGrid.SelectedItems /
+    /// Avalonia ListBox.SelectedItems); кнопка «Завершить сеансы…» действует на весь
+    /// список последовательно, при одной строке — как одиночное завершение. Для связи
+    /// с прежним одиночным выбором первый сеанс дублируется в <see cref="SelectedSession"/>.
+    /// </summary>
+    public IReadOnlyList<RacSessionRow> SelectedSessions
+    {
+        get => _selectedSessions;
+        set
+        {
+            if (!SetProperty(ref _selectedSessions, value ?? Array.Empty<RacSessionRow>()))
+                return;
+            SelectedSession = _selectedSessions.FirstOrDefault();
+            OnPropertyChanged(nameof(CanTerminateSessions));
+        }
+    }
+
+    /// <summary>
+    /// Выбранные соединения вкладки «Соединения» (мультивыделение, issue #72): Ctrl —
+    /// инверсия, Shift — диапазон. Множество ставит форма (WPF DataGrid.SelectedItems /
+    /// Avalonia ListBox.SelectedItems); кнопка «Разорвать соединения» действует на весь
+    /// список; при одной строке — как одиночное действие. Первое соединение дублируется
+    /// в <see cref="SelectedConnection"/>.
+    /// </summary>
+    public IReadOnlyList<RacConnectionRow> SelectedConnections
+    {
+        get => _selectedConnections;
+        set
+        {
+            if (!SetProperty(ref _selectedConnections, value ?? Array.Empty<RacConnectionRow>()))
+                return;
+            SelectedConnection = _selectedConnections.FirstOrDefault();
+            OnPropertyChanged(nameof(CanDisconnectConnections));
+        }
+    }
+
+    /// <summary>
+    /// Доступность «Завершить сеансы» (issue #72): есть выбранные сеансы (либо одиночная
+    /// строка) и установлено подключение. При пустом выделении кнопка недоступна — как раньше.
+    /// </summary>
+    public bool CanTerminateSessions => HasConnected && (SelectedSessions.Count > 0 || SelectedSession is not null);
+
+    /// <summary>
+    /// Доступность «Разорвать соединения» (issue #72): есть выбранные соединения (либо
+    /// одиночная строка) и установлено подключение. При пустом выделении кнопка недоступна.
+    /// </summary>
+    public bool CanDisconnectConnections => HasConnected && (SelectedConnections.Count > 0 || SelectedConnection is not null);
 
     // ===================== Базы (issue #3) =====================
 
@@ -1357,7 +1427,14 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     public bool HasConnected
     {
         get => _hasConnected;
-        private set => SetProperty(ref _hasConnected, value);
+        private set
+        {
+            if (!SetProperty(ref _hasConnected, value))
+                return;
+            // issue #72: доступность массовых действий зависит от подключения.
+            OnPropertyChanged(nameof(CanTerminateSessions));
+            OnPropertyChanged(nameof(CanDisconnectConnections));
+        }
     }
 
     /// <summary>Выполняется ли сейчас запрос (флаг занятости исключает наложение, см. ProcessInspectorViewModel).</summary>
@@ -1602,96 +1679,218 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// «Завершить сеанс»: подтверждение (предупреждение о потере несохранённых данных),
-    /// команда rac «session terminate», обновление списков; ошибка — предупреждение +
-    /// статус-строка. Образец — KillSelected из ProcessInspectorViewModel.
+    /// «Завершить сеансы» (issue #72): действие распространяется на ВСЕ выбранные строки
+    /// вкладки «Сеансы» (мультивыделение Ctrl/Shift). При одной строке — прежнее поведение:
+    /// подтверждение с именем пользователя, статус «Сеанс "N" завершён», при ошибке —
+    /// предупреждение. При нескольких — единое подтверждение о количестве и
+    /// ПОСЛЕДОВАТЕЛЬНОЕ завершение каждого сеанса (rac «session terminate», подтверждение
+    /// не запрашивается повторно); частичная ошибка не прерывает остальных, в
+    /// статус-строке — сводка «Завершено сеансов: N из M» (+ число ошибок), детали
+    /// собираются в <see cref="ErrorMessage"/>. После действия списки перечитываются.
     /// </summary>
     public async Task TerminateSessionAsync()
     {
-        var row = SelectedSession;
-        if (row is null || !HasConnected || SelectedClusterId is not Guid clusterId)
+        var rows = EffectiveSelectedSessions();
+        if (rows.Count == 0 || !HasConnected || SelectedClusterId is not Guid clusterId)
             return;
 
-        if (!_dialogs.Confirm(
-                string.Format(LocalizationManager.T("ServerMonitor.TerminateConfirmFormat"), row.User),
-                LocalizationManager.T("ServerMonitor.TerminateTitle")))
+        var single = rows.Count == 1;
+        var confirm = single
+            ? string.Format(LocalizationManager.T("ServerMonitor.TerminateConfirmFormat"), rows[0].User)
+            : string.Format(LocalizationManager.T("ServerMonitor.TerminateBulkConfirmFormat"), rows.Count);
+        if (!_dialogs.Confirm(confirm, LocalizationManager.T("ServerMonitor.TerminateTitle")))
             return;
 
-        try
+        if (single)
         {
-            var ok = await _rac.TerminateSessionAsync(BuildParams(), clusterId, row.Id).ConfigureAwait(false);
-            if (!ok)
+            // Прежнее поведение для одной строки: подробное предупреждение об ошибке (если
+            // будет) и статус «Сеанс "N" завершён».
+            var row = rows[0];
+            try
             {
-                var detail = BuildActionError(_rac.LastActionError);
-                ShowWarningOnUi(
-                    string.Format(LocalizationManager.T("ServerMonitor.TerminateFailedFormat"), row.User) + "\n" + detail,
-                    LocalizationManager.T("ServerMonitor.TerminateTitle"));
-                StatusText = detail;
-                return;
-            }
+                var ok = await _rac.TerminateSessionAsync(BuildParams(), clusterId, row.Id).ConfigureAwait(false);
+                if (!ok)
+                {
+                    var detail = BuildActionError(_rac.LastActionError);
+                    ShowWarningOnUi(
+                        string.Format(LocalizationManager.T("ServerMonitor.TerminateFailedFormat"), row.User) + "\n" + detail,
+                        LocalizationManager.T("ServerMonitor.TerminateTitle"));
+                    StatusText = detail;
+                    return;
+                }
 
-            StatusText = string.Format(
-                LocalizationManager.T("ServerMonitor.Status.TerminatedFormat"), row.User);
+                StatusText = string.Format(
+                    LocalizationManager.T("ServerMonitor.Status.TerminatedFormat"), row.User);
+            }
+            catch (Exception ex)
+            {
+                ShowWarningOnUi(
+                    string.Format(LocalizationManager.T("ServerMonitor.TerminateFailedFormat"), row.User) + "\n" + BuildErrorMessage(ex),
+                    LocalizationManager.T("ServerMonitor.TerminateTitle"));
+                StatusText = BuildErrorMessage(ex);
+            }
+            finally
+            {
+                // После действия списки перечитываются (сеанс мог исчезнуть).
+                Refresh();
+            }
+            return;
         }
-        catch (Exception ex)
+
+        // Массовое завершение (issue #72): каждый сеанс — свой rac-вызов; неудачи
+        // собираются и не останавливают остальные строки.
+        var parameters = BuildParams();
+        var succeeded = 0;
+        var failures = new List<string>();
+        foreach (var session in rows)
         {
-            ShowWarningOnUi(
-                string.Format(LocalizationManager.T("ServerMonitor.TerminateFailedFormat"), row.User) + "\n" + BuildErrorMessage(ex),
-                LocalizationManager.T("ServerMonitor.TerminateTitle"));
-            StatusText = BuildErrorMessage(ex);
+            try
+            {
+                var ok = await _rac.TerminateSessionAsync(parameters, clusterId, session.Id).ConfigureAwait(false);
+                if (ok)
+                {
+                    succeeded++;
+                }
+                else
+                {
+                    failures.Add($"{session.User}: {BuildActionError(_rac.LastActionError)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{session.User}: {BuildErrorMessage(ex)}");
+            }
         }
-        finally
-        {
-            // После действия списки перечитываются (сеанс мог исчезнуть).
-            Refresh();
-        }
+
+        StatusText = BuildBulkStatusText(
+            "ServerMonitor.Status.TerminatedBulkFormat", succeeded, rows.Count, failures.Count);
+        if (failures.Count > 0)
+            ErrorMessage = string.Join("\n", failures.Take(10));
+        Refresh();
     }
 
     /// <summary>
-    /// «Разорвать соединение»: подтверждение, команда rac «connection disconnect»,
-    /// обновление списков; ошибка — предупреждение + статус-строка.
+    /// «Разорвать соединения» (issue #72): действие распространяется на ВСЕ выбранные
+    /// строки вкладки «Соединения» (мультивыделение Ctrl/Shift). При одной строке —
+    /// прежнее поведение: подтверждение с именем клиента, статус «Соединение "N" разорвано»,
+    /// при ошибке — предупреждение. При нескольких — единое подтверждение о количестве и
+    /// последовательный разрыв каждого соединения (rac «connection disconnect», рабочий
+    /// процесс строки, issue #69); частичная ошибка не прерывает остальных, статус-строка
+    /// получает сводку «Разорвано соединений: N из M» (+ число ошибок), детали — в
+    /// <see cref="ErrorMessage"/>. После действия списки перечитываются.
     /// </summary>
     public async Task DisconnectConnectionAsync()
     {
-        var row = SelectedConnection;
-        if (row is null || !HasConnected || SelectedClusterId is not Guid clusterId)
+        var rows = EffectiveSelectedConnections();
+        if (rows.Count == 0 || !HasConnected || SelectedClusterId is not Guid clusterId)
             return;
 
-        if (!_dialogs.Confirm(
-                string.Format(LocalizationManager.T("ServerMonitor.DisconnectConfirmFormat"), row.Host),
-                LocalizationManager.T("ServerMonitor.DisconnectTitle")))
+        var single = rows.Count == 1;
+        var confirm = single
+            ? string.Format(LocalizationManager.T("ServerMonitor.DisconnectConfirmFormat"), rows[0].Host)
+            : string.Format(LocalizationManager.T("ServerMonitor.DisconnectBulkConfirmFormat"), rows.Count);
+        if (!_dialogs.Confirm(confirm, LocalizationManager.T("ServerMonitor.DisconnectTitle")))
             return;
 
-        try
+        if (single)
         {
-            // issue #69: rac 8.5.4 без --process=<pid> отклоняет «connection disconnect»
-            // («Ошибка разбора параметра: process») — pid известен из «connection list».
-            var ok = await _rac.DisconnectConnectionAsync(
-                BuildParams(), clusterId, row.Id, row.ProcessId).ConfigureAwait(false);
-            if (!ok)
+            // Прежнее поведение для одной строки.
+            var row = rows[0];
+            try
             {
-                var detail = BuildActionError(_rac.LastActionError);
-                ShowWarningOnUi(
-                    string.Format(LocalizationManager.T("ServerMonitor.DisconnectFailedFormat"), row.Host) + "\n" + detail,
-                    LocalizationManager.T("ServerMonitor.DisconnectTitle"));
-                StatusText = detail;
-                return;
-            }
+                // issue #69: rac 8.5.4 без --process=<pid> отклоняет «connection disconnect»
+                // («Ошибка разбора параметра: process») — pid известен из «connection list».
+                var ok = await _rac.DisconnectConnectionAsync(
+                    BuildParams(), clusterId, row.Id, row.ProcessId).ConfigureAwait(false);
+                if (!ok)
+                {
+                    var detail = BuildActionError(_rac.LastActionError);
+                    ShowWarningOnUi(
+                        string.Format(LocalizationManager.T("ServerMonitor.DisconnectFailedFormat"), row.Host) + "\n" + detail,
+                        LocalizationManager.T("ServerMonitor.DisconnectTitle"));
+                    StatusText = detail;
+                    return;
+                }
 
-            StatusText = string.Format(
-                LocalizationManager.T("ServerMonitor.Status.DisconnectedFormat"), row.Host);
+                StatusText = string.Format(
+                    LocalizationManager.T("ServerMonitor.Status.DisconnectedFormat"), row.Host);
+            }
+            catch (Exception ex)
+            {
+                ShowWarningOnUi(
+                    string.Format(LocalizationManager.T("ServerMonitor.DisconnectFailedFormat"), row.Host) + "\n" + BuildErrorMessage(ex),
+                    LocalizationManager.T("ServerMonitor.DisconnectTitle"));
+                StatusText = BuildErrorMessage(ex);
+            }
+            finally
+            {
+                Refresh();
+            }
+            return;
         }
-        catch (Exception ex)
+
+        // Массовый разрыв (issue #72): каждый вызов независим, неудачи не останавливают цикл.
+        var parameters = BuildParams();
+        var succeeded = 0;
+        var failures = new List<string>();
+        foreach (var connection in rows)
         {
-            ShowWarningOnUi(
-                string.Format(LocalizationManager.T("ServerMonitor.DisconnectFailedFormat"), row.Host) + "\n" + BuildErrorMessage(ex),
-                LocalizationManager.T("ServerMonitor.DisconnectTitle"));
-            StatusText = BuildErrorMessage(ex);
+            try
+            {
+                var ok = await _rac.DisconnectConnectionAsync(
+                    parameters, clusterId, connection.Id, connection.ProcessId).ConfigureAwait(false);
+                if (ok)
+                {
+                    succeeded++;
+                }
+                else
+                {
+                    failures.Add($"{connection.Host}: {BuildActionError(_rac.LastActionError)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{connection.Host}: {BuildErrorMessage(ex)}");
+            }
         }
-        finally
-        {
-            Refresh();
-        }
+
+        StatusText = BuildBulkStatusText(
+            "ServerMonitor.Status.DisconnectedBulkFormat", succeeded, rows.Count, failures.Count);
+        if (failures.Count > 0)
+            ErrorMessage = string.Join("\n", failures.Take(10));
+        Refresh();
+    }
+
+    /// <summary>
+    /// Фактический набор сеансов для действия (issue #72): мультивыделение вкладки; при
+    /// пустом множестве (прежние сценарии/тесты) — только одиночная выбранная строка.
+    /// </summary>
+    private IReadOnlyList<RacSessionRow> EffectiveSelectedSessions()
+    {
+        if (_selectedSessions.Count > 0)
+            return _selectedSessions;
+        return _selectedSession is { } row ? new[] { row } : Array.Empty<RacSessionRow>();
+    }
+
+    /// <summary>Аналог <see cref="EffectiveSelectedSessions"/> для соединений.</summary>
+    private IReadOnlyList<RacConnectionRow> EffectiveSelectedConnections()
+    {
+        if (_selectedConnections.Count > 0)
+            return _selectedConnections;
+        return _selectedConnection is { } row ? new[] { row } : Array.Empty<RacConnectionRow>();
+    }
+
+    /// <summary>
+    /// Сводка массовой операции в статус-строку (issue #72): «Завершено сеансов: N из M»
+    /// (или «Разорвано соединений: N из M») и суффикс «. Ошибок: K» при частичных неудачах.
+    /// Internal — для юнит-тестов читаемости сводки.
+    /// </summary>
+    internal static string BuildBulkStatusText(string statusKey, int succeeded, int total, int errors)
+    {
+        var summary = string.Format(LocalizationManager.T(statusKey), succeeded, total);
+        return errors > 0
+            ? string.Format(LocalizationManager.T("ServerMonitor.Status.BulkErrorsFormat"), summary, errors)
+            : summary;
     }
 
     /// <summary>
@@ -1799,6 +1998,10 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         {
             // Выбор сохраняем по идентификатору: после автообновления строка с тем же
             // Id остаётся выбранной, исчезнувшая (завершённый сеанс) — сбрасывается.
+            // issue #72: множественный выбор сохраняется по идентификаторам (как и
+            // одиночный) — после автообновления выбранные строки остаются выбранными.
+            var sessionIds = SelectedSessions.Select(s => s.Id).ToHashSet();
+            var connectionIds = SelectedConnections.Select(c => c.Id).ToHashSet();
             var sessionId = SelectedSession?.Id;
             var connectionId = SelectedConnection?.Id;
 
@@ -1844,8 +2047,16 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
             // отфильтрованные коллекции из полного снимка кластера.
             ApplyInfobaseFilter();
 
-            SelectedSession = sessionId is Guid s ? Sessions.FirstOrDefault(x => x.Id == s) : null;
-            SelectedConnection = connectionId is Guid c ? Connections.FirstOrDefault(x => x.Id == c) : null;
+            // issue #72: восстановление мультивыделения по Id; исчезнувшие строки
+            // (завершённый сеанс / разорванное соединение) сбрасываются.
+            SelectedSessions = Sessions.Where(x => sessionIds.Contains(x.Id)).ToList();
+            SelectedConnections = Connections.Where(x => connectionIds.Contains(x.Id)).ToList();
+            SelectedSession = sessionId is Guid s
+                ? Sessions.FirstOrDefault(x => x.Id == s)
+                : SelectedSessions.FirstOrDefault();
+            SelectedConnection = connectionId is Guid c
+                ? Connections.FirstOrDefault(x => x.Id == c)
+                : SelectedConnections.FirstOrDefault();
 
             // Заголовки вкладок с количеством строк (issue #3): «Сеансы (12)» и т.д.
             RaiseTabHeaderChanges();

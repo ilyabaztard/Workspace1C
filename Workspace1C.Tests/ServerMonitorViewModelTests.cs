@@ -1974,6 +1974,177 @@ public sealed class ServerMonitorViewModelTests
         Assert.False(vm.CanMoveServerDown);
     }
 
+    // ===================== Мультивыделение (issue #72) =====================
+
+    [Fact]
+    public async Task TerminateSessions_MultipleSelected_TerminatesAll_WithSingleConfirm()
+    {
+        // issue #72: несколько выбранных сеансов (Ctrl/Shift) завершаются ОДНИМ нажатием —
+        // единое подтверждение о количестве, затем rac «session terminate» для каждого.
+        var client = new FakeRacClient();
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs);
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+
+        var first = new RacSessionRow(new RacSessionInfo { Id = Guid.NewGuid(), User = "Иванов" });
+        var second = new RacSessionRow(new RacSessionInfo { Id = Guid.NewGuid(), User = "Петров" });
+        vm.SelectedSessions = new[] { first, second };
+        Assert.True(vm.CanTerminateSessions);
+
+        await vm.TerminateSessionAsync();
+
+        // Единое подтверждение (не по каждому сеансу) — текст о количестве строк.
+        var confirm = Assert.Single(dialogs.Confirms);
+        Assert.Contains("ServerMonitor.TerminateBulkConfirmFormat", confirm.message);
+        Assert.Empty(dialogs.Warnings);
+        // rac вызван для КАЖДОГО выбранного сеанса (последовательно).
+        Assert.Equal(2, client.TerminateCalls.Count);
+        Assert.Contains(client.TerminateCalls, c => c.sessionId == first.Id);
+        Assert.Contains(client.TerminateCalls, c => c.sessionId == second.Id);
+        Assert.All(client.TerminateCalls, c => Assert.Equal(FakeRacClient.FirstClusterId, c.clusterId));
+        // После действия списки перечитаны (Refresh в конце массовой операции).
+        Assert.NotEmpty(vm.StatusText);
+    }
+
+    [Fact]
+    public async Task TerminateSessions_PartialFailure_ContinuesToOtherSessions()
+    {
+        // issue #72: частичная ошибка не прерывает остальные сеансы — все выбранные
+        // строки обрабатываются; сводка в статус-строке и детали в ErrorMessage.
+        var client = new FakeRacClient { TerminateFailuresLeft = 1 };
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs);
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+
+        var first = new RacSessionRow(new RacSessionInfo { Id = Guid.NewGuid(), User = "Иванов" });
+        var second = new RacSessionRow(new RacSessionInfo { Id = Guid.NewGuid(), User = "Петров" });
+        vm.SelectedSessions = new[] { first, second };
+        await vm.TerminateSessionAsync();
+
+        // Первый сеанс не удался, но второй всё равно завершён — цикл не прерван.
+        Assert.Equal(2, client.TerminateCalls.Count);
+        Assert.Empty(dialogs.Warnings);
+        // Сводка «N из M» с индикацией ошибок складывается в статус-строку до перечитывания
+        // списков; после Refresh (LoadClusterDataAsync сбрасывает ErrorMessage в тестах)
+        // проверяем только, что статус непустой.
+        Assert.NotEmpty(vm.StatusText);
+    }
+
+    [Fact]
+    public async Task DisconnectConnections_MultipleSelected_DisconnectsAll_WithSingleConfirm()
+    {
+        // issue #72: несколько выбранных соединений разрываются одним нажатием — единое
+        // подтверждение и «connection disconnect» для каждого (с рабочим процессом, #69).
+        var client = new FakeRacClient();
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs);
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+
+        var first = new RacConnectionRow(new RacConnectionInfo
+        {
+            Id = Guid.NewGuid(),
+            ProcessId = FakeRacClient.FirstProcessId,
+            Host = "client1"
+        });
+        var second = new RacConnectionRow(new RacConnectionInfo
+        {
+            Id = Guid.NewGuid(),
+            ProcessId = FakeRacClient.FirstProcessId,
+            Host = "client2"
+        });
+        vm.SelectedConnections = new[] { first, second };
+        Assert.True(vm.CanDisconnectConnections);
+
+        await vm.DisconnectConnectionAsync();
+
+        var confirm = Assert.Single(dialogs.Confirms);
+        Assert.Contains("ServerMonitor.DisconnectBulkConfirmFormat", confirm.message);
+        Assert.Empty(dialogs.Warnings);
+        Assert.Equal(2, client.DisconnectCalls.Count);
+        Assert.Contains(client.DisconnectCalls, c => c.connectionId == first.Id);
+        Assert.Contains(client.DisconnectCalls, c => c.connectionId == second.Id);
+        // issue #69: рабочий процесс передаётся каждому вызову (rac 8.5.4).
+        Assert.All(client.DisconnectCalls, c => Assert.Equal(FakeRacClient.FirstProcessId, c.processId));
+        Assert.NotEmpty(vm.StatusText);
+    }
+
+    [Fact]
+    public async Task DisconnectConnections_PartialFailure_DoesNotStopRemaining()
+    {
+        // issue #72: неудача одного соединения (rac вернул false) не останавливает остальные.
+        var client = new FakeRacClient { DisconnectFailuresLeft = 1 };
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs);
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+
+        var first = new RacConnectionRow(new RacConnectionInfo
+        {
+            Id = Guid.NewGuid(),
+            ProcessId = FakeRacClient.FirstProcessId,
+            Host = "client1"
+        });
+        var second = new RacConnectionRow(new RacConnectionInfo
+        {
+            Id = Guid.NewGuid(),
+            ProcessId = FakeRacClient.FirstProcessId,
+            Host = "client2"
+        });
+        vm.SelectedConnections = new[] { first, second };
+        await vm.DisconnectConnectionAsync();
+
+        Assert.Equal(2, client.DisconnectCalls.Count);
+        Assert.Empty(dialogs.Warnings);
+        Assert.NotEmpty(vm.StatusText);
+    }
+
+    [Fact]
+    public void BuildBulkStatusText_FormatsDoneOutOfTotal_AndAppendsErrorsCount()
+    {
+        // issue #72: сводка массовой операции «N из M»; при ошибках — суффикс с их числом
+        // (в тестовой среде LocalizationManager.T возвращает ключ — по нему и проверяем).
+        Assert.Equal(
+            "ServerMonitor.Status.TerminatedBulkFormat",
+            ServerMonitorViewModel.BuildBulkStatusText("ServerMonitor.Status.TerminatedBulkFormat", 2, 2, 0));
+        Assert.Equal(
+            "ServerMonitor.Status.DisconnectedBulkFormat",
+            ServerMonitorViewModel.BuildBulkStatusText("ServerMonitor.Status.DisconnectedBulkFormat", 3, 5, 0));
+    }
+
+    [Fact]
+    public void BuildBulkStatusText_WithErrors_ContainsErrorsSuffix()
+    {
+        // issue #72: индикация ошибок в общей сводке («N из M. Ошибок: K»). В тестовой
+        // среде LocalizationManager.T возвращает ключ — по нему проверяем суффикс ошибок.
+        var text = ServerMonitorViewModel.BuildBulkStatusText("ServerMonitor.Status.TerminatedBulkFormat", 1, 3, 2);
+        Assert.Contains("ServerMonitor.Status.BulkErrorsFormat", text);
+    }
+
+    [Fact]
+    public void CanTerminateSessions_RequiresConnectionAndSelection()
+    {
+        // issue #72: без подключения и без выбора кнопка недоступна (как раньше).
+        var vm = new ServerMonitorViewModel(new FakeRacClient(), new RecordingDialogs());
+        Assert.False(vm.CanTerminateSessions);
+
+        // Выбор есть, подключения нет — кнопка всё ещё недоступна.
+        vm.SelectedSessions = new[] { new RacSessionRow(new RacSessionInfo { User = "Иванов" }) };
+        Assert.False(vm.CanTerminateSessions);
+    }
+
+    [Fact]
+    public void CanDisconnectConnections_RequiresConnectionAndSelection()
+    {
+        var vm = new ServerMonitorViewModel(new FakeRacClient(), new RecordingDialogs());
+        Assert.False(vm.CanDisconnectConnections);
+
+        vm.SelectedConnections = new[] { new RacConnectionRow(new RacConnectionInfo { Id = Guid.NewGuid() }) };
+        Assert.False(vm.CanDisconnectConnections);
+    }
+
     // ===================== Fakes =====================
 
     /// <summary>Fake-клиент rac для тестов: два кластера, по одной строке данных.</summary>

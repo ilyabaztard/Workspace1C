@@ -174,6 +174,21 @@ namespace Workspace1C
             _vm.DisconnectConnectionCommand.Execute(null);
 
         /// <summary>
+        /// Мультивыделение на вкладке «Сеансы» (issue #72): при изменении выбора DataGrid
+        /// (простой клик, Ctrl — инверсия, Shift — диапазон) весь набор строк
+        /// синхронизируется в ViewModel — кнопка «Завершить сеансы» действует на все.
+        /// </summary>
+        private void OnSessionsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+            _vm.SelectedSessions = SessionsGrid.SelectedItems.Cast<RacSessionRow>().ToList();
+
+        /// <summary>
+        /// Мультивыделение на вкладке «Соединения» (issue #72): набор выбранных строк
+        /// синхронизируется в ViewModel для кнопки «Разорвать соединения».
+        /// </summary>
+        private void OnConnectionsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+            _vm.SelectedConnections = ConnectionsGrid.SelectedItems.Cast<RacConnectionRow>().ToList();
+
+        /// <summary>
         /// «Сбросить» фильтр по базе (issue #3): клиентская операция — показываются
         /// сеансы/соединения/блокировки всех баз кластера, без rac-вызовов.
         /// </summary>
