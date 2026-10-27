@@ -199,6 +199,25 @@ public sealed class MaintenanceCenterRowViewModel : ViewModelBase, IDisposable
 }
 
 /// <summary>
+/// Строка списка «Топ баз по росту» в секции «История размеров» (п.7, 1.0.0.89):
+/// выбор базы показывает график роста её размера ИБ.
+/// </summary>
+public sealed class MaintenanceHistoryRow
+{
+    /// <summary>База, для которой построена строка.</summary>
+    public required Infobase Infobase { get; init; }
+
+    /// <summary>Имя базы.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Текст темпа роста: «+0,3 ГБ в день» или «≈ стабильна».</summary>
+    public required string GrowthText { get; init; }
+
+    /// <summary>Последний известный размер ИБ.</summary>
+    public required string CurrentSizeText { get; init; }
+}
+
+/// <summary>
 /// ViewModel окна «Центр обслуживания» (0.3.9.89): таблица всех баз со сводкой
 /// состояния (доступность, последняя копия, размер, кэш, конфигурация, возраст
 /// данных, проверка обновлений), фильтр-переключатель «Только проблемы» и кнопки
@@ -238,6 +257,10 @@ public sealed class MaintenanceCenterViewModel : ViewModelBase
             ib.RefreshCacheSizeAsync();
         }
         ApplyFilter();
+
+        // Секция «История размеров» (п.7, 1.0.0.89): топ баз по росту за выбранный
+        // период и прогноз диска под копиями.
+        RefreshHistory();
     }
 
     /// <summary>Все строки (до применения фильтра).</summary>
@@ -271,6 +294,259 @@ public sealed class MaintenanceCenterViewModel : ViewModelBase
     {
         if (row is not null)
             _openBase(row.Infobase);
+    }
+
+    // ---- Секция «История размеров и прогноз диска» (п.7, 1.0.0.89) ----
+
+    private const int MaxHistoryTopRows = 5;
+
+    /// <summary>Хранилище дневных снимков размеров (лениво, через DI; изоляция — в тестах).</summary>
+    private SizeHistoryStore? _historyStore;
+
+    /// <summary>Идентификаторы всех баз списка (для быстрого поиска при выборе строки).</summary>
+    private readonly Dictionary<string, Infobase> _infobaseById = new(StringComparer.Ordinal);
+
+    /// <summary>Период графика «История размеров», дней (7/30/90).</summary>
+    public int HistoryPeriodDays { get; private set; } = 30;
+
+    /// <summary>Топ баз по росту за выбранный период.</summary>
+    public ObservableCollection<MaintenanceHistoryRow> HistoryRows { get; } = new();
+
+    private MaintenanceHistoryRow? _selectedHistoryRow;
+
+    /// <summary>Выбранная база в «Топе баз по росту» (показывает график).</summary>
+    public MaintenanceHistoryRow? SelectedHistoryRow
+    {
+        get => _selectedHistoryRow;
+        set
+        {
+            if (SetProperty(ref _selectedHistoryRow, value))
+                RefreshHistoryChart();
+        }
+    }
+
+    /// <summary>Нормализованные точки графика роста выбранной базы (рисование — в окнах).</summary>
+    public SizeChartData? HistoryChart { get; private set; }
+
+    /// <summary>Заголовок графика: имя базы + период.</summary>
+    public string HistoryChartCaption { get; private set; } = string.Empty;
+
+    /// <summary>Сообщение секции графика, когда данных нет.</summary>
+    public string HistoryEmptyText { get; private set; } = string.Empty;
+
+    /// <summary>Текст прогноза роста выбранной базы («+0,3 ГБ в день»).</summary>
+    public string ForecastText { get; private set; } = string.Empty;
+
+    /// <summary>Текст прогноза «Диск под копиями закончится примерно через N дней».</summary>
+    public string DiskForecastText { get; private set; } = string.Empty;
+
+    /// <summary>Выбор периода истории (7/30/90 дней) и пересчёт секции.</summary>
+    public void SetHistoryPeriod(int days)
+    {
+        if (days is not 7 and not 30 and not 90)
+            days = 30;
+        if (HistoryPeriodDays == days)
+            return;
+        HistoryPeriodDays = days;
+        OnPropertyChanged(nameof(HistoryPeriodDays));
+        RefreshHistory();
+    }
+
+    /// <summary>Выбор базы из «Топа» (также по одиночному клику строки таблицы).</summary>
+    public void SelectHistory(MaintenanceHistoryRow row)
+    {
+        if (row is not null)
+            SelectedHistoryRow = row;
+    }
+
+    /// <summary>Выбор базы по идентификатору (выделение строки в таблице → график).</summary>
+    public void SelectHistoryById(string? infobaseId)
+    {
+        if (string.IsNullOrWhiteSpace(infobaseId))
+            return;
+        var row = HistoryRows.FirstOrDefault(r =>
+            string.Equals(r.Infobase.Id, infobaseId, StringComparison.Ordinal));
+        if (row is not null)
+            SelectedHistoryRow = row;
+    }
+
+    private SizeHistoryStore HistoryStore => _historyStore
+        ??= AppServices.TryGetService<SizeHistoryStore>() ?? new SizeHistoryStore();
+
+    /// <summary>
+    /// Пересчитывает «Топ баз по росту» за выбранный период и прогноз диска под копиями
+    /// (по всем снимкам стабильных дисков копий). Вызывается при открытии окна и при
+    /// смене периода.
+    /// </summary>
+    private void RefreshHistory()
+    {
+        _infobaseById.Clear();
+        foreach (var row in AllRows)
+        {
+            if (row.Infobase is not null)
+                _infobaseById[row.Infobase.Id] = row.Infobase;
+        }
+
+        IReadOnlyList<SizeSnapshotEntry> all;
+        try
+        {
+            all = HistoryStore.GetAll();
+        }
+        catch
+        {
+            all = Array.Empty<SizeSnapshotEntry>();
+        }
+
+        var from = SizeHistoryStore.PeriodFromUtc(DateTime.UtcNow, HistoryPeriodDays);
+
+        // Темп роста размера ИБ по снимкам за период (последние N ≥ 2).
+        var candidates = new List<(MaintenanceHistoryRow Row, double Growth)>();
+        foreach (var group in all.Where(s => !string.IsNullOrWhiteSpace(s.InfobaseId))
+                     .GroupBy(s => s.InfobaseId!))
+        {
+            var fullHistory = group.OrderBy(s => s.DateUtc).ToList();
+            var lastId = fullHistory[fullHistory.Count - 1].InfobaseId;
+            if (!_infobaseById.TryGetValue(lastId, out var ib) || ib is null)
+                continue;
+            var period = fullHistory.Where(s => s.DateUtc >= from).ToList();
+            if (period.Count < 2)
+                continue;
+            var growth = DiskForecastService.EstimateGrowthRate(period, s => s.SizeBytes);
+            if (growth is null)
+                continue;
+            var last = period[period.Count - 1].SizeBytes;
+            candidates.Add((new MaintenanceHistoryRow
+            {
+                Infobase = ib,
+                Name = ib.Name,
+                GrowthText = "+" + DiskForecastService.FormatBytes(growth.Value) + " / " +
+                    LocalizationManager.T("Maintenance.HistoryPerDay"),
+                CurrentSizeText = last.HasValue
+                    ? Services.DiskFreeSpaceHelper.FormatBytes(last.Value)
+                    : "—"
+            }, growth.Value));
+        }
+
+        // Топ по темпу роста (базы без истории не попадают в список).
+        candidates.Sort((a, b) => b.Growth.CompareTo(a.Growth));
+        HistoryRows.Clear();
+        foreach (var item in candidates.Take(MaxHistoryTopRows))
+            HistoryRows.Add(item.Row);
+
+        // Прогноз диска под копиями: общий по снимкам каталогов копий.
+        DiskForecastText = BuildDiskForecastText(all);
+
+        if (HistoryRows.Count == 0)
+        {
+            SelectedHistoryRow = null;
+            HistoryChart = null;
+            HistoryChartCaption = string.Empty;
+            ForecastText = string.Empty;
+            HistoryEmptyText = LocalizationManager.T("Maintenance.HistoryEmpty");
+        }
+        else if (SelectedHistoryRow is null || !HistoryRows.Contains(SelectedHistoryRow))
+        {
+            SelectedHistoryRow = HistoryRows[0]; // триггерит RefreshHistoryChart
+        }
+        else
+        {
+            RefreshHistoryChart();
+        }
+        OnPropertyChanged(nameof(HistoryRows));
+        OnPropertyChanged(nameof(HistoryChart));
+        OnPropertyChanged(nameof(HistoryChartCaption));
+        OnPropertyChanged(nameof(HistoryEmptyText));
+        OnPropertyChanged(nameof(ForecastText));
+        OnPropertyChanged(nameof(DiskForecastText));
+    }
+
+    /// <summary>Пересчитывает график и прогноз роста выбранной базы.</summary>
+    private void RefreshHistoryChart()
+    {
+        var row = SelectedHistoryRow;
+        if (row is null)
+        {
+            HistoryChart = null;
+            HistoryChartCaption = string.Empty;
+            ForecastText = string.Empty;
+            HistoryEmptyText = LocalizationManager.T("Maintenance.HistoryEmpty");
+            return;
+        }
+
+        var from = SizeHistoryStore.PeriodFromUtc(DateTime.UtcNow, HistoryPeriodDays);
+        IReadOnlyList<SizeSnapshotEntry> history;
+        try
+        {
+            history = HistoryStore.GetHistory(row.Infobase.Id, from);
+        }
+        catch
+        {
+            history = Array.Empty<SizeSnapshotEntry>();
+        }
+
+        HistoryChart = SizeHistoryChartModel.Build(history);
+        HistoryChartCaption = string.Format(
+            LocalizationManager.T("Maintenance.HistoryCaptionFormat"),
+            row.Name, HistoryPeriodDays);
+        HistoryEmptyText = HistoryChart is null && history.Count < 2
+            ? LocalizationManager.T("Maintenance.HistoryEmpty")
+            : string.Empty;
+
+        var growth = DiskForecastService.EstimateGrowthRate(history, s => s.SizeBytes);
+        var last = history.Count > 0 ? history[history.Count - 1].SizeBytes : null;
+        ForecastText = growth.HasValue
+            ? string.Format(LocalizationManager.T("Maintenance.ForecastGrowthFormat"),
+                "+" + DiskForecastService.FormatBytes(growth.Value) + " " +
+                LocalizationManager.T("Maintenance.HistoryPerDay"),
+                last.HasValue ? Services.DiskFreeSpaceHelper.FormatBytes(last.Value) : "—")
+            : LocalizationManager.T("Maintenance.ForecastNoData");
+
+        OnPropertyChanged(nameof(HistoryChart));
+        OnPropertyChanged(nameof(HistoryChartCaption));
+        OnPropertyChanged(nameof(HistoryEmptyText));
+        OnPropertyChanged(nameof(ForecastText));
+    }
+
+    /// <summary>
+    /// Строит текст прогноза «Диск под копиями закончится примерно через N дней» по
+    /// снимкам каталогов копий: рост объёма копий на каждом диске против свободного
+    /// места последнего снимка. Чистая логика — <see cref="DiskForecastService"/>.
+    /// </summary>
+    internal static string BuildDiskForecastText(IReadOnlyList<SizeSnapshotEntry> all)
+    {
+        if (all is null || all.Count < 2)
+            return Workspace1C.Localization.LocalizationManager.T("Maintenance.ForecastNoData");
+
+        var byDrive = all
+            .Where(s => s is not null && !string.IsNullOrWhiteSpace(s.CopiesDrive)
+                        && s.CopiesBytes.HasValue && s.CopiesBytes > 0
+                        && s.CopiesDiskFreeBytes.HasValue)
+            .GroupBy(s => s.CopiesDrive!)
+            .ToList();
+        if (byDrive.Count == 0)
+            return Workspace1C.Localization.LocalizationManager.T("Maintenance.ForecastNoData");
+
+        var parts = new List<string>();
+        foreach (var group in byDrive)
+        {
+            var ordered = group.OrderBy(s => s.DateUtc).ToList();
+            var latest = ordered[ordered.Count - 1];
+            var forecast = DiskForecastService.ForecastDaysUntilFull(
+                ordered, latest.CopiesDiskFreeBytes, s => s.CopiesBytes, DateTime.UtcNow);
+            if (!forecast.Valid)
+            {
+                parts.Add(string.Format(
+                    Workspace1C.Localization.LocalizationManager.T("Maintenance.ForecastStableFormat"),
+                    group.Key));
+                continue;
+            }
+            var days = (int)Math.Ceiling(forecast.DaysUntilFull);
+            var date = forecast.DateWhenFull!.Value.ToLocalTime().ToString("dd.MM.yyyy");
+            parts.Add(string.Format(
+                Workspace1C.Localization.LocalizationManager.T("Maintenance.ForecastDaysFormat"),
+                group.Key, days, forecast.DaysMin, forecast.DaysMax, date));
+        }
+        return string.Join(Environment.NewLine, parts);
     }
 
     private void ApplyFilter()

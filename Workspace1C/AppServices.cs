@@ -165,7 +165,11 @@ public static class AppServices
             sp.GetRequiredService<IRacClient>(), sp.GetRequiredService<IServerListStore>(),
             sp.GetRequiredService<INotificationService>(), sp.GetService<IInfobaseRepository>(),
             sp.GetService<IAppLogger>(),
-            sp.GetService<IRingLicenseService>(), sp.GetService<INotificationSettingsStore>()));
+            sp.GetService<IRingLicenseService>(), sp.GetService<INotificationSettingsStore>(),
+            sp.GetService<SizeHistoryStore>()));
+        // п.7 «История размеров баз и прогноз диска» (1.0.0.89): дневные снимки
+        // размеров в каталоге данных профиля (size_history.json).
+        services.AddSingleton<SizeHistoryStore>(_ => new SizeHistoryStore());
         services.AddSingleton<TelegramBotCommandService>(sp => new TelegramBotCommandService(
             sp.GetRequiredService<INotificationSettingsStore>(), sp.GetRequiredService<IScheduledTaskStore>(),
             sp.GetRequiredService<SchedulerService>(), sp.GetRequiredService<ServerAlertsService>(),

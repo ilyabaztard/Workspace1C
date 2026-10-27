@@ -6,8 +6,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
+using Avalonia.Controls.Shapes;
 using Avalonia.Data;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -32,6 +34,17 @@ namespace Workspace1C
         private readonly ListBox _grid = new();
         private readonly TextBlock _hint;
 
+        // Секция «История размеров и прогноз диска» (п.7, выпуск 1.0.0.89).
+        private readonly RadioButton _period7 = new() { Content = "7" };
+        private readonly RadioButton _period30 = new() { Content = "30", IsChecked = true };
+        private readonly RadioButton _period90 = new() { Content = "90" };
+        private readonly ListBox _historyList = new();
+        private readonly TextBlock _historyEmptyText = new() { TextWrapping = TextWrapping.Wrap };
+        private readonly TextBlock _forecastText = new() { TextWrapping = TextWrapping.Wrap };
+        private readonly TextBlock _historyCaption = new() { FontWeight = Avalonia.Media.FontWeight.SemiBold };
+        private readonly Canvas _historyChartCanvas = new();
+        private readonly TextBlock _diskForecastText = new() { TextWrapping = TextWrapping.Wrap };
+
         /// <param name="infobases">Все базы списка.</param>
         /// <param name="checkAvailability">Запуск общей проверки доступности (команда главного окна).</param>
         /// <param name="openBase">Переход к базе в главном окне (FindInList-механика).</param>
@@ -45,9 +58,9 @@ namespace Workspace1C
         {
             Title = LocalizationManager.T("Maintenance.Title");
             Width = 1080;
-            Height = 600;
+            Height = 840;
             MinWidth = 760;
-            MinHeight = 420;
+            MinHeight = 660;
             FontSize = 13;
             CanResize = true;
             DataContext = _vm = new MaintenanceCenterViewModel(
@@ -129,6 +142,8 @@ namespace Workspace1C
                 Children = { checkButton, openButton, closeButton }
             };
 
+            var historySection = BuildHistorySection();
+
             var grid = new Grid
             {
                 Margin = new Thickness(16),
@@ -138,15 +153,32 @@ namespace Workspace1C
                     new RowDefinition(GridLength.Auto),
                     new RowDefinition(GridLength.Star),
                     new RowDefinition(GridLength.Auto),
+                    new RowDefinition(GridLength.Auto),
                     new RowDefinition(GridLength.Auto)
                 }
             };
             Place(grid, header, 0);
             Place(grid, summary, 1);
             Place(grid, _grid, 2);
-            Place(grid, buttons, 3);
-            Place(grid, _hint, 4);
+            Place(grid, historySection, 3);
+            Place(grid, buttons, 4);
+            Place(grid, _hint, 5);
             Content = grid;
+
+            // Перерисовка графика при смене выбранной базы/периода (п.7, 1.0.0.89).
+            _vm.PropertyChanged += OnViewModelPropertyChanged;
+            _historyList.SelectionChanged += OnHistoryListSelectionChanged;
+            _grid.SelectionChanged += (_, _) =>
+            {
+                // Одиночный клик по строке таблицы → график истории этой базы (п.7, 1.0.0.89).
+                if (_grid.SelectedItem is MaintenanceCenterRowViewModel row)
+                    _vm.SelectHistoryById(row.Infobase?.Id);
+            };
+            _historyChartCanvas.SizeChanged += (_, _) => DrawHistoryChart();
+            foreach (var radio in new[] { _period7, _period30, _period90 })
+                radio.IsCheckedChanged += OnHistoryPeriodChanged;
+            _historyList.ItemsSource = _vm.HistoryRows;
+            DrawHistoryChart();
         }
 
         private static void Place(Grid grid, Control control, int row)
@@ -255,6 +287,238 @@ namespace Workspace1C
             };
             text.Bind(TextBlock.TextProperty, new Binding(property));
             return text;
+        }
+
+        // ---- Секция «История размеров и прогноз диска» (п.7, 1.0.0.89) ----
+
+        private Control BuildHistorySection()
+        {
+            var title = new TextBlock
+            {
+                Text = LocalizationManager.T("Maintenance.HistoryTitle"),
+                FontSize = 13,
+                FontWeight = FontWeight.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ThemeBrushes.Bind(title, TextBlock.ForegroundProperty, "TextPrimaryColorBrush");
+
+            var periodLabel = new TextBlock
+            {
+                Text = LocalizationManager.T("Maintenance.HistoryPeriod"),
+                FontSize = 12,
+                Margin = new Thickness(14, 0, 4, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ThemeBrushes.Bind(periodLabel, TextBlock.ForegroundProperty, "TextSecondaryColorBrush");
+            foreach (var radio in new[] { _period7, _period30, _period90 })
+            {
+                radio.GroupName = "HistoryPeriod";
+                radio.Margin = new Thickness(6, 0, 0, 0);
+                radio.VerticalAlignment = VerticalAlignment.Center;
+            }
+
+            var headerRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Children =
+                {
+                    title, periodLabel, _period7, _period30, _period90
+                }
+            };
+
+            // Топ баз по росту: имя + темп роста + текущий размер.
+            _historyList.Height = 132;
+            _historyList.Margin = new Thickness(0, 8, 0, 0);
+            _historyList.ItemTemplate = new FuncDataTemplate<MaintenanceHistoryRow>((row, _) =>
+            {
+                var name = new TextBlock
+                {
+                    Text = row.Name,
+                    FontWeight = FontWeight.SemiBold,
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                };
+                var growth = new TextBlock
+                {
+                    Text = row.GrowthText,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.Parse("#E53935"))
+                };
+                var current = new TextBlock
+                {
+                    Text = row.CurrentSizeText,
+                    FontSize = 11,
+                    Margin = new Thickness(8, 0, 0, 0)
+                };
+                ThemeBrushes.Bind(current, TextBlock.ForegroundProperty, "TextSecondaryColorBrush");
+                var meta = new StackPanel { Orientation = Orientation.Horizontal, Children = { growth, current } };
+                var cell = new StackPanel { Children = { name, meta } };
+                return cell;
+            });
+
+            _historyEmptyText.FontSize = 12;
+            _historyEmptyText.Margin = new Thickness(0, 8, 0, 0);
+            _historyEmptyText.Bind(TextBlock.TextProperty, new Binding("HistoryEmptyText"));
+            ThemeBrushes.Bind(_historyEmptyText, TextBlock.ForegroundProperty, "TextSecondaryColorBrush");
+            _forecastText.FontSize = 12;
+            _forecastText.Margin = new Thickness(0, 6, 0, 0);
+            _forecastText.Bind(TextBlock.TextProperty, new Binding("ForecastText"));
+            ThemeBrushes.Bind(_forecastText, TextBlock.ForegroundProperty, "TextPrimaryColorBrush");
+
+            var left = new StackPanel
+            {
+                Children = { headerRow, _historyList, _historyEmptyText, _forecastText }
+            };
+
+            // Правая колонка: график роста + прогноз диска под копиями.
+            _historyCaption.HorizontalAlignment = HorizontalAlignment.Center;
+            _historyCaption.Bind(TextBlock.TextProperty, new Binding("HistoryChartCaption"));
+            ThemeBrushes.Bind(_historyCaption, TextBlock.ForegroundProperty, "TextPrimaryColorBrush");
+            _historyChartCanvas.Height = 150;
+            _historyChartCanvas.Margin = new Thickness(0, 4, 0, 0);
+            _historyChartCanvas.Background = Brushes.Transparent;
+            _diskForecastText.FontSize = 12;
+            _diskForecastText.Margin = new Thickness(0, 4, 0, 0);
+            _diskForecastText.Bind(TextBlock.TextProperty, new Binding("DiskForecastText"));
+            ThemeBrushes.Bind(_diskForecastText, TextBlock.ForegroundProperty, "TextSecondaryColorBrush");
+
+            var right = new Border
+            {
+                Margin = new Thickness(12, 0, 0, 0),
+                Padding = new Thickness(8),
+                Child = new StackPanel
+                {
+                    Children = { _historyCaption, _historyChartCanvas, _diskForecastText }
+                }
+            };
+            ThemeBrushes.Bind(right, Border.BorderBrushProperty, "BorderBrush");
+            ThemeBrushes.Bind(right, Border.BackgroundProperty, "CardBackgroundBrush");
+            right.BorderThickness = new Thickness(1);
+
+            var root = new Border
+            {
+                Margin = new Thickness(0, 10, 0, 0),
+                Padding = new Thickness(10),
+                Child = new Grid
+                {
+                    ColumnDefinitions =
+                    {
+                        new ColumnDefinition(new GridLength(330, GridUnitType.Pixel)),
+                        new ColumnDefinition(new GridLength(1, GridUnitType.Star))
+                    },
+                    Children = { left, right }
+                }
+            };
+            Grid.SetColumn(right, 1);
+            ThemeBrushes.Bind(root, Border.BorderBrushProperty, "BorderBrush");
+            root.BorderThickness = new Thickness(1);
+            return root;
+        }
+
+        private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(MaintenanceCenterViewModel.HistoryChart) ||
+                e.PropertyName == nameof(MaintenanceCenterViewModel.HistoryEmptyText) ||
+                e.PropertyName == nameof(MaintenanceCenterViewModel.DiskForecastText))
+                DrawHistoryChart();
+        }
+
+        private void OnHistoryListSelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_historyList.SelectedItem is MaintenanceHistoryRow row)
+                _vm.SelectHistory(row);
+        }
+
+        private void OnHistoryPeriodChanged(object? sender, RoutedEventArgs e)
+        {
+            var days = ReferenceEquals(sender, _period7) ? 7
+                : ReferenceEquals(sender, _period90) ? 90
+                : 30;
+            _vm.SetHistoryPeriod(days);
+        }
+
+        /// <summary>
+        /// Рисует простой линейный график роста ИБ на <see cref="Canvas"/> (без внешних
+        /// библиотек): сетка с подписями Y, ось X с датами и полилиния точек.
+        /// </summary>
+        private void DrawHistoryChart()
+        {
+            _historyChartCanvas.Children.Clear();
+            var chart = _vm.HistoryChart;
+            if (chart is null || chart.Points.Count < 2)
+                return;
+
+            double w = Math.Max(60, _historyChartCanvas.Bounds.Width);
+            double h = Math.Max(40, _historyChartCanvas.Bounds.Height);
+            const double left = 58, right = 12, top = 8, bottom = 20;
+            var plotW = w - left - right;
+            var plotH = h - top - bottom;
+            if (plotW <= 20 || plotH <= 20)
+                return;
+
+            var lineBrush = new SolidColorBrush(Color.Parse("#B0B0B0"));
+            var textBrush = new SolidColorBrush(Color.Parse("#888888"));
+            var accentBrush = new SolidColorBrush(Color.Parse("#2D6CDF"));
+
+            foreach (var (f, label) in new[] { (0.0, chart.YMinLabel), (1.0, chart.YMaxLabel) })
+            {
+                var y = top + (1 - f) * plotH;
+                _historyChartCanvas.Children.Add(new Line
+                {
+                    StartPoint = new Point(left, y),
+                    EndPoint = new Point(left + plotW, y),
+                    Stroke = lineBrush,
+                    StrokeThickness = 1,
+                    StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 3, 3 }
+                });
+                var yLabel = new TextBlock
+                {
+                    Text = label,
+                    FontSize = 10,
+                    Width = left - 4
+                };
+                Canvas.SetLeft(yLabel, 0);
+                Canvas.SetTop(yLabel, y - 7);
+                _historyChartCanvas.Children.Add(yLabel);
+            }
+
+            _historyChartCanvas.Children.Add(new Line
+            {
+                StartPoint = new Point(left, top + plotH),
+                EndPoint = new Point(left + plotW, top + plotH),
+                Stroke = lineBrush,
+                StrokeThickness = 1
+            });
+            foreach (var (f, label) in new[] { (0.0, chart.XMinLabel), (1.0, chart.XMaxLabel) })
+            {
+                var xLabel = new TextBlock { Text = label, FontSize = 10 };
+                Canvas.SetLeft(xLabel, f == 0 ? left - 2 : left + plotW - 64);
+                Canvas.SetTop(xLabel, top + plotH + 4);
+                _historyChartCanvas.Children.Add(xLabel);
+            }
+
+            var polyline = new Polyline
+            {
+                Stroke = accentBrush,
+                StrokeThickness = 2
+            };
+            foreach (var p in chart.Points)
+            {
+                polyline.Points.Add(new Point(left + p.X * plotW, top + (1 - p.Y) * plotH));
+            }
+            _historyChartCanvas.Children.Add(polyline);
+
+            var last = chart.Points[chart.Points.Count - 1];
+            var dot = new Ellipse
+            {
+                Width = 6,
+                Height = 6,
+                Fill = accentBrush,
+                Stroke = Brushes.White,
+                StrokeThickness = 1
+            };
+            Canvas.SetLeft(dot, left + last.X * plotW - 3);
+            Canvas.SetTop(dot, top + (1 - last.Y) * plotH - 3);
+            _historyChartCanvas.Children.Add(dot);
         }
 
         private void OnGrid_DoubleTapped(object? sender, TappedEventArgs e)

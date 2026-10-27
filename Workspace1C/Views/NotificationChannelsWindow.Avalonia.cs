@@ -51,6 +51,12 @@ public sealed class NotificationChannelsWindow : ModalWindowBase
     /// <summary>Период повторных оповещений о нехватке лицензий, часов.</summary>
     private readonly TextBox _licenseRepeat = new TextBox { Width = 110 }.Styled(ControlThemes.ModernTextBox);
 
+    /// <summary>Порог «диск под копиями закончится через N дней» (п.7, 1.0.0.89); 0 — отключено.</summary>
+    private readonly TextBox _diskForecastThreshold = new TextBox { Width = 110 }.Styled(ControlThemes.ModernTextBox);
+
+    /// <summary>Период повторных оповещений о прогнозе диска, дней.</summary>
+    private readonly TextBox _diskForecastRepeat = new TextBox { Width = 110 }.Styled(ControlThemes.ModernTextBox);
+
     public NotificationChannelsWindow()
     {
         Title = T("Notifications.Title");
@@ -175,6 +181,13 @@ public sealed class NotificationChannelsWindow : ModalWindowBase
         panel.Children.Add(Row(T("Notifications.LicenseRepeatHours"), _licenseRepeat));
         panel.Children.Add(Hint(T("Notifications.LicenseRepeatHint")));
 
+        // ===== Прогноз диска под копиями (п.7 «История размеров», 1.0.0.89) =====
+        panel.Children.Add(Header(T("Notifications.DiskForecastHeader")));
+        panel.Children.Add(Hint(T("Notifications.DiskForecastHint")));
+        panel.Children.Add(Row(T("Notifications.DiskForecastThreshold"), _diskForecastThreshold));
+        panel.Children.Add(Row(T("Notifications.DiskForecastRepeatDays"), _diskForecastRepeat));
+        panel.Children.Add(Hint(T("Notifications.DiskForecastRepeatHint")));
+
         var bottom = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -244,6 +257,8 @@ public sealed class NotificationChannelsWindow : ModalWindowBase
         _onlyProblems.IsChecked = s.OnlyProblems;
         _licenseThreshold.Text = s.LicenseFreeThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _licenseRepeat.Text = s.LicenseAlertRepeatHours.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _diskForecastThreshold.Text = s.DiskForecastThresholdDays.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _diskForecastRepeat.Text = s.DiskForecastAlertRepeatDays.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private NotificationChannelSettings Collect()
@@ -270,6 +285,10 @@ public sealed class NotificationChannelsWindow : ModalWindowBase
             LicenseAlertRepeatHours = int.TryParse(_licenseRepeat.Text?.Trim(), out var repeat) && repeat > 0
                 ? repeat
                 : 24,
+            DiskForecastThresholdDays = ParseNonNegative(_diskForecastThreshold.Text, 0),
+            DiskForecastAlertRepeatDays = int.TryParse(_diskForecastRepeat.Text?.Trim(), out var repeatDays) && repeatDays > 0
+                ? repeatDays
+                : 1,
         });
     }
 

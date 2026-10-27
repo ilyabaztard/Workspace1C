@@ -188,6 +188,26 @@
                     <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" x:Name="LicenseRepeatBox" Style="{StaticResource FieldBox}"/>
                 </Grid>
                 <TextBlock Style="{StaticResource HintText}" Text="{loc:Loc Notifications.LicenseRepeatHint}"/>
+
+                <!-- ===== Прогноз диска под копиями (п.7 «История размеров», 1.0.0.89) ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Loc Notifications.DiskForecastHeader}"/>
+                <TextBlock Style="{StaticResource HintText}" Text="{loc:Loc Notifications.DiskForecastHint}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="{loc:Loc Notifications.DiskForecastThreshold}"/>
+                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="DiskForecastThresholdBox" Style="{StaticResource FieldBox}"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource FieldLabel}" Margin="0,4,0,0" Text="{loc:Loc Notifications.DiskForecastRepeatDays}"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" x:Name="DiskForecastRepeatBox" Style="{StaticResource FieldBox}"/>
+                </Grid>
+                <TextBlock Style="{StaticResource HintText}" Text="{loc:Loc Notifications.DiskForecastRepeatHint}"/>
             </StackPanel>
         </ScrollViewer>
 

@@ -94,6 +94,12 @@ public sealed class NotificationSettingsStore : INotificationSettingsStore
             s.LicenseFreeThreshold = 0;
         if (s.LicenseAlertRepeatHours < 1)
             s.LicenseAlertRepeatHours = 24;
+        // Порог прогноза диска под копиями (п.7, выпуск 1.0.0.89): отрицательные — 0
+        // (отключено); период повтора — не меньше 1 дня.
+        if (s.DiskForecastThresholdDays < 0)
+            s.DiskForecastThresholdDays = 0;
+        if (s.DiskForecastAlertRepeatDays < 1)
+            s.DiskForecastAlertRepeatDays = 1;
         return s;
     }
 }

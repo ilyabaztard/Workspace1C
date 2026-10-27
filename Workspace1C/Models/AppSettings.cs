@@ -765,6 +765,13 @@ public class AppSettings
     public Dictionary<string, FileSizeCacheEntry> FileSizeCache { get; set; } = new();
 
     /// <summary>
+    /// Глубина истории размеров баз по дням (п.7 «История размеров баз и прогноз диска»,
+    /// 1.0.0.89): сколько дневных снимков <c>size_history.json</c> хранить. 0 или меньше —
+    /// значение по умолчанию (365 дней).
+    /// </summary>
+    public int SizeHistoryMaxDays { get; set; }
+
+    /// <summary>
     /// Пользовательские типовые конфигурации 1С для проверки обновлений (функции №21/№22).
     /// Дополняются предопределённым набором <c>Services.BuiltInConfigTypes</c> при показе.
     /// </summary>
@@ -1031,6 +1038,10 @@ public class AppSettings
         TemplateCatalogPaths ??= new List<string>();
         ElementFonts ??= new Dictionary<string, ElementFontSettings>();
         FileSizeCache ??= new Dictionary<string, FileSizeCacheEntry>();
+        // Глубина истории размеров (п.7, 1.0.0.89): 0/отрицательное — 365 дней по умолчанию,
+        // верхняя граница — защита от опечаток (10 лет).
+        if (SizeHistoryMaxDays <= 0 || SizeHistoryMaxDays > 3650)
+            SizeHistoryMaxDays = 365;
         CustomConfigTypes ??= new List<OneCConfigType>();
         UpdateCheckCache ??= new Dictionary<string, ConfigUpdateCheckResult>();
         BackupTargetDirectories ??= new List<string>();

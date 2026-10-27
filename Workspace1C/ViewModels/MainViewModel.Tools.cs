@@ -1813,6 +1813,10 @@ public partial class MainViewModel : ViewModelBase
             var map = new Dictionary<Infobase, (long?, DateTime)>();
             foreach (var ib in fileBases)
                 map[ib] = CalculateFileBaseMetadataCached(ib);
+
+            // Дневные снимки размеров (п.7, 1.0.0.89): в том же фоновом потоке, один
+            // снимок на базу в день; тяжёлое сканирование каталога копий не блокирует UI.
+            TryCollectDailySizeSnapshots(fileBases, map);
             return map;
         });
 
@@ -1882,6 +1886,65 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Нормализует путь для ключа кеша размеров (убирает хвостовые разделители, верхний регистр).</summary>
     private static string NormalizeCachePath(string path) =>
         path.TrimEnd('\\', '/').ToUpperInvariant();
+
+    /// <summary>
+    /// Собирает дневные снимки размеров баз (п.7 «История размеров баз и прогноз
+    /// диска», 1.0.0.89): один снимок на базу в сутки (не чаще), размер ИБ берётся из
+    /// уже выполненных замеров <paramref name="measured"/>, объём каталога копий и
+    /// свободное место — через <see cref="Services.SizeSnapshotCollector"/> (тяжёлое
+    /// сканирование каталога копий выполняется здесь же — в фоне). Ошибки отдельной
+    /// базы не роняют сбор остальных.
+    /// </summary>
+    private void TryCollectDailySizeSnapshots(
+        IReadOnlyList<Infobase> bases,
+        IReadOnlyDictionary<Infobase, (long?, DateTime)> measured)
+    {
+        try
+        {
+            var store = AppServices.TryGetService<Services.SizeHistoryStore>();
+            if (store is null)
+                return;
+
+            var scenarios = AppServices.TryGetService<Services.IBackupScenarioStore>()?.LoadAll()
+                ?? Array.Empty<BackupScenario>();
+            AppSettings settings;
+            try
+            {
+                settings = _repository.LoadSettings();
+            }
+            catch
+            {
+                settings = new AppSettings();
+            }
+            var maxDays = settings.SizeHistoryMaxDays > 0
+                ? settings.SizeHistoryMaxDays
+                : Services.SizeHistoryStore.DefaultMaxDays;
+            var nowUtc = DateTime.UtcNow;
+
+            foreach (var ib in bases)
+            {
+                try
+                {
+                    if (ib is null || ib.Connection.Type != ConnectionType.File)
+                        continue;
+                    if (store.HasSnapshot(ib.Id, nowUtc))
+                        continue; // Снимок за сегодня уже есть — не чаще раза в день.
+
+                    var size = measured.TryGetValue(ib, out var m) ? m.Item1 : null;
+                    var entry = Services.SizeSnapshotCollector.Build(ib, size, nowUtc, scenarios, settings);
+                    store.AddDailySnapshot(entry, nowUtc, maxDays);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Warn($"Снимок размеров «{ib?.Name}» не сохранён: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn("Сбор дневных снимков размеров не выполнен: " + ex.Message);
+        }
+    }
 
     /// <summary>Обработчик запуска пакетной операции DESIGNER (показывает индикатор выгрузки).</summary>
     private void OnDesignerBatchStarted(object? sender, OneCLauncher.DesignerBatchInfo e)

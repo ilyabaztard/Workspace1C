@@ -73,6 +73,9 @@ public sealed class ServerAlertsService : IDisposable
     /// <summary>Настройки каналов уведомлений (порог «свободно меньше N», п.5, 1.0.0.87).</summary>
     private readonly INotificationSettingsStore? _notificationSettings;
 
+    /// <summary>История размеров баз (п.7 «История размеров и прогноз диска», 1.0.0.89).</summary>
+    private readonly SizeHistoryStore? _sizeHistory;
+
     private readonly Dictionary<string, DateTime> _lastSent = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> _eventLogChecked = new(StringComparer.Ordinal);
     private Timer? _timer;
@@ -80,7 +83,8 @@ public sealed class ServerAlertsService : IDisposable
 
     public ServerAlertsService(IRacClient rac, IServerListStore servers, INotificationService notifications,
         IInfobaseRepository? infobases = null, IAppLogger? logger = null,
-        IRingLicenseService? ringLicenses = null, INotificationSettingsStore? notificationSettings = null)
+        IRingLicenseService? ringLicenses = null, INotificationSettingsStore? notificationSettings = null,
+        SizeHistoryStore? sizeHistory = null)
     {
         _rac = rac;
         _servers = servers;
@@ -89,6 +93,7 @@ public sealed class ServerAlertsService : IDisposable
         _logger = logger;
         _ringLicenses = ringLicenses;
         _notificationSettings = notificationSettings;
+        _sizeHistory = sizeHistory;
     }
 
     public static ServerAlertSettings Load() => FeatureDataStore.Load<ServerAlertSettings>(FileName);
@@ -197,23 +202,60 @@ public sealed class ServerAlertsService : IDisposable
                 if (text is not null)
                     alerts.Add(($"eventlog:{ib.Id}:{DateTime.Now:yyyyMMddHHmm}", text));
             }
+
+            // п.7 «История размеров и прогноз диска» (1.0.0.89): дневные снимки размеров
+            // по расписанию (не чаще раза в день) + оповещение «диск под копиями закончится
+            // примерно через N дней», когда прогноз ≤ порога из настроек уведомлений
+            // (0 — отключено). Защита от повторов — общий _lastSent (ключ
+            // «diskforecast:{имя диска}»).
+            if (_sizeHistory is not null)
+            {
+                try
+                {
+                    CollectDailySizeSnapshots(all);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Warn($"Снимки размеров по расписанию не собраны: {ex.Message}");
+                }
+
+                try
+                {
+                    var notificationSettings = _notificationSettings?.Load();
+                    var thresholdDays = notificationSettings?.DiskForecastThresholdDays ?? 0;
+                    if (thresholdDays > 0)
+                    {
+                        var repeatDays = Math.Max(1, notificationSettings!.DiskForecastAlertRepeatDays);
+                        alerts.AddRange(CheckDiskForecastAsync(all, thresholdDays, repeatDays));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Warn($"Проверка прогноза диска не выполнена: {ex.Message}");
+                }
+            }
         }
 
         if (notify)
         {
             var repeat = TimeSpan.FromMinutes(Math.Max(1, settings.RepeatMinutes));
-            // Период повтора оповещений о лицензиях — из настроек уведомлений (часы).
+            // Период повтора оповещений о лицензиях — из настроек уведомлений (часы);
+            // о прогнозе диска (п.7, 1.0.0.89) — из настроек уведомлений (дни).
             var licenseRepeat = TimeSpan.FromHours(24);
+            var diskForecastRepeat = TimeSpan.FromDays(1);
             if (_notificationSettings is not null)
             {
-                licenseRepeat = TimeSpan.FromHours(
-                    Math.Max(1, _notificationSettings.Load().LicenseAlertRepeatHours));
+                var ns = _notificationSettings.Load();
+                licenseRepeat = TimeSpan.FromHours(Math.Max(1, ns.LicenseAlertRepeatHours));
+                diskForecastRepeat = TimeSpan.FromDays(Math.Max(1, ns.DiskForecastAlertRepeatDays));
             }
             foreach (var (key, text) in alerts)
             {
                 var effectiveRepeat = key.StartsWith("license:", StringComparison.Ordinal)
                     ? licenseRepeat
-                    : repeat;
+                    : key.StartsWith(DiskForecastService.DiskForecastAlertKey(""), StringComparison.Ordinal)
+                        ? diskForecastRepeat
+                        : repeat;
                 if (_lastSent.TryGetValue(key, out var last) && DateTime.Now - last < effectiveRepeat)
                     continue;
                 _lastSent[key] = DateTime.Now;
@@ -343,5 +385,96 @@ public sealed class ServerAlertsService : IDisposable
             return null;
         return string.Format(LocalizationManager.T("Alerts.EventLogErrors"), ib.Name, count.Value,
             since.ToString("HH:mm", CultureInfo.InvariantCulture));
+    }
+
+    // ---- п.7 «История размеров баз и прогноз диска» (1.0.0.89) ----
+
+    /// <summary>
+    /// Собирает дневные снимки размеров по расписанию: один снимок на базу в сутки
+    /// (не чаще). Тяжёлое сканирование каталога копий — здесь же (фоновый цикл
+    /// мониторинга); ошибки отдельной базы не роняют весь цикл.
+    /// </summary>
+    private void CollectDailySizeSnapshots(IReadOnlyList<Infobase> bases)
+    {
+        if (_sizeHistory is null || bases is null || bases.Count == 0)
+            return;
+
+        var scenarios = AppServices.TryGetService<IBackupScenarioStore>()?.LoadAll()
+            ?? Array.Empty<BackupScenario>();
+        AppSettings settings;
+        try
+        {
+            settings = _infobases!.LoadSettings();
+        }
+        catch
+        {
+            settings = new AppSettings();
+        }
+        var maxDays = settings.SizeHistoryMaxDays > 0
+            ? settings.SizeHistoryMaxDays
+            : SizeHistoryStore.DefaultMaxDays;
+        var nowUtc = DateTime.UtcNow;
+
+        foreach (var ib in bases)
+        {
+            try
+            {
+                if (ib is null || ib.Connection.Type != ConnectionType.File)
+                    continue;
+                if (_sizeHistory.HasSnapshot(ib.Id, nowUtc))
+                    continue; // Снимок за сегодня уже есть.
+                var size = InfobaseMaintenanceService.CalculateFileBaseSize(ib);
+                var entry = SizeSnapshotCollector.Build(ib, size, nowUtc, scenarios, settings);
+                _sizeHistory.AddDailySnapshot(entry, nowUtc, maxDays);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Warn($"Снимок размеров «{ib?.Name}» (расписание) не сохранён: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Проверка прогноза «диск под копиями закончится через N дней»: по снимкам
+    /// каталогов копий (объём — рост, свободное место — последний замер) для каждого
+    /// диска. Возвращает тексты, которые пора отправить (подавление повторов — в
+    /// общей <see cref="_lastSent"/> через ключи «diskforecast:{диск}» в цикле отправки).
+    /// </summary>
+    private IReadOnlyList<(string Key, string Text)> CheckDiskForecastAsync(
+        IReadOnlyList<Infobase> bases, int thresholdDays, int repeatDays)
+    {
+        var result = new List<(string, string)>();
+        var allSnapshots = _sizeHistory!.GetAll();
+        if (allSnapshots.Count < 2)
+            return result;
+
+        // Снимки по дискам каталогов копий (объём копий + свободное место на диске).
+        var byDrive = allSnapshots
+            .Where(s => s is not null && !string.IsNullOrWhiteSpace(s.CopiesDrive)
+                        && s.CopiesBytes.HasValue && s.CopiesBytes > 0
+                        && s.CopiesDiskFreeBytes.HasValue)
+            .GroupBy(s => s.CopiesDrive!)
+            .ToList();
+
+        var nowUtc = DateTime.UtcNow;
+        foreach (var group in byDrive)
+        {
+            var drive = group.Key;
+            var ordered = group.OrderBy(s => s.DateUtc).ToList();
+            var latestFree = ordered.Last().CopiesDiskFreeBytes;
+            if (latestFree is null or <= 0)
+                continue;
+            var forecast = DiskForecastService.ForecastDaysUntilFull(
+                ordered, latestFree, s => s.CopiesBytes, nowUtc);
+            if (!forecast.Valid)
+                continue;
+
+            var texts = DiskForecastService.CheckThreshold(
+                forecast, drive, thresholdDays, DateTime.Now,
+                _lastSent, repeatDays);
+            foreach (var text in texts)
+                result.Add((DiskForecastService.DiskForecastAlertKey(drive), text));
+        }
+        return result;
     }
 }

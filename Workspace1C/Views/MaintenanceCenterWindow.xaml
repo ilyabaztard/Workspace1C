@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:Workspace1C.Localization"
         Icon="{StaticResource AppIcon}"
-        Height="600" Width="1080" MinHeight="420" MinWidth="760"
+        Height="840" Width="1080" MinHeight="660" MinWidth="760"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         Background="{DynamicResource ContentBackgroundBrush}">
@@ -32,6 +32,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -119,8 +120,84 @@
             </DataGrid.Columns>
         </DataGrid>
 
+        <!-- Секция «История размеров и прогноз диска» (п.7, 1.0.0.89) -->
+        <Border Grid.Row="3" Margin="0,10,0,0" Padding="10"
+                BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" CornerRadius="6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="330"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Левая колонка: топ баз по росту + период + прогноз роста базы -->
+                <StackPanel Grid.Column="0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{loc:Loc Maintenance.HistoryTitle}" FontSize="13" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Loc Maintenance.HistoryPeriod}" FontSize="12" Margin="14,0,4,0"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <RadioButton x:Name="Period7Radio" GroupName="HistoryPeriod" Content="7" Margin="4,0,0,0"
+                                     Cursor="Hand" VerticalAlignment="Center" Checked="OnHistoryPeriodChanged"/>
+                        <RadioButton x:Name="Period30Radio" GroupName="HistoryPeriod" Content="30" Margin="6,0,0,0"
+                                     IsChecked="True" Cursor="Hand" VerticalAlignment="Center" Checked="OnHistoryPeriodChanged"/>
+                        <RadioButton x:Name="Period90Radio" GroupName="HistoryPeriod" Content="90" Margin="6,0,0,0"
+                                     Cursor="Hand" VerticalAlignment="Center" Checked="OnHistoryPeriodChanged"/>
+                    </StackPanel>
+                    <ListBox x:Name="HistoryList" Height="132" Margin="0,8,0,0"
+                             BorderThickness="0" Background="Transparent"
+                             ItemsSource="{Binding HistoryRows}"
+                             SelectedItem="{Binding SelectedHistoryRow, Mode=TwoWay}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="4,2"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding GrowthText}" FontSize="11" Foreground="#E53935"/>
+                                        <TextBlock Text="{Binding CurrentSizeText}" FontSize="11" Margin="8,0,0,0"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock x:Name="HistoryEmptyTextBlock" Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding HistoryEmptyText}"/>
+                    <TextBlock x:Name="ForecastTextBlock" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                               Text="{Binding ForecastText}"/>
+                </StackPanel>
+
+                <!-- Правая колонка: график роста + прогноз диска под копиями -->
+                <Border Grid.Column="1" Margin="12,0,0,0" Padding="8" BorderThickness="1"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        Background="{DynamicResource CardBackgroundBrush}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="HistoryChartCaptionBox" Grid.Row="0" FontSize="12" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Text="{Binding HistoryChartCaption}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <Canvas x:Name="HistoryChartCanvas" Grid.Row="1" Height="150" Margin="0,4,0,0"
+                                Background="Transparent" SizeChanged="OnHistoryChartSizeChanged"/>
+                        <TextBlock x:Name="DiskForecastTextBlock" Grid.Row="2" Margin="0,4,0,0" FontSize="12"
+                                   TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Text="{Binding DiskForecastText}"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
         <!-- Кнопки -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button x:Name="CheckAvailabilityButton" Style="{StaticResource ModernButton}"
                     Background="{DynamicResource ItemHoverBrush}" Padding="12,5" Margin="0,0,8,0"
                     Click="OnCheckAvailability_Click">
@@ -149,7 +226,7 @@
             </Button>
         </StackPanel>
 
-        <TextBlock x:Name="HintText" Grid.Row="4" Margin="0,8,0,0" FontSize="11"
+        <TextBlock x:Name="HintText" Grid.Row="5" Margin="0,8,0,0" FontSize="11"
                    Foreground="{DynamicResource TextSecondaryBrush}"
                    Text="{loc:Loc Maintenance.Hint}"/>
     </Grid>

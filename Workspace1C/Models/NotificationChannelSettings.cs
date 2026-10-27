@@ -84,6 +84,20 @@ public sealed class NotificationChannelSettings
     /// </summary>
     public int LicenseAlertRepeatHours { get; set; } = 24;
 
+    // ---------- Прогноз диска под копиями (п.7 «История размеров», выпуск 1.0.0.89) ----------
+
+    /// <summary>
+    /// Порог «диск под копиями закончится не позднее, чем через N дней»: при прогнозе
+    /// меньше порога отправляется оповещение в каналы мониторинга. 0 — проверка отключена.
+    /// </summary>
+    public int DiskForecastThresholdDays { get; set; }
+
+    /// <summary>
+    /// Не повторять оповещение о том же диске чаще, чем раз в N дней (защита от спама
+    /// на каждом цикле мониторинга); по умолчанию 1 день.
+    /// </summary>
+    public int DiskForecastAlertRepeatDays { get; set; } = 1;
+
     /// <summary>Глубокая копия (для редактирования в окне без изменения исходника).</summary>
     public NotificationChannelSettings Clone() => (NotificationChannelSettings)MemberwiseClone();
 }

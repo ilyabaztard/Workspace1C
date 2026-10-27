@@ -50,6 +50,10 @@ public partial class NotificationChannelsWindow : Window
         // Порог «свободно меньше N» (п.5 «Мониторинг лицензий», 1.0.0.87).
         LicenseThresholdBox.Text = s.LicenseFreeThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture);
         LicenseRepeatBox.Text = s.LicenseAlertRepeatHours.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        // Прогноз диска под копиями (п.7 «История размеров», 1.0.0.89).
+        DiskForecastThresholdBox.Text = s.DiskForecastThresholdDays.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        DiskForecastRepeatBox.Text = s.DiskForecastAlertRepeatDays.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private NotificationChannelSettings Collect()
@@ -78,6 +82,12 @@ public partial class NotificationChannelsWindow : Window
             LicenseAlertRepeatHours = int.TryParse(LicenseRepeatBox.Text?.Trim(), out var repeat) && repeat > 0
                 ? repeat
                 : 24,
+
+            // Прогноз диска под копиями (п.7, 1.0.0.89): неотрицательное число, 0 — отключено.
+            DiskForecastThresholdDays = ParseNonNegative(DiskForecastThresholdBox.Text, 0),
+            DiskForecastAlertRepeatDays = int.TryParse(DiskForecastRepeatBox.Text?.Trim(), out var repeatDays) && repeatDays > 0
+                ? repeatDays
+                : 1,
         });
     }
 
