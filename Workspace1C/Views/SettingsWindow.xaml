@@ -2769,22 +2769,37 @@
         <!-- ============ Кнопки ============ -->
         <!-- Единый контракт нижней панели диалогов (issue #26): сохранение — акцентная
              ModernButton (заливка акцентом темы, текст TextOnAccentBrush), отмена —
-             вторичная SecondaryButton (карточка + контур + текст темы). -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Width="140" Height="36" Margin="0,0,10,0" IsDefault="True" Click="OnSave_Click"
-                    Style="{DynamicResource ModernButton}">
+             вторичная SecondaryButton (карточка + контур + текст темы). Слева — вход
+             в окно «Синхронизация настроек» (п.9, 1.0.0.91). -->
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" HorizontalAlignment="Left" Padding="12,6" VerticalAlignment="Center"
+                    Click="OnSettingsSync_Click" Style="{DynamicResource SecondaryButton}" Cursor="Hand">
                 <StackPanel Orientation="Horizontal">
-                    <materialDesign:PackIcon Kind="ContentSave" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{loc:Loc Common.Save}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                    <materialDesign:PackIcon Kind="Sync" Width="16" Height="16"
+                                             Foreground="#3B82F6" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc SettingsSync.BottomButton}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button Width="140" Height="36" IsCancel="True" Click="OnCancel_Click"
-                    Style="{DynamicResource SecondaryButton}">
-                <StackPanel Orientation="Horizontal">
-                    <materialDesign:PackIcon Kind="Close" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                </StackPanel>
-            </Button>
-        </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Width="140" Height="36" Margin="0,0,10,0" IsDefault="True" Click="OnSave_Click"
+                        Style="{DynamicResource ModernButton}">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="ContentSave" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Loc Common.Save}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Button>
+                <Button Width="140" Height="36" IsCancel="True" Click="OnCancel_Click"
+                        Style="{DynamicResource SecondaryButton}">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

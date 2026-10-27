@@ -174,6 +174,16 @@ public static class AppServices
         // секреты внешних сервисов (infobase_notes.json в каталоге данных профиля).
         services.AddSingleton<NoteStore>(_ => new NoteStore());
         services.AddSingleton<NoteCrypto>(_ => NoteCrypto.CreateDefault());
+        // п.9 «Синхронизация своих настроек между компьютерами» (1.0.0.91): ядро
+        // (WebDAV GET/HEAD/PUT или сетевая папка, last-write-wins, конфликт-бэкапы)
+        // и фоновый исполнитель по интервалу + задание планировщика.
+        services.AddSingleton<Workspace1C.Services.Sync.SettingsSyncService>(sp =>
+            new Workspace1C.Services.Sync.SettingsSyncService(sp.GetService<IAppLogger>()));
+        services.AddSingleton<Workspace1C.Services.Sync.SettingsSyncRunner>(
+            sp => new Workspace1C.Services.Sync.SettingsSyncRunner(
+                sp.GetRequiredService<Workspace1C.Services.Sync.SettingsSyncService>(),
+                sp.GetRequiredService<IScheduledTaskStore>(),
+                sp.GetService<IAppLogger>()));
         services.AddSingleton<TelegramBotCommandService>(sp => new TelegramBotCommandService(
             sp.GetRequiredService<INotificationSettingsStore>(), sp.GetRequiredService<IScheduledTaskStore>(),
             sp.GetRequiredService<SchedulerService>(), sp.GetRequiredService<ServerAlertsService>(),

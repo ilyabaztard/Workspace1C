@@ -830,6 +830,16 @@ namespace Workspace1C
             DialogResult = false;
         }
 
+        /// <summary>
+        /// «Синхронизация настроек…» (п.9, 1.0.0.91): открывает окно двусторонней
+        /// синхронизации своих настроек между компьютерами (WebDAV / сетевая папка).
+        /// </summary>
+        private void OnSettingsSync_Click(object sender, RoutedEventArgs e)
+        {
+            var syncWindow = new SettingsSyncWindow { Owner = this };
+            syncWindow.ShowDialog();
+        }
+
         /// <summary>Заполняет комбобокс «Действие по двойному щелчку» глобальной настройкой (функция №28 StartManager).</summary>
         private void InitGlobalDoubleClickCombo()
         {

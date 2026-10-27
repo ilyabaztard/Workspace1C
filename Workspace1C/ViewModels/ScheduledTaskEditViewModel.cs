@@ -192,7 +192,9 @@ public class ScheduledTaskEditViewModel : ViewModelBase
             new ScheduledTaskOption("ConfigurationUpdateCheck", LocalizationManager.T("Schedule.Kind.ConfigurationUpdateCheck")),
             new ScheduledTaskOption("InstallExtension", LocalizationManager.T("Schedule.Kind.InstallExtension")),
             new ScheduledTaskOption("GitCommitConfig", LocalizationManager.T("Schedule.Kind.GitCommitConfig")),
-            new ScheduledTaskOption("DbmsBackup", LocalizationManager.T("Schedule.Kind.DbmsBackup"))
+            new ScheduledTaskOption("DbmsBackup", LocalizationManager.T("Schedule.Kind.DbmsBackup")),
+            // Синхронизация своих настроек между компьютерами (п.9, 1.0.0.91).
+            new ScheduledTaskOption("SettingsSync", LocalizationManager.T("Schedule.Kind.SettingsSync"))
         };
 #if DEBUG
         // Диагностика локализации опций (issue #372): язык и текст первой опции — чтобы

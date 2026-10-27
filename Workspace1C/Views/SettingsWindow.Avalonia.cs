@@ -3340,14 +3340,33 @@ namespace Workspace1C
             grid.Children.Add(tabs);
 
             // Подвал: верхний отступ 12 и зазор между кнопками 10
-            // (SettingsWindow.xaml:1526-1527).
+            // (SettingsWindow.xaml:1526-1527). Слева — вход в окно
+            // «Синхронизация настроек» (п.9, 1.0.0.91).
+            var footer = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+            footer.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            footer.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+            var syncButton = new Button
+            {
+                Content = LocalizationManager.T("SettingsSync.BottomButton"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(12, 6)
+            };
+            syncButton.Styled(ControlThemes.DialogCancelButton);
+            syncButton.Click += (_, _) =>
+            {
+                var syncWindow = new SettingsSyncWindow();
+                syncWindow.ShowDialogSync(this);
+            };
+
             var buttons = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 12, 0, 0),
                 Spacing = 10
             };
+            Grid.SetColumn(syncButton, 0);
+            Grid.SetColumn(buttons, 1);
             // Подвал: единый контракт (issue #26) — «Сохранить» акцентная
             // DialogConfirmButton (заливка акцентом темы, значок и подпись —
             // контрастный TextOnAccentBrush), «Отмена» — вторичная DialogCancelButton.
@@ -3654,8 +3673,10 @@ namespace Workspace1C
 
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
-            Grid.SetRow(buttons, 1);
-            grid.Children.Add(buttons);
+            footer.Children.Add(syncButton);
+            footer.Children.Add(buttons);
+            Grid.SetRow(footer, 1);
+            grid.Children.Add(footer);
 
             return grid;
         }

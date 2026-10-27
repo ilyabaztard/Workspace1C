@@ -33,6 +33,7 @@ public class SchedulerService : IDisposable
     private readonly IOneCUpdatesService _updates;
     private readonly ICustomConfigTypesStore _configTypes;
     private readonly IMainWindowNotifier _mainWindowNotifier;
+    private readonly Workspace1C.Services.Sync.SettingsSyncRunner? _settingsSync;
     private readonly IAppLogger? _logger;
 
     private Timer? _timer;
@@ -54,6 +55,7 @@ public class SchedulerService : IDisposable
         IOneCUpdatesService updates,
         ICustomConfigTypesStore configTypes,
         IMainWindowNotifier mainWindowNotifier,
+        Workspace1C.Services.Sync.SettingsSyncRunner? settingsSync = null,
         IAppLogger? logger = null)
     {
         _tasks = tasks;
@@ -70,6 +72,7 @@ public class SchedulerService : IDisposable
         _updates = updates;
         _configTypes = configTypes;
         _mainWindowNotifier = mainWindowNotifier;
+        _settingsSync = settingsSync;
         _logger = logger;
     }
 
@@ -299,6 +302,7 @@ public class SchedulerService : IDisposable
         ScheduledTaskKind.InstallExtension => LocalizationManager.T("Schedule.Kind.InstallExtension"),
         ScheduledTaskKind.GitCommitConfig => LocalizationManager.T("Schedule.Kind.GitCommitConfig"),
         ScheduledTaskKind.DbmsBackup => LocalizationManager.T("Schedule.Kind.DbmsBackup"),
+        ScheduledTaskKind.SettingsSync => LocalizationManager.T("Schedule.Kind.SettingsSync"),
         _ => LocalizationManager.T("Schedule.Kind.Backup")
     };
 
@@ -318,6 +322,7 @@ public class SchedulerService : IDisposable
                 ScheduledTaskKind.InstallExtension => await RunInstallExtensionAsync(task).ConfigureAwait(false),
                 ScheduledTaskKind.GitCommitConfig => await RunGitCommitAsync(task).ConfigureAwait(false),
                 ScheduledTaskKind.DbmsBackup => await RunDbmsBackupAsync(task).ConfigureAwait(false),
+                ScheduledTaskKind.SettingsSync => await RunSettingsSyncAsync(task).ConfigureAwait(false),
                 _ => null
             };
         }
@@ -706,6 +711,30 @@ public class SchedulerService : IDisposable
         {
             _logger?.Error("Не удалось уведомить о проверке обновления", ex);
         }
+    }
+
+    /// <summary>
+    /// Задание «Синхронизация настроек» (п.9, 1.0.0.91): выполняется ядром
+    /// <see cref="Workspace1C.Services.Sync.SettingsSyncRunner"/> по сохранённым настройкам
+    /// окна (settings_sync.json). Результат — сводка изменённых файлов и ошибок (без секретов).
+    /// </summary>
+    private async Task<BackupRunResult?> RunSettingsSyncAsync(ScheduledTask task)
+    {
+        if (_settingsSync is null)
+            return Fail(LocalizationManager.T("SettingsSync.NotConfigured"));
+
+        var errors = Workspace1C.Services.Sync.SettingsSyncService.Validate(
+            Workspace1C.Services.Sync.SettingsSyncStore.Load());
+        if (errors.Count > 0)
+            return Fail(LocalizationManager.T("SettingsSync.ValidationFailed"));
+
+        var result = await _settingsSync.RunNowAsync().ConfigureAwait(false);
+        return new BackupRunResult
+        {
+            Success = result.Success,
+            ErrorMessage = result.Errors.Count == 0 ? null : string.Join("; ", result.Errors),
+            ScenarioName = result.Message
+        };
     }
 
     private Infobase? ResolveInfobase(string? id)

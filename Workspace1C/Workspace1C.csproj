@@ -59,10 +59,10 @@
          поэтому AssemblyVersion/FileVersion/Version ограничены 4 частями, а точная
          пользовательская версия «0.3.1.1» задаётся через InformationalVersion
          и выводится в заголовок окна. -->
-    <Version>1.0.0.90</Version>
-    <AssemblyVersion>1.0.0.90</AssemblyVersion>
-    <FileVersion>1.0.0.90</FileVersion>
-    <InformationalVersion>1.0.0.90</InformationalVersion>
+    <Version>1.0.0.91</Version>
+    <AssemblyVersion>1.0.0.91</AssemblyVersion>
+    <FileVersion>1.0.0.91</FileVersion>
+    <InformationalVersion>1.0.0.91</InformationalVersion>
     <!-- RID/SelfContained только при publish, чтобы обычный dotnet run/build не ломался -->
     <PublishReadyToRun>false</PublishReadyToRun>
     <DebugType>embedded</DebugType>
@@ -96,6 +96,9 @@
     <Compile Remove="Services\UpdateService.Avalonia.cs" />
     <Compile Remove="Services\ManualUpdateWindow.Avalonia.cs" />
     <Compile Remove="Services\UpdateProgressWindow.Avalonia.cs" />
+    <!-- Окно «Синхронизация настроек» (п.9, 1.0.0.91): Avalonia-версия не собирается
+         в Windows/WPF-сборке (нет Avalonia), используется кодовая WPF-версия. -->
+    <Compile Remove="Views\SettingsSyncWindow.Avalonia.cs" />
   </ItemGroup>
 
   <!-- WPF-ресурсы иконок (embedded, только Windows) -->
@@ -248,6 +251,10 @@
     <!-- Окно «Заметки базы» (п.8, 1.0.0.90): WPF code-behind исключается, Avalonia-версия
          (BaseNotesWindow.Avalonia.cs) подключается глобом *Window.Avalonia.cs ниже. -->
     <Compile Remove="Views\BaseNotesWindow.xaml.cs" />
+    <!-- Окно «Синхронизация настроек» (п.9, 1.0.0.91): WPF-реализация (кодовая, #if WINDOWS)
+         исключается из Linux-сборки; подключается Avalonia-версия
+         SettingsSyncWindow.Avalonia.cs глобом *Window.Avalonia.cs ниже. -->
+    <Compile Remove="Views\SettingsSyncWindow.cs" />
     <!-- Окно разблокировки приватных баз (0.3.9.85): WPF code-behind исключается,
          Avalonia-версия (PrivateBasesUnlockWindow.Avalonia.cs) подключается глобом ниже. -->
     <Compile Remove="Views\PrivateBasesUnlockWindow.xaml.cs" />
@@ -559,6 +566,7 @@
     <!-- Вью-модель окна «Миграция между кластерами 1С» (issue #41, переработка):
          чистый .NET без WPF-зависимостей, используется и Windows, и Linux;
          подключается явно (имя не совпадает с глобом *.Avalonia.cs). -->
+    <Compile Include="ViewModels\SettingsSyncViewModel.cs" />
     <Compile Include="ViewModels\ClusterMigrationViewModel.cs" />
     <Compile Include="ViewModels\ClusterMigrationRow.cs" />
     <!-- ViewModel и строка диалога «Выбор переменной» подстановок сценариев (issue #67):

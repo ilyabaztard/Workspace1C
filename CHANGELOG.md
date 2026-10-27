@@ -11,6 +11,57 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.91] — 2026-10-27
+
+### Добавлено
+
+- **Синхронизация своих настроек между компьютерами (п.9 «Синхронизация настроек»,
+  Windows и Linux)** — двусторонняя синхронизация личного списка баз, групп, тегов,
+  сценариев, горячих клавиш и пользовательских действий через **WebDAV** (Яндекс.Диск,
+  Nextcloud и др.) или **сетевую папку**:
+  - окно «Синхронизация настроек…» (кнопка в нижней панели окна «Настройки»; WPF
+    [`SettingsSyncWindow.cs`](Workspace1C/Views/SettingsSyncWindow.cs) и Avalonia
+    [`SettingsSyncWindow.Avalonia.cs`](Workspace1C/Views/SettingsSyncWindow.Avalonia.cs)):
+    тип хранилища, адрес WebDAV/сетевая папка, пользователь и пароль (сохраняется
+    ТОЛЬКО зашифрованным, [`NoteCrypto.cs`](Workspace1C/Services/NoteCrypto.cs)),
+    интервал автозапуска, набор файлов, кнопка «Синхронизировать сейчас», статус и
+    журнал операции;
+  - набор по умолчанию: персональный `ibases.v8i`, `infobases.json` (список и теги баз),
+    `groups.json`, `settings.json` (включая горячие клавиши), `custom_actions.json`,
+    `custom_config_types.json`, `context_menu_layout.json`, `tray_menu_layout.json`,
+    `utilities_menu_layout.json`, `deleted_groups.json`, `server_ports.json`,
+    `scripts/scenarios/*.script.json`;
+  - WebDAV-клиент расширен до двусторонней работы: GET (скачивание в файл), HEAD
+    (дата/размер/ETag для сравнения), PUT и MKCOL ([`WebDavClient.cs`](Workspace1C/Services/WebDavClient.cs));
+    существующий `WebDavUploader` (DbmsBackupService) не изменён;
+  - **last-write-wins**: новее версия побеждает по времени изменения; проигравшая
+    сторона сохраняется как `*.conflict-<дата>` в каталоге
+    `settings_sync_conflicts` каталога данных профиля
+    ([`SettingsSyncService.cs`](Workspace1C/Services/Sync/SettingsSyncService.cs),
+    [`SettingsSyncPlan.cs`](Workspace1C/Services/Sync/SettingsSyncPlan.cs));
+  - запуск: вручную (кнопка), по интервалу (фоновый таймер
+    [`SettingsSyncRunner.cs`](Workspace1C/Services/Sync/SettingsSyncRunner.cs)) и как
+    задание планировщика нового типа «Синхронизация настроек»
+    (`ScheduledTaskKind.SettingsSync` в окне «Задания по расписанию»);
+  - безопасность: зашифрованный пароль WebDAV, пути в пакете/шаблонах защищены от
+    выхода за каталог данных (zip-slip), секреты не попадают в журнал/результат;
+  - ограничение зафиксировано в документации: локальные пути каталогов баз могут
+    отличаться между компьютерами и переносятся как есть (ручная правка на втором ПК
+    либо исключение файла из списка).
+
+### Тесты
+
+- [`SettingsSyncTests.cs`](Workspace1C.Tests/SettingsSyncTests.cs): план операций
+  last-write-wins (upload/download/skip, допуск сравнения дат), имена конфликтных
+  резервов, безопасность путей (zip-slip) и zip-пакет round-trip, чтение/запись
+  настроек, валидация хранилища, исполнение синхронизации по сетевой папке
+  (выгрузка/скачивание/конфликт-бэкапы, отсутствие «пинг-понга»), шифрование пароля
+  и отсутствие пароля в журнале, интервальная логика расписания.
+
+Всего в релизе **4826** юнит-тестов (все проходят на Windows; Linux-сборка — без ошибок).
+
+---
+
 ## [1.0.0.90] — 2026-10-27
 
 ### Добавлено

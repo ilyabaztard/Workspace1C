@@ -24,6 +24,14 @@ public static class BackgroundFeatures
             bot.Start();
             return bot.Stop;
         });
+        // Синхронизация своих настроек (п.9, 1.0.0.91): фоновый таймер по интервалу
+        // из настроек окна «Синхронизация настроек» (0 — только вручную).
+        TryStart(() =>
+        {
+            var sync = AppServices.GetRequiredService<Sync.SettingsSyncRunner>();
+            sync.Start();
+            return sync.Stop;
+        });
     }
 
     /// <summary>Регистрирует фоновую функцию: запуск возвращает действие остановки.</summary>
