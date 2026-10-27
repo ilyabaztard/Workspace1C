@@ -74,8 +74,8 @@ namespace Workspace1C
             Title = LocalizationManager.T("ConnectionSettings.Title");
             Width = 760;
             Height = 780;
-            MinWidth = 680;
-            MinHeight = 680;
+            MinWidth = 760;
+            MinHeight = 780;
             FontSize = 13;
 
             _dialogs = AppServices.GetRequiredService<IDialogService>();
@@ -482,13 +482,13 @@ namespace Workspace1C
         {
             var tab = new TabItem
             {
-                // Горизонтальная полоса - fallback (issue #55): при узком окне
-                // содержимое не обрезается правым краем, а прокручивается.
+                // Горизонтальная прокрутка отключена (issue #71): окно не сужается
+                // меньше MinWidth, поэтому содержимое всегда помещается по ширине.
                 Content = new ScrollViewer
                 {
                     Content = content,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
                 }
             };
             tab.Styled(ControlThemes.ConnTabItem);

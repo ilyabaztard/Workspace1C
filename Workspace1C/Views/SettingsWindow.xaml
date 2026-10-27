@@ -12,8 +12,8 @@
         Title="{loc:Loc Settings.Title}"
         Icon="{StaticResource AppIcon}"
         Width="960"
-        MinWidth="820"
-        MinHeight="620"
+        MinWidth="960"
+        MinHeight="720"
         Height="720"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
@@ -453,7 +453,7 @@
                          прокручивается, а не обрезается; дерево версий осталось
                          в гибкой строке сверху. -->
                     <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Auto">
+                                  HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
                     <TextBlock x:Name="StatusText"
                                Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -550,7 +550,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Icons.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -593,7 +593,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Columns.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -688,7 +688,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Panels.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -795,7 +795,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Status.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -868,7 +868,7 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                             </StackPanel>
                         </TabItem.Header>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8,4,4,4">
                             <StackPanel>
                                 <TextBlock Text="{loc:Loc Settings.Font.Description}"
                                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
@@ -939,7 +939,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <!-- Полноценная тема: выбор применяется мгновенно и сохраняется в AppSettings.FullTheme. -->
@@ -1090,7 +1090,7 @@
 
                     <!-- Левая колонка: настройки темы и редактор цветов (прокручиваются) -->
                     <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Auto" Padding="0,0,12,0">
+                                  HorizontalScrollBarVisibility="Disabled" Padding="0,0,12,0">
                         <StackPanel>
                             <GroupBox Header="{loc:Loc Settings.Theme}" Padding="8" Margin="0,0,0,12">
                                 <StackPanel>
@@ -1233,7 +1233,7 @@
                          ограничен по высоте и получает собственную вертикальную прокрутку. -->
                     <GroupBox Grid.Column="1" Header="{loc:Loc Settings.Preview}" Padding="8"
                               VerticalAlignment="Top">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                       MaxHeight="520">
                             <Border x:Name="PreviewShell" Width="264" CornerRadius="8" BorderThickness="1"
                                     ClipToBounds="True" HorizontalAlignment="Left" VerticalAlignment="Top">
@@ -1343,7 +1343,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -1765,7 +1765,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <GroupBox Header="{loc:Loc Settings.Language}" Padding="8" Margin="0,0,0,12">
@@ -2091,7 +2091,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <!-- Общее описание вкладки (issue #56): здесь настраиваются и меню
@@ -2170,9 +2170,9 @@
                     </StackPanel>
                 </TabItem.Header>
                 <!-- Прокрутка по вертикали, чтобы при маленьком окне данные не выходили за границы.
-                     Горизонтальная полоса - fallback (issue #55): элементы с жёсткой шириной
-                     больше не обрезаются правым краем, а становятся доступны прокруткой. -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                     Горизонтальная прокрутка отключена (issue #71): окно не сужается меньше
+                     MinWidth, поэтому содержимое вкладки всегда помещается по ширине. -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Margin="4,12,4,0" Padding="0,0,4,0">
                     <StackPanel>
                         <TextBlock Text="{loc:Loc Settings.Ibases.Description}"
@@ -2349,7 +2349,7 @@
                                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                                 </StackPanel>
                             </TabItem.Header>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8,4,4,4">
                                 <StackPanel>
                                     <!-- Экспорт / загрузка списка баз -->
                                     <GroupBox Header="{loc:Loc Settings.IbaseList}" Padding="8" Margin="0,0,0,8">
@@ -2531,7 +2531,7 @@
                                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                                 </StackPanel>
                             </TabItem.Header>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8,4,4,4">
                                 <StackPanel>
                                     <GroupBox Header="{loc:Loc Settings.TemplateDirs}" Padding="8" Margin="0,0,0,8">
                                         <StackPanel>
@@ -2592,7 +2592,7 @@
                                                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                                 </StackPanel>
                             </TabItem.Header>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8,4,4,4">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="8,4,4,4">
                                 <StackPanel>
                                     <!-- Сервис (по аналогии со StartManager) -->
                                     <GroupBox Header="{loc:Loc Settings.Maintenance}" Padding="8" Margin="0,0,0,8">
@@ -2718,7 +2718,7 @@
                                    Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Margin="4,12,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="4,12,4,0">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="{loc:Loc App.Title}" FontSize="18" FontWeight="SemiBold"

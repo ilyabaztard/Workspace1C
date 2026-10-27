@@ -47,16 +47,23 @@ public sealed class Issue55AdaptiveLayoutTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public void SettingsWindow_Wpf_TabContent_HorizontalFallback_And_MinWidth()
+    public void SettingsWindow_Wpf_TabContent_NoHorizontalScroll_And_MinWidth()
     {
         var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "SettingsWindow.xaml"));
 
-        // Вкладки прокручиваются по вертикали; горизонтальная полоса — fallback:
-        // при узком окне контент не обрезается правым краем (issue #55).
-        Assert.Contains("HorizontalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
-        // Единственная оставшаяся Disabled-полоса — список вкладок слева (таблицы вкладок
-        // не должны скроллиться по горизонтали).
-        Assert.Equal(1, Count(xaml, "HorizontalScrollBarVisibility=\"Disabled\""));
+        // Минимальные размеры окна (issue #71): сузить окно мышкой ниже MinWidth нельзя,
+        // поэтому всё содержимое вкладок помещается по ширине без горизонтальной полосы.
+        Assert.Contains("ResizeMode=\"CanResizeWithGrip\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"960\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"720\"", xaml, StringComparison.Ordinal);
+
+        // Горизонтальная прокрутка вкладок отключена: контентные ScrollViewer вкладок
+        // (17) и полоса списка вкладок слева имеют Disabled.
+        Assert.True(
+            Count(xaml, "HorizontalScrollBarVisibility=\"Disabled\"") >= 18,
+            "Контентные ScrollViewer вкладок должны иметь горизонтальную полосу Disabled (issue #71).");
+        // Единственная Auto — вложенная полоса списка каталогов шаблонов (данные списка).
+        Assert.Equal(1, Count(xaml, "HorizontalScrollBarVisibility=\"Auto\""));
 
         // Фиксированные ширины комбобоксов/полей во вкладках заменены MinWidth.
         Assert.Contains("x:Name=\"LanguageComboBox\" MinWidth=\"280\"", xaml, StringComparison.Ordinal);
@@ -81,13 +88,20 @@ public sealed class Issue55AdaptiveLayoutTests
     }
 
     [Fact]
-    public void SettingsWindow_Avalonia_TabContent_HorizontalFallback_And_MinWidth()
+    public void SettingsWindow_Avalonia_TabContent_NoHorizontalScroll_And_MinWidth()
     {
         var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "SettingsWindow.Avalonia.cs"));
 
+        // Минимальные размеры окна (issue #71): сужение ниже MinWidth запрещено.
+        Assert.Contains("MinWidth = 960;", code, StringComparison.Ordinal);
+        Assert.Contains("MinHeight = 720;", code, StringComparison.Ordinal);
+
+        // Контентные ScrollViewer вкладок горизонтальной прокрутки не имеют (Disabled);
+        // единственная Auto — окно просмотра картинки «О программе» (donat.png).
         Assert.True(
-            Count(code, "HorizontalScrollBarVisibility = ScrollBarVisibility.Auto") >= 8,
-            "Контентные ScrollViewer вкладок должны иметь горизонтальную полосу Auto.");
+            Count(code, "HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled") >= 10,
+            "Контентные ScrollViewer вкладок должны иметь горизонтальную полосу Disabled (issue #71).");
+        Assert.Equal(1, Count(code, "HorizontalScrollBarVisibility = ScrollBarVisibility.Auto"));
 
         // Жёсткие ширины полей -> MinWidth (в том числе язык, действие после запуска, ОА).
         Assert.Contains("MinWidth = 280,", code, StringComparison.Ordinal);
@@ -115,23 +129,33 @@ public sealed class Issue55AdaptiveLayoutTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public void ConnectionSettingsWindow_Wpf_TabsHorizontalFallback_And_ComboMinWidth()
+    public void ConnectionSettingsWindow_Wpf_TabsNoHorizontalScroll_And_ComboMinWidth()
     {
         var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ConnectionSettingsWindow.xaml"));
 
-        Assert.Equal(0, Count(xaml, "HorizontalScrollBarVisibility=\"Disabled\""));
-        Assert.True(
-            Count(xaml, "VerticalScrollBarVisibility=\"Auto\" HorizontalScrollBarVisibility=\"Auto\" Padding=\"0,0,4,0\"") >= 4,
-            "Все вкладки должны иметь горизонтальную полосу Auto (fallback).");
+        // Минимальные размеры окна (issue #71): сужение ниже MinWidth запрещено.
+        Assert.Contains("ResizeMode=\"CanResizeWithGrip\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"760\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"780\"", xaml, StringComparison.Ordinal);
+
+        // Все 8 вкладок обёрнуты в ScrollViewer с вертикальной прокруткой и БЕЗ
+        // горизонтальной (полоса Disabled, «размахивание» #55 устранено).
+        Assert.Equal(8, Count(xaml, "<ScrollViewer"));
+        Assert.Equal(8, Count(xaml, "HorizontalScrollBarVisibility=\"Disabled\""));
+        Assert.Equal(0, Count(xaml, "HorizontalScrollBarVisibility=\"Auto\""));
         Assert.Contains("x:Name=\"DoubleClickActionCombo\" MinWidth=\"220\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ConnectionSettingsWindow_Avalonia_TabsHorizontalFallback_And_ComboMinWidth()
+    public void ConnectionSettingsWindow_Avalonia_TabsNoHorizontalScroll_And_ComboMinWidth()
     {
         var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ConnectionSettingsWindow.Avalonia.cs"));
-        // Общая обёртка вкладок (метод Tab) имеет горизонтальную полосу Auto - покрывает все вкладки.
-        Assert.Contains("HorizontalScrollBarVisibility = ScrollBarVisibility.Auto", code, StringComparison.Ordinal);
+        // Минимальные размеры окна (issue #71).
+        Assert.Contains("MinWidth = 760;", code, StringComparison.Ordinal);
+        Assert.Contains("MinHeight = 780;", code, StringComparison.Ordinal);
+        // Общая обёртка вкладок (метод Tab) горизонтальной прокрутки не имеет.
+        Assert.Contains("HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("HorizontalScrollBarVisibility = ScrollBarVisibility.Auto", code, StringComparison.Ordinal);
         // Комбобокс двойного клика без фиксированной ширины.
         Assert.Contains("Content = new ScrollViewer", code, StringComparison.Ordinal);
         Assert.Contains("MinWidth = 220,", code, StringComparison.Ordinal);

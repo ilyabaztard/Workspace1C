@@ -10,7 +10,7 @@
         mc:Ignorable="d"
         Icon="{StaticResource AppIcon}"
         Width="760"
-        MinHeight="680" MinWidth="680"
+        MinHeight="780" MinWidth="760"
         Height="780"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
@@ -235,7 +235,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Base}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
                 <StackPanel>
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
@@ -352,7 +352,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Connection}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
                 <StackPanel>
                     <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
@@ -505,7 +505,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Repository}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
                         <StackPanel Orientation="Horizontal">
@@ -596,7 +596,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Auth}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
                 <StackPanel>
                     <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                         <GroupBox.Header>
@@ -845,7 +845,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Launch}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
                         <StackPanel Orientation="Horizontal">
@@ -1027,7 +1027,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Bitness}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
                         <StackPanel Orientation="Horizontal">
@@ -1159,7 +1159,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Platform}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
                 <StackPanel>
                 <GroupBox Margin="4,6,4,4" VerticalAlignment="Top">
                     <GroupBox.Header>
@@ -1301,7 +1301,7 @@
                         <TextBlock Text="{loc:Loc Connection.Tab.Id}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </TabItem.Header>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="0,0,4,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
                 <StackPanel Margin="8,12,8,8" VerticalAlignment="Top">
                     <TextBlock Text="{loc:Loc Connection.IdDescription}"
                                FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"

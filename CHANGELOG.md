@@ -47,6 +47,25 @@
   [`OneCLauncher.Linux.cs`](Workspace1C/Services/OneCLauncher.Linux.cs)).
   Покрыто тестами `OneCLauncherArchitectureTests` (+7).
 
+- **Ширина окна «Настройки» (issue #71, Windows и Linux)** — после фикса #55
+  настроечные вкладки «размахнулись»: многие элементы стали шире самого окна,
+  и почти на всех вкладках появилась горизонтальная прокрутка. Принята единая
+  со стратегией #55 политика «минимальные размеры + запрет сужения»: окнам
+  «Настройки» и «Настройка информационной базы» заданы минимальные размеры
+  (Windows — MinWidth/MinHeight в XAML, Linux — MinWidth/MinHeight в коде
+  окна; сузить окно мышкой меньше минимума теперь нельзя), при которых всё
+  содержимое вкладок помещается без обрезания и без горизонтальных полос:
+  «Настройки» — 960×720 (было 820×620), «Настройка информационной базы» —
+  760×780 (было 680×680). Горизонтальная прокрутка вкладок настроек отключена;
+  жёсткие широкие размеры полей оставлены MinWidth со звёздными колонками,
+  длинные подписи переносятся по словам
+  ([`SettingsWindow.xaml`](Workspace1C/Views/SettingsWindow.xaml),
+  [`SettingsWindow.Avalonia.cs`](Workspace1C/Views/SettingsWindow.Avalonia.cs),
+  [`ConnectionSettingsWindow.xaml`](Workspace1C/Views/ConnectionSettingsWindow.xaml),
+  [`ConnectionSettingsWindow.Avalonia.cs`](Workspace1C/Views/ConnectionSettingsWindow.Avalonia.cs)).
+  Покрыто тестами `Issue71SettingsWindowLayoutTests` (+8), обновлены
+  `Issue55AdaptiveLayoutTests` и `Issue55WindowLayoutTests`.
+
 ---
 
 ## [1.0.0.81] — 2026-10-27

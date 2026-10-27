@@ -105,8 +105,8 @@ namespace Workspace1C
             // Размеры и кегль окна из разметки (SettingsWindow.xaml:14-21).
             Width = 960;
             Height = 720;
-            MinWidth = 820;
-            MinHeight = 620;
+            MinWidth = 960;
+            MinHeight = 720;
             FontSize = 13;
 
             _viewModel = viewModel;
@@ -855,7 +855,7 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = settings,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     // Отступы прокрутки из разметки (SettingsWindow.xaml:1085).
                     Margin = new Thickness(4, 12, 4, 0),
@@ -1118,13 +1118,13 @@ namespace Workspace1C
 
             // Нижний блок прокручивается при нехватке высоты окна (issue #55):
             // группировки статуса, путей и разрядности становятся доступны
-            // прокруткой, а не обрезаются. Горизонтальная полоса - fallback:
-            // при узком окне элементы не режутся правым краем.
+            // прокруткой, а не обрезаются. Горизонтальная прокрутка отключена
+            // (issue #71): окно не сужается меньше MinWidth.
             var platformsBottomScroll = new ScrollViewer
             {
                 Content = platformsBottom,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
             };
             Grid.SetRow(platformsBottomScroll, 2);
             platforms.Children.Add(platformsBottomScroll);
@@ -2203,7 +2203,7 @@ namespace Workspace1C
                 {
                     Content = _preview.Shell,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                     MaxHeight = 520
                 },
                 new Thickness(8), bottom: 0);
@@ -2221,7 +2221,7 @@ namespace Workspace1C
             {
                 Content = schemeColumn,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 Padding = new Thickness(0, 0, 12, 0)
             };
             schemeColumn.VerticalAlignment = VerticalAlignment.Top;
@@ -2957,10 +2957,10 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = bases,
-                    // Горизонтальная полоса - fallback (issue #55): элементы растягиваются
-                    // по ширине окна, а при нехватке ширины не обрезаются, а прокручиваются;
-                    // строки уже адаптивны (Grid со Star-колонкой).
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    // Горизонтальная прокрутка отключена (issue #71): окно не сужается
+                    // меньше MinWidth, поэтому всё помещается по ширине; строки уже
+                    // адаптивны (Grid со Star-колонкой).
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto
                 });
 
@@ -3083,7 +3083,7 @@ namespace Workspace1C
             // (SettingsWindow.Profile.cs:37 берёт BackupRestore); прежде здесь
             // был самодельный контур.
             var tabProfile = MainTab("IconBackupRestore", "Settings.TabProfile",
-                new ScrollViewer { Content = profile, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto });
+                new ScrollViewer { Content = profile, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
 
             // ===== Клавиши =====
             // Spacing не задаётся: в Avalonia он складывается с полями соседей,
@@ -3288,7 +3288,7 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = hotkeys,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     // Отступы прокрутки из разметки (SettingsWindow.xaml:943).
                     Margin = new Thickness(4, 12, 4, 0),
@@ -3301,7 +3301,7 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = utilitiesMenu,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     // Отступ прокрутки из разметки (SettingsWindow.xaml:1486).
                     Margin = new Thickness(4, 12, 4, 0)
@@ -3314,7 +3314,7 @@ namespace Workspace1C
                 new ScrollViewer
                 {
                     Content = about,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     // Отступ прокрутки из разметки (SettingsWindow.xaml:1486).
                     Margin = new Thickness(4, 12, 4, 0)
@@ -4138,7 +4138,7 @@ namespace Workspace1C
                 {
                     Content = themesPanel,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
                 });
         }
 

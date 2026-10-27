@@ -139,8 +139,8 @@ public sealed class Issue55WindowLayoutTests
         var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ConnectionSettingsWindow.xaml"));
 
         Assert.Contains("ResizeMode=\"CanResizeWithGrip\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinWidth=\"680\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinHeight=\"680\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"760\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"780\"", xaml, StringComparison.Ordinal);
 
         // Колонка подписей Auto с минимумом 120 (чекбоксы «Размер вручную» и
         // «Приватная база» в ней не обрезаются при узком окне).
@@ -164,8 +164,8 @@ public sealed class Issue55WindowLayoutTests
     {
         var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ConnectionSettingsWindow.Avalonia.cs"));
 
-        Assert.Contains("MinWidth = 680;", code, StringComparison.Ordinal);
-        Assert.Contains("MinHeight = 680;", code, StringComparison.Ordinal);
+        Assert.Contains("MinWidth = 760;", code, StringComparison.Ordinal);
+        Assert.Contains("MinHeight = 780;", code, StringComparison.Ordinal);
 
         // FieldsGrid: колонка подписей Auto с минимумом LabelColumn.
         Assert.Contains("Width = GridLength.Auto, MinWidth = LabelColumn", code, StringComparison.Ordinal);
@@ -196,8 +196,8 @@ public sealed class Issue55WindowLayoutTests
         var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "SettingsWindow.xaml"));
 
         Assert.Contains("ResizeMode=\"CanResizeWithGrip\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinWidth=\"820\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinHeight=\"620\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"960\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"720\"", xaml, StringComparison.Ordinal);
 
         // Вкладка «Платформы»: нижний блок (статус/пути/разрядность) в ScrollViewer.
         var treePos = xaml.IndexOf("PlatformsTree", StringComparison.Ordinal);
@@ -214,8 +214,8 @@ public sealed class Issue55WindowLayoutTests
     {
         var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "SettingsWindow.Avalonia.cs"));
 
-        Assert.Contains("MinWidth = 820;", code, StringComparison.Ordinal);
-        Assert.Contains("MinHeight = 620;", code, StringComparison.Ordinal);
+        Assert.Contains("MinWidth = 960;", code, StringComparison.Ordinal);
+        Assert.Contains("MinHeight = 720;", code, StringComparison.Ordinal);
         Assert.Contains("new ScrollViewer", code, StringComparison.Ordinal);
         // Нижняя строка вкладки «Платформы» (статус/пути/разрядность) живёт в ScrollViewer.
         Assert.Contains("ScrollViewer.SetVerticalScrollBarVisibility", code, StringComparison.Ordinal);
