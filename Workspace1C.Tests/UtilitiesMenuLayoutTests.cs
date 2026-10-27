@@ -77,46 +77,34 @@ public sealed class UtilitiesMenuLayoutTests
         AssertSeparator(layout.Root[13]);
         AssertGroup(layout.Root[14], UtilitiesMenuCatalog.GroupOperations);
         var opsChildren = layout.Root[14].Children;
-        Assert.Equal(29, opsChildren.Count);
-        AssertItem(opsChildren[0], "ConfigDiff");
-        AssertItem(opsChildren[1], "MetadataExplorer");
-        // Новые функции 1.0.0.69–1.0.0.71 — сразу после «Обозревателя метаданных».
-        AssertItem(opsChildren[2], "EventLog");
-        AssertItem(opsChildren[3], "ConfigExtensions");
-        AssertItem(opsChildren[4], "GitVersioning");
-        AssertItem(opsChildren[5], "TechLog");
-        // «Публикация на веб-сервере» перенесена в контекстное меню базы (issue #63).
-        AssertItem(opsChildren[6], "ServerAlerts");
-        AssertItem(opsChildren[7], "DbmsBackup");
-        AssertItem(opsChildren[8], "TelegramBot");
-        AssertItem(opsChildren[9], "SharedLists");
-        AssertSeparator(opsChildren[10]);
-        AssertItem(opsChildren[11], "RepositoryBatchUpdate");
-        AssertItem(opsChildren[12], "RepositoryBrowser");
-        AssertSeparator(opsChildren[13]);
-        AssertItem(opsChildren[14], "ExportCsv");
-        AssertItem(opsChildren[15], "ExportHtml");
-        AssertItem(opsChildren[16], "ExportJson");
-        AssertItem(opsChildren[17], "ImportJson");
-        // Экспорт/импорт в произвольный файл *.v8i (issue #29): те же операции,
-        // что в настройках (вкладка «Базы» → «Список баз»).
-        AssertItem(opsChildren[18], "ExportV8iFile");
-        AssertItem(opsChildren[19], "ImportV8iFile");
-        // «Импорт из кластера 1С» и «Миграция между кластерами 1С» (issue #41):
-        // отдельные пункты — миграция вынесена в самостоятельное окно.
-        AssertItem(opsChildren[20], "ClusterImport");
-        AssertItem(opsChildren[21], "ClusterMigration");
-        AssertSeparator(opsChildren[22]);
-        AssertItem(opsChildren[23], "ProcessInspector");
-        AssertItem(opsChildren[24], "KillOneCProcesses");
-        AssertSeparator(opsChildren[25]);
-        AssertItem(opsChildren[26], "ConnectionReplace");
-        AssertItem(opsChildren[27], "UndoConnectionReplace");
-        // «Удаление отсутствующих файловых баз» — сразу после «Отмены замены» (issue #66:
-        // пункт «Блокировка сеансов ИБ» из меню «Утилиты» удалён вместе с разделителями;
-        // функция блокировки осталась в контекстном меню базы и на хоткее Ctrl+Alt+L;
-        // «Публикация на веб-сервере» ушла в контекстное меню — issue #63).
-        AssertItem(opsChildren[28], "RemoveMissingFileBases");
+        // Ожидаемый состав подменю «Операции» по порядку (null — разделитель).
+        // Новые функции 1.0.0.69–1.0.0.71 — сразу после «Обозревателя метаданных»;
+        // «Пользователи ИБ» (1.0.0.83) — после «Расширений конфигурации».
+        // «Публикация на веб-сервере» перенесена в контекстное меню базы (issue #63);
+        // «Блокировка сеансов ИБ» удалена из меню (issue #66); экспорт/импорт *.v8i
+        // (issue #29); импорт и миграция кластера — отдельные пункты (issue #41).
+        var expected = new string?[]
+        {
+            "ConfigDiff", "MetadataExplorer", "EventLog", "ConfigExtensions", "InfobaseUsers",
+            "GitVersioning", "TechLog", "ServerAlerts", "DbmsBackup", "TelegramBot", "SharedLists",
+            null,
+            "RepositoryBatchUpdate", "RepositoryBrowser",
+            null,
+            "ExportCsv", "ExportHtml", "ExportJson", "ImportJson", "ExportV8iFile", "ImportV8iFile",
+            "ClusterImport", "ClusterMigration",
+            null,
+            "ProcessInspector", "KillOneCProcesses",
+            null,
+            "ConnectionReplace", "UndoConnectionReplace", "RemoveMissingFileBases"
+        };
+        Assert.Equal(expected.Length, opsChildren.Count);
+        for (var i = 0; i < expected.Length; i++)
+        {
+            if (expected[i] is null)
+                AssertSeparator(opsChildren[i]);
+            else
+                AssertItem(opsChildren[i], expected[i]!);
+        }
 
         // ---- «Проверить обновления» в конце, с разделителем ----
         AssertSeparator(layout.Root[15]);

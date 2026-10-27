@@ -237,12 +237,14 @@ default{throw ('Unknown operation: '+[string]$q.op)}
     public static string DescribeFailure(ComScriptResult result)
     {
         var detail = string.IsNullOrWhiteSpace(result.Error) ? string.Empty : result.Error!.Trim();
-        return result.Code switch
+        var text = result.Code switch
         {
             "connect" => string.Format(LocalizationManager.T("ComScript.ConnectFailed"), detail),
             "op" => string.Format(LocalizationManager.T("ComScript.OperationFailed"), detail),
             _ => detail.Length > 0 ? detail : LocalizationManager.T("ComScript.NoResponse")
         };
+        // Без загруженного словаря шаблон может прийти без {0} — деталь не должна теряться.
+        return detail.Length > 0 && !text.Contains(detail, StringComparison.Ordinal) ? text + ": " + detail : text;
     }
 }
 
