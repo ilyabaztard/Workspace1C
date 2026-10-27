@@ -174,7 +174,7 @@ public sealed class InfobaseUsersServiceTests
     {
         var a = FileBase("Альфа");
         var b = FileBase("Бета");
-        var web = new Infobase { Id = "w", Name = "Веб", Connection = new ConnectionSettings { Type = ConnectionType.Web } };
+        var web = new Infobase { Id = "w", Name = "Веб", Connection = new ConnectionSettings { Type = ConnectionType.WebServer } };
         var vm = new InfobaseUsersViewModel(new[] { b, a, web }, b);
         Assert.Equal(new[] { "Альфа", "Бета" }, vm.Targets.Select(t => t.Name));
         Assert.Same(b, vm.SelectedTarget!.Infobase);
