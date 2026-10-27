@@ -165,3 +165,40 @@ jobs:
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Новость о релизе в Telegram-канал проекта. Шаг выполняется, только если в
+      # репозитории задан секрет TELEGRAM_BOT_TOKEN (бот — администратор канала).
+      # Канал по умолчанию -1004425443528, переопределяется секретом TELEGRAM_CHAT_ID.
+      # Текст — из _telegram_msg_v1000NN.txt (1.0.0.NN), иначе первые строки заметок.
+      - name: Новость в Telegram
+        if: github.event_name != 'release'
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TG_TOKEN" ]; then
+            echo "Секрет TELEGRAM_BOT_TOKEN не задан — новость в Telegram не отправляется."
+            exit 0
+          fi
+          chat="${TG_CHAT:--1004425443528}"
+          ver="${{ steps.notes.outputs.version }}"
+          head3="${ver%.*}"
+          msg="_telegram_msg_v${head3//./}0${ver##*.}.txt"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+          if [ -f "$msg" ]; then
+            cp "$msg" dist/tg.txt
+          else
+            { echo "🚀 Workspace 1C ${ver}"; echo; head -c 3000 dist/notes.md; echo; echo; echo "$url"; } > dist/tg.txt
+          fi
+          grep -q "$url" dist/tg.txt || { echo; echo "$url"; } >> dist/tg.txt
+          code=$(curl -sS -o dist/tg.json -w '%{http_code}' \
+            "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${chat}" \
+            --data-urlencode "text@dist/tg.txt" \
+            --data-urlencode "disable_web_page_preview=false")
+          echo "Telegram HTTP $code"
+          grep -o '"ok":[a-z]*' dist/tg.json || true
+          if [ "$code" != "200" ]; then
+            grep -o '"description":"[^"]*"' dist/tg.json || true
+            echo "::warning title=Telegram::Новость не отправлена (HTTP $code)"
+          fi

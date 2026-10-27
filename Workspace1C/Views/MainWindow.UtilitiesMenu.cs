@@ -325,6 +325,8 @@ public partial class MainWindow
                 item.Command = _viewModel.GitVersioningCommand; break;
             case UtilitiesMenuCommandKind.ConfigExtensions:
                 item.Command = _viewModel.ExtensionsCommand; break;
+            case UtilitiesMenuCommandKind.InfobaseUsers:
+                item.Command = _viewModel.InfobaseUsersCommand; break;
         }
     }
 

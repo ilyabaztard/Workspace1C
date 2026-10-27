@@ -47,6 +47,21 @@ public partial class MainViewModel
         window.ShowDialogSync(OwnerWindow());
     }
 
+    // ======================= Пользователи информационных баз (1.0.0.83) =======================
+
+    private System.Windows.Input.ICommand? _infobaseUsersCommand;
+
+    /// <summary>Команда «Пользователи информационных баз…» (на Linux операции недоступны — нет COM).</summary>
+    public System.Windows.Input.ICommand InfobaseUsersCommand =>
+        _infobaseUsersCommand ??= new RelayCommand(_ => ExecuteInfobaseUsers());
+
+    private void ExecuteInfobaseUsers()
+    {
+        var vm = new InfobaseUsersViewModel(_allInfobases.ToList(), SelectedInfobase);
+        var window = new Workspace1C.InfobaseUsersWindow(vm);
+        window.ShowDialogSync(OwnerWindow());
+    }
+
     // ======================= Версионирование конфигурации в Git (1.0.0.69) =======================
 
     private System.Windows.Input.ICommand? _gitVersioningCommand;

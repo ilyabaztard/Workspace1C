@@ -143,7 +143,10 @@ public enum UtilitiesMenuCommandKind
     TelegramBot,
 
     /// <summary>Общие списки баз отдела (1.0.0.69).</summary>
-    SharedLists
+    SharedLists,
+
+    /// <summary>Пользователи информационных баз (1.0.0.83).</summary>
+    InfobaseUsers
 }
 
 /// <summary>
@@ -472,6 +475,10 @@ public static class UtilitiesMenuCatalog
             new("ConfigExtensions", "Extensions.MenuItem", GroupOperations,
                 "IconExtension", "IconExtension", "#8B5CF6", UtilitiesMenuCommandKind.ConfigExtensions,
                 isNew: true),
+            // «Пользователи информационных баз» (1.0.0.83): список и пакетные операции через COM.
+            new("InfobaseUsers", "IbUsers.MenuItem", GroupOperations,
+                "IconUsers", "IconUsers", "#6366F1", UtilitiesMenuCommandKind.InfobaseUsers,
+                isNew: true),
             // «Версионирование конфигурации в Git (1.0.0.69)».
             new("GitVersioning", "Git.MenuItem", GroupOperations,
                 "IconMerge", "IconMerge", "#F97316", UtilitiesMenuCommandKind.GitVersioning,
@@ -599,6 +606,7 @@ public static class UtilitiesMenuLayouts
                 Item("MetadataExplorer"),
                 Item("EventLog"),
                 Item("ConfigExtensions"),
+                Item("InfobaseUsers"),
                 Item("GitVersioning"),
                 Item("TechLog"),
                 Item("ServerAlerts"),
