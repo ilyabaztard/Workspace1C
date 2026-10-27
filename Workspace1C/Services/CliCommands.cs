@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using System.Linq;
 using Workspace1C.Models;
+using Workspace1C.Services.EventLog;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Workspace1C.Services;
@@ -29,6 +31,11 @@ public static class CliCommands
             CliCommandKind.Run => ExecuteRun(command, parsed.Target!, parsed.Options),
             CliCommandKind.TelegramSend => CliTelegramCommands.Send(command, parsed.Options),
             CliCommandKind.TelegramConfirm => CliTelegramCommands.Confirm(command, parsed.Options),
+            // Новые команды п.6 (выпуск 1.0.0.88): MCP обрабатывается в CliEntryPoint до Execute.
+            CliCommandKind.Mcp => Unsupported(command, parsed.Options),
+            CliCommandKind.Update => ExecuteUpdate(command, parsed.Options),
+            CliCommandKind.Eventlog => ExecuteEventlog(command, parsed.Target!, parsed.Options),
+            CliCommandKind.Check => ExecuteCheck(command, parsed.Options),
             _ => Unsupported(command, parsed.Options)
         };
     }
@@ -182,6 +189,350 @@ public static class CliCommands
         return CliExitCodes.Error;
     }
 
+    // ------------------------------------------------------------ обновление (--update)
+
+    /// <summary>
+    /// <c>--update</c> (выпуск 1.0.0.88, п.6): проверка наличия новой версии через
+    /// <see cref="GitHubReleaseService"/>; при <c>--apply</c> — скачивание однофайловой
+    /// сборки текущей платформы и запись маркера <see cref="PendingUpdateStore"/>,
+    /// который применит новую версию при следующем запуске приложения.
+    /// JSON-контракт: data.updateAvailable / latestVersion / notes / downloadUrl;
+    /// при --apply дополнительно data.downloaded=true и data.path.
+    /// </summary>
+    internal static int ExecuteUpdate(string command, CliOptions options)
+    {
+        var logger = AppServices.GetRequiredService<IAppLogger>();
+        var gitHub = AppServices.GetRequiredService<GitHubReleaseService>();
+
+        ReleaseInfo? release = null;
+        try { release = gitHub.GetLatestReleaseAsync().GetAwaiter().GetResult(); }
+        catch { /* сообщение об ошибке ниже */ }
+
+        if (release is null)
+        {
+            CliOutput.WriteResult(
+                CliResult.Failure(command, "check_failed", "Не удалось проверить наличие обновления (сеть или GitHub недоступны)."),
+                options.Json);
+            logger.Warn("[cli] Не удалось проверить наличие обновления (--update)");
+            return CliExitCodes.Error;
+        }
+
+        var currentVersion = VersionInfo.Display();
+        if (!GitHubReleaseService.IsNewerThan(release, currentVersion))
+        {
+            CliOutput.WriteResult(CliResult.Success(command, new
+            {
+                updateAvailable = false,
+                currentVersion,
+                message = "Версия актуальна."
+            }), options.Json);
+            return CliExitCodes.Success;
+        }
+
+        // ---- Обновление доступно: без --apply только информируем. ----
+        if (!options.Apply)
+        {
+            CliOutput.WriteResult(CliResult.Success(command, new
+            {
+                updateAvailable = true,
+                currentVersion,
+                latestVersion = ReleaseVersion(release),
+                notes = release.Body ?? string.Empty,
+                downloadUrl = release.DownloadUrl,
+                htmlUrl = release.HtmlUrl
+            }), options.Json);
+
+            if (!options.Json)
+            {
+                Console.WriteLine($"Доступна новая версия: {ReleaseVersion(release)} (текущая {currentVersion}); " +
+                                  "для загрузки выполните: --update --apply");
+            }
+
+            logger.Info($"[cli] Найдено обновление {ReleaseVersion(release)} (--update)");
+            return CliExitCodes.Success;
+        }
+
+        // ---- --apply: скачиваем сборку текущей платформы + маркер применения. ----
+        var (downloadOk, path, error) = DownloadUpdateFile(release);
+        if (!downloadOk)
+        {
+            CliOutput.WriteResult(CliResult.Failure(
+                command, "download_failed",
+                string.IsNullOrWhiteSpace(error) ? "Не удалось скачать обновление." : "Не удалось скачать обновление: " + error),
+                options.Json);
+            logger.Warn("[cli] Не удалось скачать обновление (--update --apply): " + error);
+            return CliExitCodes.Error;
+        }
+
+        // Маркер «планируется обновление»: новая версия отправит уведомление при старте,
+        // а сам файл пользователь/планировщик подменит (или запустит при следующем старте).
+        try
+        {
+            AppServices.GetRequiredService<PendingUpdateStore>()
+                .Write(release.TagName, release.Body, release.HtmlUrl);
+        }
+        catch { /* маркер сервисный */ }
+
+        CliOutput.WriteResult(CliResult.Success(command, new
+        {
+            updateAvailable = true,
+            currentVersion,
+            latestVersion = ReleaseVersion(release),
+            downloaded = true,
+            path,
+            message = "Новая версия скачана: закройте приложение и замените исполняемый файл (или запустите скачанный)."
+        }), options.Json);
+
+        logger.Info($"[cli] Обновление {ReleaseVersion(release)} скачано: {path}");
+        return CliExitCodes.Success;
+    }
+
+    /// <summary>Версия выпуска для контракта: тег без ведущего «v».</summary>
+    private static string ReleaseVersion(ReleaseInfo release) =>
+        (release.TagName ?? string.Empty).TrimStart('v', 'V');
+
+    /// <summary>
+    /// Скачивает однофайловую сборку текущей платформы во временный каталог
+    /// <c>%TEMP%\Workspace1C\update\<версия>\</c>. Возвращает путь файла.
+    /// </summary>
+    private static (bool Ok, string? Path, string Error) DownloadUpdateFile(ReleaseInfo release)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(release.DownloadUrl))
+                return (false, null, "no_download_url");
+
+            var safeTag = string.Concat(
+                (release.TagName ?? "unknown").Select(c => char.IsLetterOrDigit(c) || c == '.' || c == '-' ? c : '_'));
+            var dir = Path.Combine(Path.GetTempPath(), "Workspace1C", "update", safeTag);
+            Directory.CreateDirectory(dir);
+            var dest = Path.Combine(dir, OperatingSystem.IsWindows() ? "Workspace1C.exe" : "Workspace1C");
+
+            using var http = new System.Net.Http.HttpClient();
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Workspace1C/1.0");
+            http.Timeout = TimeSpan.FromMinutes(20);
+            using var response = http.GetAsync(release.DownloadUrl).GetAwaiter().GetResult();
+            if (!response.IsSuccessStatusCode)
+                return (false, null, "http_" + (int)response.StatusCode);
+            using var stream = response.Content.ReadAsStreamAsync().GetAwaiter().GetResult();
+            using var file = File.Create(dest);
+            stream.CopyToAsync(file).GetAwaiter().GetResult();
+            return (true, dest, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
+        }
+    }
+
+    // ------------------------------------------------------------ журнал (--eventlog)
+
+    /// <summary>
+    /// <c>--eventlog</c> (выпуск 1.0.0.88, п.6): выборка записей журнала регистрации
+    /// файловой базы (--target <имя базы или каталог ИБ>) с фильтрами периода,
+    /// пользователя, события и текста. Вывод — единый JSON-контракт (data.entries).
+    /// </summary>
+    internal static int ExecuteEventlog(string command, string target, CliOptions options)
+    {
+        var logger = AppServices.GetRequiredService<IAppLogger>();
+
+        // Источник журнала: каталог ИБ (1Cv8.1CD рядом) / каталог журнала либо база по имени/id.
+        JournalLocation location = ResolveJournalLocation(target);
+        if (!location.IsValid)
+        {
+            CliOutput.WriteResult(CliResult.Failure(
+                command, "eventlog_not_found", location.ErrorMessage ?? "Журнал регистрации не найден."),
+                options.Json);
+            logger.Warn($"[cli] Журнал регистрации недоступен: {location.ErrorMessage}");
+            return CliExitCodes.Error;
+        }
+
+        var query = new EventLogQuery
+        {
+            From = options.From is null
+                ? DateTime.Today
+                : (DateTime.TryParse(options.From, out var from) ? from : DateTime.Today),
+            To = options.To is null
+                ? DateTime.MaxValue
+                : (DateTime.TryParse(options.To, out var to) ? to : DateTime.MaxValue),
+            User = options.User ?? string.Empty,
+            Event = options.Event ?? string.Empty,
+            Text = options.Text ?? string.Empty,
+            MaxRows = options.Limit > 0 ? options.Limit : EventLogQuery.DefaultMaxRows,
+            IncludeInfo = true,
+            IncludeWarning = true,
+            IncludeError = true,
+            IncludeNote = true
+        };
+
+        var result = EventLogQueryService.Query(location, query);
+        if (result.Error is not null)
+        {
+            CliOutput.WriteResult(CliResult.Failure(
+                command, "read_failed", "Ошибка чтения журнала регистрации: " + result.Error), options.Json);
+            return CliExitCodes.Error;
+        }
+
+        if (options.Json)
+        {
+            CliOutput.WriteResult(CliResult.Success(command, new
+            {
+                location = location.LogDir,
+                format = location.FormatDisplay,
+                truncated = result.Truncated,
+                count = result.Entries.Count,
+                entries = result.Entries.Select(e => new
+                {
+                    timestamp = e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss"),
+                    severity = e.Severity.ToString().ToLowerInvariant(),
+                    user = e.User,
+                    computer = e.Computer,
+                    application = e.Application,
+                    @event = string.IsNullOrEmpty(e.EventName) ? e.EventCode.ToString() : e.EventName,
+                    metadata = string.IsNullOrEmpty(e.MetadataName) ? null : e.MetadataName,
+                    comment = e.Comment,
+                    data = e.Data,
+                    session = e.Session == 0 ? (long?)null : e.Session
+                }).ToList()
+            }), json: true);
+        }
+        else
+        {
+            foreach (var e in result.Entries)
+            {
+                Console.WriteLine(
+                    $"{e.Timestamp:yyyy-MM-dd HH:mm:ss}\t{e.Severity}\t{e.User}\t{e.EventName}\t{e.Comment}");
+            }
+        }
+
+        logger.Info($"[cli] Выборка журнала регистрации: {result.Entries.Count} записей (--eventlog)");
+        return CliExitCodes.Success;
+    }
+
+    /// <summary>Определяет каталог журнала регистрации по цели --target (база/каталог ИБ).</summary>
+    internal static JournalLocation ResolveJournalLocation(string target)
+    {
+        if (Directory.Exists(target))
+        {
+            // Цель — каталог файловой ИБ (рядом 1Cv8.1CD) или сам каталог журнала.
+            if (File.Exists(System.IO.Path.Combine(target, "1Cv8.1CD")))
+                return LgdJournalLocator.FromDirectory(
+                    System.IO.Path.Combine(target, LgdJournalLocator.LogDirectoryName));
+            if (Directory.Exists(System.IO.Path.Combine(target, LgdJournalLocator.LogDirectoryName)))
+                return LgdJournalLocator.FromDirectory(
+                    System.IO.Path.Combine(target, LgdJournalLocator.LogDirectoryName));
+            return LgdJournalLocator.FromDirectory(target);
+        }
+
+        var repository = AppServices.GetRequiredService<IInfobaseRepository>();
+        var infobase = repository.Load().FirstOrDefault(b =>
+                string.Equals(b.Id, target, StringComparison.OrdinalIgnoreCase))
+            ?? repository.Load().FirstOrDefault(b =>
+                string.Equals(b.Name?.Trim(), target.Trim(), StringComparison.OrdinalIgnoreCase));
+        return infobase is null
+            ? new JournalLocation { ErrorMessage = $"База не найдена: '{target}'" }
+            : LgdJournalLocator.Resolve(infobase);
+    }
+
+    // -------------------------------------------------------------- проверка (--check)
+
+    /// <summary>
+    /// <c>--check</c> (выпуск 1.0.0.88, п.6): диагностика окружения и конфигурации —
+    /// версия приложения, каталог данных, установленные платформы 1С, наличие rac/ring,
+    /// запущенные процессы 1С, службы из справочника и права текущего пользователя.
+    /// Вывод — единый JSON-контракт (data).
+    /// </summary>
+    internal static int ExecuteCheck(string command, CliOptions options)
+    {
+        var profileService = AppServices.GetRequiredService<IProfileService>();
+
+        var platforms = new System.Collections.Generic.List<object>();
+        foreach (var architecture in new[] { "64", "32" })
+        {
+            foreach (var (version, binDir) in PlatformVersionService.FindPlatformVersionDirs(architecture))
+                platforms.Add(new { version, architecture = architecture + "-bit", bin = binDir });
+        }
+
+        var racPath = OneCPlatformLocator.FindRacExecutable();
+        var ringPath = racPath is null
+            ? null
+            : OneCPlatformLocator.FindInBinDir(System.IO.Path.GetDirectoryName(racPath)!, "ring");
+
+        var runningProcesses = 0;
+        try
+        {
+            runningProcesses = AppServices.GetRequiredService<IRunningInfobasesService>().GetRunning().Count;
+        }
+        catch { /* инспектор может быть недоступен в окружении */ }
+
+        var services = new System.Collections.Generic.List<object>();
+        try
+        {
+            var names = AppServices.GetRequiredService<IServicesStore>().Load().Services ?? new System.Collections.Generic.List<string>();
+            var controller = AppServices.GetRequiredService<IServiceControllerService>();
+            foreach (var name in names)
+            {
+                try { services.Add(new { name, status = controller.GetStatus(name).Status.ToString() }); }
+                catch { services.Add(new { name, status = "error" }); }
+            }
+        }
+        catch { /* недоступен список служб */ }
+
+        var data = new
+        {
+            version = VersionInfo.Display(),
+            os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            appDataDirectory = string.IsNullOrWhiteSpace(profileService.CurrentProfileDataDirectory)
+                ? PlatformPaths.AppDataDirectory
+                : profileService.CurrentProfileDataDirectory,
+            platforms,
+            rac = racPath is null ? null : new { found = true, path = racPath },
+            ring = ringPath is null ? null : new { found = true, path = ringPath },
+            runningProcesses,
+            services,
+            isElevated = IsAdministrator(),
+            rightsNote = string.Empty
+        };
+
+        CliOutput.WriteResult(CliResult.Success(command, data), options.Json);
+
+        if (!options.Json)
+        {
+            var logger = AppServices.GetRequiredService<IAppLogger>();
+            Console.WriteLine($"Версия: {VersionInfo.Display()}");
+            Console.WriteLine($"Платформ 1С: {platforms.Count}, rac: {(racPath is null ? "нет" : racPath)}, ring: {(ringPath is null ? "нет" : ringPath)}");
+            Console.WriteLine($"Процессов 1С: {runningProcesses}, служб в справочнике: {services.Count}, повышенные права: {(IsAdministrator() ? "да" : "нет")}");
+        }
+
+        return CliExitCodes.Success;
+    }
+
+    /// <summary>Проверка повышенных прав текущего процесса (Windows — роль администратора, Linux — root).</summary>
+    internal static bool IsAdministrator()
+    {
+#if WINDOWS
+        try
+        {
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            var principal = new System.Security.Principal.WindowsPrincipal(identity);
+            return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        }
+        catch { return false; }
+#else
+        try
+        {
+            // Linux: euid 0 — процесс под root (sudo/pkexec); обычный пользователь — false.
+            return System.IO.File.Exists("/proc/self/status")
+                && (System.IO.File.ReadAllText("/proc/self/status")
+                    .Split('\n')
+                    .FirstOrDefault(l => l.StartsWith("Uid:", StringComparison.Ordinal))
+                    ?.Split('\t', StringSplitOptions.RemoveEmptyEntries)
+                    .Skip(1).FirstOrDefault() == "0");
+        }
+        catch { return false; }
+#endif
+    }
+
     // ------------------------------------------------------------ не реализовано
 
     /// <summary>Команды будущих этапов цикла (add/backup/status/export/help) — до реализации
@@ -207,6 +558,7 @@ public static class CliCommands
     {
         CliCommandKind.TelegramSend => "telegram_send",
         CliCommandKind.TelegramConfirm => "telegram_confirm",
+        // Составные имена новых команд п.6 (выпуск 1.0.0.88) — с подчёркиванием.
         _ => kind.ToString().ToLowerInvariant()
     };
 

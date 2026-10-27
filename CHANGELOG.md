@@ -11,6 +11,64 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.88] — 2026-10-27
+
+### Добавлено
+
+- **MCP-сервер по stdio (п.6 «MCP-сервер и расширение CLI», Windows и Linux)** — новый
+  headless-режим **`--mcp`**: JSON-RPC 2.0 поверх stdin/stdout (каждая строка — одно
+  сообщение), без внешних зависимостей (чистый `System.Text.Json`). ИИ-агенты получают
+  инструменты управления базами:
+  - `list_infobases` — список баз (имя, тип подключения, id, группа, теги);
+  - `launch_infobase` — запуск базы («1С:Предприятие» / Конфигуратор);
+  - `clone_infobase` — копия клиент-серверной базы (механизм «Дублировать базу»,
+    полная копия или только конфигурация);
+  - `event_log_query` — выборка журнала регистрации файловой базы (SQLite `.lgd` /
+    последовательный `.lgf`/`.lgp`) с фильтрами периода/пользователя/события/текста;
+  - `server_sessions` — сеансы сервера 1С через rac по записи справочника «Серверы 1С»;
+  - `scheduled_jobs_state` — состояние заданий по расписанию;
+  - `terminate_session` — **завершение сеанса (опасная операция)**: выполняется ТОЛЬКО
+    после подтверждения через Telegram (inline-кнопки «Да/Нет»,
+    `TelegramConfirmationService`); без подтверждения действие не выполняется.
+  В stdout пишутся только JSON-RPC-сообщения; диагностика — в stderr. Перехват `--mcp`
+  в `CliEntryPoint` до инициализации UI (обе платформы, работает без DISPLAY).
+  ([`McpServer.cs`](Workspace1C/Services/Mcp/McpServer.cs),
+  [`McpToolRegistry.cs`](Workspace1C/Services/Mcp/McpToolRegistry.cs),
+  [`McpToolHandlers.cs`](Workspace1C/Services/Mcp/McpToolHandlers.cs),
+  [`McpSafetyGate.cs`](Workspace1C/Services/Mcp/McpSafetyGate.cs),
+  [`McpJsonRpc.cs`](Workspace1C/Services/Mcp/McpJsonRpc.cs),
+  [`CliEntryPoint.cs`](Workspace1C/Services/CliEntryPoint.cs)).
+  Документация со схемами инструментов — [`docs/mcp.md`](docs/mcp.md).
+- **Расширение обычной командной строки (п.6)**:
+  - **`--update [--apply]`** — проверка наличия новой версии через `GitHubReleaseService`
+    (JSON: `updateAvailable`, `latestVersion`, `notes`, `downloadUrl`); при `--apply` —
+    скачивание однофайловой сборки текущей платформы и запись маркера применения,
+    который новая версия подхватит при следующем запуске;
+  - **`--eventlog --target <база/каталог файловой ИБ> [--from --to --user --event
+    --text --limit]`** — выборка из журнала регистрации с фильтрами, единый
+    JSON-контракт (`data.entries`); цель — имя/id базы или каталог `1Cv8.1CD`;
+  - **`--check`** — диагностика окружения/конфигурации: версия приложения, каталог
+    данных, установленные платформы 1С (64/32 бита), наличие `rac`/`ring`, число
+    запущенных процессов 1С, статусы служб справочника и повышены ли права;
+  - **`--backup` / `--backup-all`** — проверены и задокументированы (есть с 0.3.9.220):
+    резервное копирование одной/всех видимых баз, `--json` — единый контракт.
+  ([`CliArgs.cs`](Workspace1C/Services/CliArgs.cs),
+  [`CliCommands.cs`](Workspace1C/Services/CliCommands.cs),
+  [`CliOutput.cs`](Workspace1C/Services/CliOutput.cs)).
+
+### Тесты
+
+- `McpServerTests` (+18): JSON-RPC 2.0 цикл (initialize → протокол/имя сервера, ping,
+  уведомления без ответа, ParseError/InvalidRequest/MethodNotFound), tools/list (состав
+  6 инструментов + опасный `terminate_session`, схемы параметров, обязательные поля),
+  tools/call (не найден инструмент, без имени, ошибка инструмента) и поведение
+  `McpSafetyGate` (подтверждено/отклонено/таймаут/не настроен Telegram, блокировка
+  опасной операции без подтверждения).
+- `CliMcpTests` (+14): разбор `--mcp`, `--update` (с `--apply`), `--eventlog` (цель,
+  фильтры, отсутствие цели → ошибка), `--check`.
+
+---
+
 ## [1.0.0.87] — 2026-10-27
 
 ### Добавлено

@@ -1,6 +1,6 @@
 # Workspace 1C
 
-![Версия](https://img.shields.io/badge/Версия-1.0.0.87-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
+![Версия](https://img.shields.io/badge/Версия-1.0.0.88-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
 
 > **Кроссплатформенное десктопное приложение на .NET для управления информационными базами 1С:Предприятие 8.3**, заменяющее стандартный список баз 1С современным интерфейсом. Одна кодовая база собирается под обе ОС: **WPF** на Windows и **Avalonia 11** на Linux.
 
@@ -8,8 +8,8 @@
 
 **Workspace 1C** — новое название программы «Управление конфигурациями 1С». Возможности
 сохранены полностью, нумерация версий начата заново с **1.0.0.0** (последняя версия под
-прежним названием — 0.3.12.70); актуальная версия — **1.0.0.87**
-(поддерживается **4 718 юнит-тестами**).
+прежним названием — 0.3.12.70); актуальная версия — **1.0.0.88**
+(поддерживается **4 748 юнит-тестами**).
 
 ## 📣 Telegram-канал
 
@@ -39,8 +39,13 @@
 | `--run "Имя базы"` | Запускает базу в «1С:Предприятии» без открытия окна |
 | `--run "Имя базы" --designer` | Запускает базу в «Конфигураторе» |
 | `--list` | Выводит список баз с Id |
+| `--backup "База"` / `--backup-all` | Резервная копия одной/всех баз |
+| `--update [--apply]` | Проверка обновления; `--apply` — скачивание и подготовка применения |
+| `--eventlog --target <база/каталог> [--from --to --user --event --text --limit]` | Выборка из журнала регистрации |
+| `--check` | Диагностика окружения/конфигурации |
 | `--telegram-send --text "…" [--kind success]` | Уведомление о прогрессе в Telegram |
 | `--telegram-confirm --prompt "…" [--timeout N]` | Подтверждение inline-кнопками «Да/Нет» с ожиданием ответа |
+| `--mcp` | **MCP-сервер по stdio** — инструменты для ИИ-агентов (см. [`docs/mcp.md`](docs/mcp.md)) |
 | `--json` | Машиночитаемый вывод в едином контракте (глобальный флаг) |
 | `--profile <id>` | Использует указанный профиль |
 
@@ -50,7 +55,9 @@
 
 Телеграм-мост для агентов разработки (Roo Code / Claude Code) описан в
 [`docs/telegram-dev-bridge.md`](docs/telegram-dev-bridge.md): настройка бота, команды,
-коды выхода и правила интеграции.
+коды выхода и правила интеграции. MCP-сервер (`--mcp`) для ИИ-агентов — в
+[`docs/mcp.md`](docs/mcp.md): инструменты списка/запуска/копии баз, журнала регистрации,
+сеансов и заданий; опасные операции подтверждаются через Telegram.
 
 ### Переход с «Управление конфигурациями 1С»
 

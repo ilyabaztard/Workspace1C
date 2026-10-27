@@ -1,6 +1,6 @@
 using System;
 using Workspace1C.Models;
-using Microsoft.Extensions.DependencyInjection;
+using Workspace1C.Services.Mcp;
 
 namespace Workspace1C.Services;
 
@@ -57,6 +57,21 @@ public static class CliEntryPoint
                     exitCode = CliExitCodes.Error;
                     return true;
                 }
+            }
+
+            // MCP-сервер по stdio (п.6 «MCP-сервер и расширение CLI», выпуск 1.0.0.88):
+            // работает ДО инициализации UI (обе платформы) в том же headless-процессе.
+            // В stdout пишутся ТОЛЬКО JSON-RPC сообщения; диагностика — в stderr
+            // (внутри McpServer); сервисы инструментов берутся из AppServices.
+            if (parsed.Kind == CliCommandKind.Mcp)
+            {
+                var confirmationService = AppServices.TryGetService<TelegramConfirmationService>();
+                var server = new McpServer(
+                    output: Console.Out,
+                    diagnostics: Console.Error,
+                    safetyGate: new McpSafetyGate(confirmationService));
+                exitCode = server.Run(Console.In);
+                return true;
             }
 
             exitCode = CliCommands.Execute(parsed);

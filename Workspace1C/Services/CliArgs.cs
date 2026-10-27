@@ -37,7 +37,19 @@ public enum CliCommandKind
     TelegramSend,
 
     /// <summary>Подтверждение через inline-кнопки Telegram (--telegram-confirm, выпуск 1.0.0.36).</summary>
-    TelegramConfirm
+    TelegramConfirm,
+
+    /// <summary>MCP-сервер по stdio (--mcp, выпуск 1.0.0.88): JSON-RPC 2.0, инструменты для ИИ-агентов.</summary>
+    Mcp,
+
+    /// <summary>Проверка/применение обновления приложения (--update, выпуск 1.0.0.88).</summary>
+    Update,
+
+    /// <summary>Выборка из журнала регистрации с фильтрами (--eventlog, выпуск 1.0.0.88).</summary>
+    Eventlog,
+
+    /// <summary>Диагностика окружения/конфигурации (--check, выпуск 1.0.0.88).</summary>
+    Check
 }
 
 /// <summary>Общие параметры любой команды CLI.</summary>
@@ -69,6 +81,26 @@ public sealed class CliOptions
 
     /// <summary>Таймаут ожидания подтверждения, секунд (--timeout; по умолчанию 300).</summary>
     public int TimeoutSeconds { get; set; }
+
+    // ---- Параметры новых команд CLI (п.6 «MCP-сервер и расширение CLI», выпуск 1.0.0.88) ----
+
+    /// <summary>Применить обновление (--apply; с --update — скачать/подготовить новую версию).</summary>
+    public bool Apply { get; set; }
+
+    /// <summary>Начало периода выборки журнала (--from; --eventlog).</summary>
+    public string? From { get; set; }
+
+    /// <summary>Конец периода выборки журнала (--to; --eventlog).</summary>
+    public string? To { get; set; }
+
+    /// <summary>Подстрока имени пользователя (--user; --eventlog).</summary>
+    public string? User { get; set; }
+
+    /// <summary>Подстрока имени события (--event; --eventlog).</summary>
+    public string? Event { get; set; }
+
+    /// <summary>Максимум записей выборки (--limit; --eventlog).</summary>
+    public int Limit { get; set; }
 }
 
 /// <summary>Результат разбора аргументов командной строки.</summary>
@@ -190,6 +222,79 @@ public static class CliArgs
                 continue;
             }
 
+            // ---- Новые команды CLI (п.6 «MCP-сервер и расширение CLI», выпуск 1.0.0.88): ----
+
+            if (string.Equals(key, "--mcp", StringComparison.OrdinalIgnoreCase))
+            {
+                action = CliCommandKind.Mcp;
+                continue;
+            }
+
+            if (string.Equals(key, "--update", StringComparison.OrdinalIgnoreCase))
+            {
+                action = CliCommandKind.Update;
+                continue;
+            }
+
+            if (string.Equals(key, "--eventlog", StringComparison.OrdinalIgnoreCase))
+            {
+                action = CliCommandKind.Eventlog;
+                continue;
+            }
+
+            if (string.Equals(key, "--check", StringComparison.OrdinalIgnoreCase))
+            {
+                action = CliCommandKind.Check;
+                continue;
+            }
+
+            if (string.Equals(key, "--apply", StringComparison.OrdinalIgnoreCase))
+            {
+                options.Apply = true;
+                continue;
+            }
+
+            // Целевая база/файловая ИБ команды --eventlog (и общая форма --target).
+            if (string.Equals(key, "--target", StringComparison.OrdinalIgnoreCase))
+            {
+                var targetValue = value ?? ReadNextValue(args, ref i);
+                if (!string.IsNullOrWhiteSpace(targetValue))
+                    target = targetValue.Trim().Trim('"');
+                continue;
+            }
+
+            if (string.Equals(key, "--from", StringComparison.OrdinalIgnoreCase))
+            {
+                options.From = value ?? ReadNextValue(args, ref i);
+                continue;
+            }
+
+            if (string.Equals(key, "--to", StringComparison.OrdinalIgnoreCase))
+            {
+                options.To = value ?? ReadNextValue(args, ref i);
+                continue;
+            }
+
+            if (string.Equals(key, "--user", StringComparison.OrdinalIgnoreCase))
+            {
+                options.User = value ?? ReadNextValue(args, ref i);
+                continue;
+            }
+
+            if (string.Equals(key, "--event", StringComparison.OrdinalIgnoreCase))
+            {
+                options.Event = value ?? ReadNextValue(args, ref i);
+                continue;
+            }
+
+            if (string.Equals(key, "--limit", StringComparison.OrdinalIgnoreCase))
+            {
+                var limit = value ?? ReadNextValue(args, ref i);
+                int.TryParse(limit, out var parsedLimit);
+                options.Limit = parsedLimit;
+                continue;
+            }
+
             var isRun = string.Equals(key, "--run", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(key, "--base", StringComparison.OrdinalIgnoreCase);
             if (!isRun)
@@ -239,6 +344,14 @@ public static class CliArgs
                 Kind = action,
                 Options = options,
                 Error = "Команда --telegram-confirm требует вопрос (--prompt <что подтвердить?>)"
+            };
+
+        if (action == CliCommandKind.Eventlog && string.IsNullOrWhiteSpace(target))
+            return new CliParseResult
+            {
+                Kind = action,
+                Options = options,
+                Error = "Команда --eventlog требует цель выборки (--target <база или каталог файловой ИБ>)"
             };
 
         return new CliParseResult { Kind = action, Target = target, Options = options };
