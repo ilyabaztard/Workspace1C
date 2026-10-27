@@ -146,56 +146,24 @@
                        Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,12,0"/>
 
+            <!-- Единый контракт кнопок (issue #26): «Очистить» — опасная DangerButton
+                 (красная заливка, белый текст), «Закрыть» — вторичная SecondaryButton. -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="ClearButton" Width="180" Height="36" Margin="0,0,10,0" IsDefault="True"
                         Click="OnClear_Click"
-                        Background="#EF4444" BorderThickness="0" Cursor="Hand" Foreground="White">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="12,8">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#DC2626"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#B91C1C"/>
-                                </Trigger>
-                                <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
+                        Style="{DynamicResource DangerButton}">
                     <StackPanel Orientation="Horizontal">
-                        <materialDesign:PackIcon Kind="DeleteSweep" Width="16" Height="16" Foreground="White"
+                        <materialDesign:PackIcon Kind="DeleteSweep" Width="16" Height="16"
                                                  Margin="0,0,6,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{loc:Loc ClearHistory.Button.Clear}" VerticalAlignment="Center"
-                                   Foreground="White" FontWeight="SemiBold"/>
+                                   FontWeight="SemiBold"/>
                     </StackPanel>
                 </Button>
                 <Button Width="140" Height="36" IsCancel="True"
-                        Background="Transparent" Cursor="Hand" BorderThickness="1.5"
-                        BorderBrush="#EF4444" Foreground="#EF4444" Click="OnClose_Click">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8" Padding="12,8">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#FEF2F2"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
+                        Style="{DynamicResource SecondaryButton}" Click="OnClose_Click">
                     <StackPanel Orientation="Horizontal">
-                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" Foreground="#EF4444" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="{loc:Loc Common.Close}" VerticalAlignment="Center" Foreground="#EF4444" FontWeight="SemiBold"/>
+                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Loc Common.Close}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Button>
             </StackPanel>

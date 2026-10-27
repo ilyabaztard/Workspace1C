@@ -10,15 +10,16 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ResourceDictionary.ThemeDictionaries>
-        <!-- Светлая: вторичная кнопка это заливка янтарного семейства без контура. -->
+        <!-- Светлая: вторичная кнопка — фон карточки, контур и текст темы (единый
+             контракт с тёмной и с WPF, issue #26). -->
         <ResourceDictionary x:Key="Light">
-            <SolidColorBrush x:Key="SecondaryButtonSurfaceBrush" Color="{DynamicResource SecondaryButtonBackgroundColor}"/>
-            <SolidColorBrush x:Key="SecondaryButtonTextBrush" Color="{DynamicResource ButtonTextColor}"/>
-            <SolidColorBrush x:Key="SecondaryButtonOutlineBrush" Color="{DynamicResource SecondaryButtonBackgroundColor}"/>
-            <SolidColorBrush x:Key="SecondaryButtonHoverSurfaceBrush" Color="{DynamicResource SecondaryButtonHoverColor}"/>
-            <SolidColorBrush x:Key="SecondaryButtonHoverOutlineBrush" Color="{DynamicResource SecondaryButtonHoverColor}"/>
-            <SolidColorBrush x:Key="SecondaryButtonPressedSurfaceBrush" Color="{DynamicResource SecondaryButtonPressedColor}"/>
-            <Thickness x:Key="SecondaryButtonOutlineThickness">0</Thickness>
+            <SolidColorBrush x:Key="SecondaryButtonSurfaceBrush" Color="{DynamicResource CardBackgroundColor}"/>
+            <SolidColorBrush x:Key="SecondaryButtonTextBrush" Color="{DynamicResource TextPrimaryColor}"/>
+            <SolidColorBrush x:Key="SecondaryButtonOutlineBrush" Color="{DynamicResource BorderColor}"/>
+            <SolidColorBrush x:Key="SecondaryButtonHoverSurfaceBrush" Color="{DynamicResource ItemHoverColor}"/>
+            <SolidColorBrush x:Key="SecondaryButtonHoverOutlineBrush" Color="{DynamicResource AccentColor}"/>
+            <SolidColorBrush x:Key="SecondaryButtonPressedSurfaceBrush" Color="{DynamicResource SidebarHoverColor}"/>
+            <Thickness x:Key="SecondaryButtonOutlineThickness">1</Thickness>
             <SolidColorBrush x:Key="SettingsToggleTrackBrush">#CBD5E1</SolidColorBrush>
             <SolidColorBrush x:Key="IconButtonHoverBrush">#F1F5F9</SolidColorBrush>
             <SolidColorBrush x:Key="StatusBarIconPressedBrush">#0F172A</SolidColorBrush>
@@ -58,10 +59,13 @@
     <SolidColorBrush x:Key="ComboBoxDropDownGlyphForegroundDisabled" Color="{DynamicResource TextSecondaryColor}"/>
     <Thickness x:Key="ComboBoxDropdownBorderPadding">4</Thickness>
 
-    <!-- ===================== Основная кнопка ===================== -->
+    <!-- ===================== Основная кнопка =====================
+         Контракт акцентной кнопки (issue #26): заливка акцентом темы, текст —
+         TextOnAccentBrush (пересчитывается ThemeManager по WCAG ≥ 4.5:1 для любого
+         пользовательского акцента). Жёсткие Foreground="White" в коде запрещены. -->
     <ControlTheme x:Key="ModernButton" TargetType="Button">
         <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-        <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBrush}"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding" Value="14,9"/>
         <Setter Property="FontSize" Value="13"/>
@@ -135,98 +139,44 @@
         </Style>
     </ControlTheme>
     <!-- ===================== Кнопки нижней панели диалогов =====================
-         В разметке WPF эти две кнопки заданы не именованным стилем, а встроенным
-         шаблоном, и повторены так в десяти окнах: AddEditWindow.xaml:152,
-         CacheCleanWindow.xaml:206, ConnectionSettingsWindow.xaml:1026,
-         ConnectionStringInputWindow.xaml:71, CreateInfobaseWindow.xaml:185,
-         GroupEditWindow.xaml:294, LaunchParametersWindow.xaml:78,
-         LinkInputWindow.xaml:51, PlatformVersionPickerWindow.xaml:258,
-         SettingsWindow.xaml:1527. Здесь это две темы контролов, чтобы девять
-         повторений не разъезжались. Цвета в разметке заданы числом и от темы
-         не зависят, поэтому и тут они числом.
-         Гашение при недоступности автор задал только там, где кнопка бывает
-         недоступна (ConnectionStringInputWindow.xaml:86); в остальных окнах
-         состояние недостижимо, поэтому расхождения не видно. -->
-    <ControlTheme x:Key="DialogConfirmButton" TargetType="Button">
-        <Setter Property="Background" Value="#16A34A"/>
-        <Setter Property="Foreground" Value="White"/>
-        <Setter Property="BorderThickness" Value="0"/>
+         Единый контракт (issue #26): подтверждение — акцентная ModernButton
+         (заливка акцентом темы, текст TextOnAccentBrush), отмена — вторичная
+         SecondaryButton (карточка + контур + текст темы). Раньше здесь были
+         жёсткие зелёная (#16A34A) и красная (#EF4444) кнопки, отличавшие вид
+         диалогов от остальных окон; имена тем контролов сохранены, чтобы десятки
+         ссылок из кода не менялись. Гашение при недоступности — двумя классами:
+         greyed (серая заливка) и dimmed (полупрозрачность), окно выбирает нужный. -->
+    <ControlTheme x:Key="DialogConfirmButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
         <Setter Property="Padding" Value="12,8"/>
-        <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Height" Value="36"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="HorizontalContentAlignment" Value="Center"/>
-        <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="Template">
-            <ControlTemplate TargetType="Button">
-                <Border Name="PART_Surface"
-                        Background="{TemplateBinding Background}"
-                        CornerRadius="8"
-                        Padding="{TemplateBinding Padding}">
-                    <ContentPresenter Name="PART_ContentPresenter"
-                                      Content="{TemplateBinding Content}"
-                                      ContentTemplate="{TemplateBinding ContentTemplate}"
-                                      Foreground="{TemplateBinding Foreground}"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
-                </Border>
-            </ControlTemplate>
-        </Setter>
-
-        <Style Selector="^:pointerover /template/ Border#PART_Surface">
-            <Setter Property="Background" Value="#15803D"/>
-        </Style>
-        <Style Selector="^:pressed /template/ Border#PART_Surface">
-            <Setter Property="Background" Value="#166534"/>
-        </Style>
-        <!-- Недоступное состояние автор задал по-разному и только там, где оно
-             достижимо: серой заливкой (ConnectionStringInputWindow.xaml:86,
-             LinkInputWindow.xaml:66) и полупрозрачностью
-             (PlatformVersionPickerWindow.xaml:272 и CacheCleanWindow.xaml:220
-             дают 0.45, ConnectionSettingsWindow.xaml:1040 даёт 0.5; здесь у всех
-             0.45, разница в полшага не различима). Поэтому не в общем виде темы,
-             а двумя классами, и окно выбирает нужный. -->
         <Style Selector="^.greyed:disabled /template/ Border#PART_Surface">
             <Setter Property="Background" Value="#9CA3AF"/>
         </Style>
         <Style Selector="^.dimmed:disabled /template/ Border#PART_Surface">
-            <Setter Property="Opacity" Value="0.45"/>
+            <Setter Property="Opacity" Value="0.5"/>
         </Style>
     </ControlTheme>
 
-    <ControlTheme x:Key="DialogCancelButton" TargetType="Button">
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="#EF4444"/>
-        <Setter Property="BorderBrush" Value="#EF4444"/>
-        <Setter Property="BorderThickness" Value="1.5"/>
+    <ControlTheme x:Key="DialogCancelButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
         <Setter Property="Padding" Value="12,8"/>
-        <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Height" Value="36"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="HorizontalContentAlignment" Value="Center"/>
-        <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="Template">
-            <ControlTemplate TargetType="Button">
-                <Border Name="PART_Surface"
-                        Background="{TemplateBinding Background}"
-                        BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="8"
-                        Padding="{TemplateBinding Padding}">
-                    <ContentPresenter Name="PART_ContentPresenter"
-                                      Content="{TemplateBinding Content}"
-                                      ContentTemplate="{TemplateBinding ContentTemplate}"
-                                      Foreground="{TemplateBinding Foreground}"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
-                </Border>
-            </ControlTemplate>
-        </Setter>
+    </ControlTheme>
 
+    <!-- ===================== Стиль опасной кнопки =====================
+         Единая «красная» кнопка (issue #26): удаление, остановка и другие
+         необратимые действия. Заливка DangerBrush и белый текст (контраст по
+         WCAG ≥ 4.5 для #DC2626), hover и pressed затемняют заливку — одинаково
+         с WPF-стилем DangerButton. -->
+    <ControlTheme x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
+        <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DangerTextBrush}"/>
         <Style Selector="^:pointerover /template/ Border#PART_Surface">
-            <Setter Property="Background" Value="#FEF2F2"/>
+            <Setter Property="Background" Value="{DynamicResource DangerHoverBrush}"/>
+        </Style>
+        <Style Selector="^:pressed /template/ Border#PART_Surface">
+            <Setter Property="Background" Value="{DynamicResource DangerPressedBrush}"/>
         </Style>
     </ControlTheme>
 

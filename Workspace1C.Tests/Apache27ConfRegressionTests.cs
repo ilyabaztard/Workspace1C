@@ -251,6 +251,135 @@ public sealed class Apache27ConfRegressionTests
         }
     }
 
+    [Fact]
+    public void PopulateIncludes_RealFixturesOnDisk_EndToEnd_ConfTargetsAndDefaults_Issue63()
+    {
+        // Воспроизведение сценария 7OH (комментарий #issuecomment-6419272270) «как на
+        // диске»: фикстуры TestData/Apache27Conf копируются во временный каталог, детектор
+        // читает файлы ПО-НАСТОЯЩЕМУ (File.ReadAllText), Include-граф раскрывается через
+        // conf\httpd.conf, файл алиасов 1c8Aliases27.conf попадает в ConfTargets ровно один,
+        // каталог публикации «…\htdocs\27» и порт 8027 подставляются в окно.
+        var tempDir = Path.Combine(Path.GetTempPath(), "W1C_Issue63_E2E_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var confDir = Path.Combine(tempDir, "conf");
+            Directory.CreateDirectory(confDir);
+            foreach (var fileName in new[] { "httpd27.conf", "httpd.conf", "1c8Aliases27.conf" })
+                File.Copy(Path.Combine(TestDataDir, fileName), Path.Combine(confDir, fileName), overwrite: true);
+
+            var instance = new ApacheInstance
+            {
+                Id = "httpd27",
+                Name = "Apache 2.4 (httpd-27)",
+                ConfPath = Path.Combine(confDir, "httpd27.conf"),
+                ServerRoot = tempDir,
+                Htdocs = Path.Combine(tempDir, "htdocs"),
+                Kind = WebServerKind.Apache24
+            };
+            ApacheInstanceDetector.PopulateIncludes(instance,
+                File.ReadAllText(instance.ConfPath), confDir);
+
+            // DocumentRoot/Listen из include-графа (httpd.conf), переменные из обоих файлов.
+            Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\htdocs\27"), instance.DocumentRoot, ignoreCase: true);
+            Assert.Equal(new[] { 8027 }, instance.ListenPorts);
+            Assert.Contains(instance.IncludeFiles, p =>
+                p.EndsWith("1c8Aliases27.conf", StringComparison.OrdinalIgnoreCase));
+
+            var infobase = new Infobase
+            {
+                Name = "Тестовая база",
+                Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+            };
+            var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+            vm.ServerIndex = vm.ServerIndexFor(instance);
+            vm.VirtualDirectory = "demo_27";
+
+            // В ConfTargets ровно ОДИН файл алиасов — используемый 1c8Aliases27.conf.
+            var aliasTargets = vm.ConfTargetPaths
+                .Where(p => Path.GetFileName(p).StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            Assert.Single(aliasTargets);
+            Assert.EndsWith("1c8Aliases27.conf", aliasTargets[0], StringComparison.OrdinalIgnoreCase);
+
+            // Каталог публикации и URL по умолчанию из конфига службы.
+            Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\htdocs\27\demo_27"),
+                vm.PhysicalDirectory, ignoreCase: true);
+            Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+
+            // Смена файла webinst (на файл алиасов) пересчитывает каталог/порт корректно.
+            var aliasIndex = vm.ConfTargetPaths
+                .Select((p, i) => (p, i))
+                .First(t => t.p.EndsWith("1c8Aliases27.conf", StringComparison.OrdinalIgnoreCase)).i;
+            vm.ConfTargetIndex = aliasIndex;
+            Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\htdocs\27\demo_27"),
+                vm.PhysicalDirectory, ignoreCase: true);
+            Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); }
+            catch { /* временный каталог не влияет на результат теста */ }
+        }
+    }
+
+    [Fact]
+    public void PopulateIncludes_DefineAfterInclude_StillResolvesAliasAndDefaults_Issue63()
+    {
+        // «Переменные могут быть объявлены до include» — а если Define стоит ПОСЛЕ
+        // Include-строки (реальный вариант раскладки), двухпроходный разбор всё равно
+        // должен раскрыть ${SRVROOT}/${OneCPort} для DocumentRoot/Listen/Include алиасов.
+        var instance = new ApacheInstance
+        {
+            Id = "httpd27",
+            Name = "Apache 2.4 (httpd-27)",
+            ConfPath = Path.Combine(ServerRootDir, "conf", "httpd27.conf"),
+            ServerRoot = ServerRootDir,
+            Htdocs = Path.Combine(ServerRootDir, "htdocs"),
+            Kind = WebServerKind.Apache24
+        };
+
+        const string mainConf = """
+        Include conf/site.conf
+        Define SRVROOT "c:/Apache/Apache24"
+        Define OneCPort 27
+        """;
+        const string siteConf = """
+        DocumentRoot "${SRVROOT}/htdocs/${OneCPort}"
+        Listen "80${OneCPort}"
+        Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf"
+        """;
+        const string aliasesConf = "Alias \"/Demo\" \"${SRVROOT}/htdocs/${OneCPort}/Demo/\"\n";
+
+        ApacheInstanceDetector.PopulateIncludes(instance, mainConf,
+            Path.Combine(ServerRootDir, "conf"),
+            path => path.EndsWith("site.conf", StringComparison.OrdinalIgnoreCase) ? siteConf
+                : path.EndsWith("1c8Aliases27.conf", StringComparison.OrdinalIgnoreCase) ? aliasesConf
+                : null);
+
+        Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\htdocs\27"), instance.DocumentRoot, ignoreCase: true);
+        Assert.Equal(new[] { 8027 }, instance.ListenPorts);
+        Assert.Contains(instance.IncludeFiles, p =>
+            p.EndsWith("1c8Aliases27.conf", StringComparison.OrdinalIgnoreCase));
+
+        var infobase = new Infobase
+        {
+            Name = "Тестовая база",
+            Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+        };
+        var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+        vm.ServerIndex = vm.ServerIndexFor(instance);
+        vm.VirtualDirectory = "demo_27";
+
+        var aliasTargets = vm.ConfTargetPaths
+            .Where(p => Path.GetFileName(p).StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        Assert.Single(aliasTargets);
+        Assert.EndsWith("1c8Aliases27.conf", aliasTargets[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\htdocs\27\demo_27"),
+            vm.PhysicalDirectory, ignoreCase: true);
+        Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

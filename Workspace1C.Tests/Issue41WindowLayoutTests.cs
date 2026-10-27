@@ -244,4 +244,48 @@ public sealed class Issue41WindowLayoutTests
         Assert.DoesNotContain("Width=\"120\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Width=\"120\"", axaml, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ClusterMigrationWindow_Wpf_OnMigrationCompleted_DoesNotCloseWindow()
+    {
+        // issue #41, комментарий 7OH от 2026-10-26 «закрывать окно не надо»: обработчик
+        // завершения миграции НЕ закрывает окно — вопрос «Заменить строку подключения?»
+        // остаётся, окно открыто (сводка и статусы строк видны, перенос можно повторить
+        // на другой сервер). Закрытие — только кнопкой «Закрыть»/крестиком.
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.xaml.cs"));
+        var body = ExtractMethodBody(code, "private void OnMigrationCompleted");
+        Assert.Contains("SetReplaceConnectionStrings", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Close()", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("DialogResult", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClusterMigrationWindow_Avalonia_OnMigrationCompleted_DoesNotCloseWindow()
+    {
+        // issue #41, комментарий 7OH от 2026-10-26 «закрывать окно не надо»: как и в WPF,
+        // обработчик завершения миграции Avalonia не закрывает окно (аналог WPF-поведения).
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.Avalonia.cs"));
+        var body = ExtractMethodBody(code, "private void OnMigrationCompleted");
+        Assert.Contains("SetReplaceConnectionStrings", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Close()", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("DialogResult", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>Извлекает тело метода (включая открывающую/закрывающую скобки) по сигнатуре — для текстовых стражей.</summary>
+    private static string ExtractMethodBody(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Метод не найден: {signature}");
+        var braceStart = source.IndexOf('{', start);
+        Assert.True(braceStart >= 0, $"Тело метода не найдено: {signature}");
+        var depth = 0;
+        var end = braceStart;
+        for (; end < source.Length; end++)
+        {
+            if (source[end] == '{') depth++;
+            else if (source[end] == '}') { depth--; if (depth == 0) break; }
+        }
+        Assert.True(depth == 0, $"Тело метода не закрыто: {signature}");
+        return source.Substring(braceStart, end - braceStart + 1);
+    }
 }

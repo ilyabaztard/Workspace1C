@@ -62,52 +62,17 @@
             </ComboBox.ItemTemplate>
         </ComboBox>
 
-        <!-- ============ Кнопки ============ -->
+        <!-- ============ Кнопки — единый контракт (issue #26): акцентная
+             ModernButton и вторичная SecondaryButton. -->
         <StackPanel Grid.Row="4" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button x:Name="OkButton" Width="130" Height="38" Margin="0,0,10,0"
                     IsDefault="True" Click="OnOk_Click"
-                    Background="#16A34A" BorderThickness="0" Cursor="Hand" Foreground="White">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Padding="12,8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#15803D"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#166534"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bd" Property="Background" Value="#9CA3AF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
-                <TextBlock Text="{loc:Loc Common.Ok}" VerticalAlignment="Center" Foreground="White" FontWeight="SemiBold"/>
+                    Style="{DynamicResource ModernButton}">
+                <TextBlock Text="{loc:Loc Common.Ok}" VerticalAlignment="Center" FontWeight="SemiBold"/>
             </Button>
             <Button Width="130" Height="38" IsCancel="True"
-                    Background="Transparent" Cursor="Hand" BorderThickness="1.5"
-                    BorderBrush="{DynamicResource BorderBrushColor}"
-                    Foreground="{DynamicResource TextPrimaryBrush}">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8" Padding="12,8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ItemHoverBrush}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
+                    Style="{DynamicResource SecondaryButton}">
                 <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center"/>
             </Button>
         </StackPanel>

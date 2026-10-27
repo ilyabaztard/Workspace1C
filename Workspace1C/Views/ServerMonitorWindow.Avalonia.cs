@@ -66,6 +66,20 @@ namespace Workspace1C
         /// <summary>Заголовки вкладок с количеством строк (обновляются по PropertyChanged).</summary>
         private readonly List<(TabItem Tab, string Property)> _dynamicTabHeaders = new();
 
+        /// <summary>
+        /// Настройки окна «Серверы 1С» (issue #75): загружаются в конструкторе, при закрытии
+        /// в них сохраняются ширины колонок вкладок (переживают закрытие программы).
+        /// </summary>
+        private Models.AppSettings _windowSettings = new();
+
+        /// <summary>
+        /// Текущие фактические ширины колонок по вкладкам (issue #75): ключ — вкладка
+        /// (Sessions/Connections/Locks/Processes), значение — пиксельные ширины (0 —
+        /// гибкая/не сохранявшаяся колонка). Заполняется при перетаскивании границ
+        /// колонок и сохраняется в настройки при закрытии окна.
+        /// </summary>
+        private readonly Dictionary<string, double[]> _columnWidths = new();
+
         /// <summary>Фоновое обновление кэша статусов служб (5 с; issue #3, часть 2).</summary>
         private System.Threading.Timer? _servicesStatusTimer;
 
@@ -120,9 +134,12 @@ namespace Workspace1C
             _vm.PropertyChanged += OnVmPropertyChanged;
 
             // Состояние окна запоминается (issue #3, комментарий 7OH): максимизировано или нет.
+            // Ширины колонок вкладок (issue #75): загружаются при открытии, сохраняются
+            // при закрытии (переживают закрытие программы).
             try
             {
                 var settings = AppServices.GetRequiredService<IInfobaseRepository>().LoadSettings();
+                _windowSettings = settings;
                 if (settings.ServerMonitorMaximized)
                     WindowState = WindowState.Maximized;
             }
@@ -139,9 +156,10 @@ namespace Workspace1C
                 _vm.Dispose();
                 try
                 {
-                    var settings = AppServices.GetRequiredService<IInfobaseRepository>().LoadSettings();
-                    settings.ServerMonitorMaximized = WindowState == WindowState.Maximized;
-                    AppServices.GetRequiredService<IInfobaseRepository>().SaveSettings(settings);
+                    _windowSettings.ServerMonitorMaximized = WindowState == WindowState.Maximized;
+                    foreach (var (tabKey, widths) in _columnWidths)
+                        ServerMonitorColumnWidthsStore.Save(_windowSettings, tabKey, widths);
+                    AppServices.GetRequiredService<IInfobaseRepository>().SaveSettings(_windowSettings);
                 }
                 catch
                 {
@@ -374,7 +392,8 @@ namespace Workspace1C
                     BuildSortableTable(_vm.FilteredSessions, SessionColumns, BuildSessionRow,
                         multiSelect: true,
                         selectionSource: () => _vm.SelectedSessions,
-                        selectionHandler: items => _vm.SelectedSessions = items.OfType<RacSessionRow>().ToList()),
+                        selectionHandler: items => _vm.SelectedSessions = items.OfType<RacSessionRow>().ToList(),
+                        tabKey: ServerMonitorColumnWidthsStore.SessionsKey),
                     terminateButton));
 
             // issue #72: то же для соединений («Разорвать соединения» — по всем выбранным).
@@ -387,12 +406,15 @@ namespace Workspace1C
                     BuildSortableTable(_vm.FilteredConnections, ConnectionColumns, BuildConnectionRow,
                         multiSelect: true,
                         selectionSource: () => _vm.SelectedConnections,
-                        selectionHandler: items => _vm.SelectedConnections = items.OfType<RacConnectionRow>().ToList()),
+                        selectionHandler: items => _vm.SelectedConnections = items.OfType<RacConnectionRow>().ToList(),
+                        tabKey: ServerMonitorColumnWidthsStore.ConnectionsKey),
                     disconnectButton));
             var locksTab = CreateTab(_vm.LocksTabText,
-                BuildSortableTable(_vm.FilteredLocks, LockColumns, BuildLockRow));
+                BuildSortableTable(_vm.FilteredLocks, LockColumns, BuildLockRow,
+                    tabKey: ServerMonitorColumnWidthsStore.LocksKey));
             var processesTab = CreateTab(_vm.ProcessesTabText,
-                BuildContent(() => BuildSortableTable(_vm.Processes, ProcessColumns, BuildProcessRow)));
+                BuildContent(() => BuildSortableTable(_vm.Processes, ProcessColumns, BuildProcessRow,
+                    tabKey: ServerMonitorColumnWidthsStore.ProcessesKey)));
             var infoTab = CreateTab(LocalizationManager.T("ServerMonitor.Tabs.Info"), BuildInfoPane());
             tabs.Items.Add(sessionsTab);
             tabs.Items.Add(connectionsTab);
@@ -521,8 +543,12 @@ namespace Workspace1C
             grid.Children.Add(control);
         }
 
-        /// <summary>Колонка таблицы: заголовок, свойство отображения, свойство сортировки (может быть null), ширина.</summary>
-        private sealed record TableColumn(string Header, string DisplayPath, string? SortPath, GridLength Width);
+        /// <summary>
+        /// Колонка таблицы: заголовок, свойство отображения, свойство сортировки (может быть null),
+        /// ширина и минимальная ширина (issue #75): нижний предел, достаточный для заголовка
+        /// и стрелки сортировки (расчёт — <see cref="ServerMonitorColumnWidthsStore.HeaderMinWidth"/>).
+        /// </summary>
+        private sealed record TableColumn(string Header, string DisplayPath, string? SortPath, GridLength Width, double MinWidth = 0);
 
         /// <summary>
         /// Таблица с заголовками колонок и сортировкой по клику (issue #3): шапка из
@@ -537,21 +563,42 @@ namespace Workspace1C
             string? selectedBinding = null,
             bool multiSelect = false,
             Func<IEnumerable<object>>? selectionSource = null,
-            Action<IReadOnlyList<object>>? selectionHandler = null)
+            Action<IReadOnlyList<object>>? selectionHandler = null,
+            string? tabKey = null)
         {
             // Текущие ширины колонок (issue #3, 7OH 17.10): общие для шапки и всех строк,
             // меняются перетаскиванием границы заголовка. Строки создаются шаблоном и
             // получают ширины отсюда — свои ColumnDefinitions построителей перекрываются.
-            var widths = columns.Select(c => c.Width).ToArray();
+            // issue #75: при наличии сохранённых ширин вкладки они применяются (пиксельные),
+            // иначе — дефолтные ширины из спецификации колонки (звёздные делят свободное место).
+            var widths = ResolveTableWidths(tabKey, columns);
             var liveRows = new List<WeakReference<Grid>>();
             Grid? headerGridRef = null;
+            // Горизонтальная прокрутка таблицы (issue #75): заголовок и строки лежат в общем
+            // горизонтальном ScrollViewer, поэтому колонки прокручиваются за границу области
+            // вместе с заголовком. Минимальная ширина контента — не меньше суммы ширин колонок
+            // (чтобы колонки не «схлопывались») и не меньше вьюпорта (при широком окне колонки
+            // по-прежнему занимают всю ширину области).
+            double contentMinWidth = 0;
+            DockPanel? tableLayout = null;
+            ScrollViewer? tableScroll = null;
+
+            void UpdateTableMinWidth()
+            {
+                if (tableLayout is null || tableScroll is null)
+                    return;
+                tableLayout.MinWidth = Math.Max(contentMinWidth, tableScroll.Viewport.Width);
+            }
 
             void ApplyWidths()
             {
                 if (headerGridRef is not null)
                 {
                     for (var i = 0; i < widths.Length && i < headerGridRef.ColumnDefinitions.Count; i++)
+                    {
                         headerGridRef.ColumnDefinitions[i].Width = widths[i];
+                        headerGridRef.ColumnDefinitions[i].MinWidth = columns[i].MinWidth;
+                    }
                 }
                 liveRows.RemoveAll(r => !r.TryGetTarget(out _));
                 foreach (var weak in liveRows)
@@ -559,8 +606,16 @@ namespace Workspace1C
                     if (!weak.TryGetTarget(out var rowGrid))
                         continue;
                     for (var i = 0; i < widths.Length && i < rowGrid.ColumnDefinitions.Count; i++)
+                    {
                         rowGrid.ColumnDefinitions[i].Width = widths[i];
+                        rowGrid.ColumnDefinitions[i].MinWidth = columns[i].MinWidth;
+                    }
                 }
+                // Минимальная ширина контента таблицы (issue #75): сумма дефолтных/сохранённых
+                // ширин (для звёздных — их MinWidth), чтобы при узком окне содержимое не
+                // «схлопывалось», а прокручивалось вместе с заголовком.
+                contentMinWidth = ComputeContentMinWidth(columns, widths);
+                UpdateTableMinWidth();
             }
 
             var list = new ListBox
@@ -571,7 +626,11 @@ namespace Workspace1C
                     if (control is Grid rowGrid && rowGrid.ColumnDefinitions.Count == widths.Length)
                     {
                         for (var i = 0; i < widths.Length; i++)
+                        {
                             rowGrid.ColumnDefinitions[i].Width = widths[i];
+                            // issue #75: строки не «схлопываются» ниже минимума, как шапка.
+                            rowGrid.ColumnDefinitions[i].MinWidth = columns[i].MinWidth;
+                        }
                         // Вертикальные линии между колонками (issue #3, 7OH 17.10).
                         AddColumnLines(rowGrid, widths.Length);
                         // «_» здесь — параметр шаблона (INameScope), поэтому не discard.
@@ -645,8 +704,11 @@ namespace Workspace1C
             // Заголовки-кнопки: клик сортирует по колонке (повторный клик меняет направление).
             var headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
             headerGridRef = headerGrid;
-            foreach (var width in widths)
-                headerGrid.ColumnDefinitions.Add(new ColumnDefinition(width));
+            for (var i = 0; i < columns.Count; i++)
+            {
+                // issue #75: MinWidth колонки — заголовок и стрелка сортировки не обрезаются.
+                headerGrid.ColumnDefinitions.Add(new ColumnDefinition(widths[i]) { MinWidth = columns[i].MinWidth });
+            }
             var arrows = new Dictionary<TableColumn, TextBlock>();
 
             for (var i = 0; i < columns.Count; i++)
@@ -748,7 +810,9 @@ namespace Workspace1C
                 {
                     if (!dragging)
                         return;
-                    var newWidth = Math.Max(30, startWidth + e.GetPosition(headerGrid).X - startX);
+                    // issue #75: колонка не сжимается ниже минимума (заголовок + стрелка).
+                    var minWidth = Math.Max(30, columns[index].MinWidth);
+                    var newWidth = Math.Max(minWidth, startWidth + e.GetPosition(headerGrid).X - startX);
                     widths[index] = new GridLength(newWidth, GridUnitType.Pixel);
                     ApplyWidths();
                     e.Handled = true;
@@ -758,6 +822,15 @@ namespace Workspace1C
                     dragging = false;
                     e.Pointer.Capture(null);
                     e.Handled = true;
+                    // issue #75: фиксируем фактические ширины вкладки — при закрытии окна
+                    // они сохранятся в настройки (переживают закрытие программы). Гибкие
+                    // колонки записываются нулём («не сохранять» — останутся звёздными).
+                    if (tabKey is not null)
+                    {
+                        _columnWidths[tabKey] = widths
+                            .Select(w => w.IsStar ? 0.0 : w.Value)
+                            .ToArray();
+                    }
                 };
                 Grid.SetColumn(line, i);
                 Grid.SetColumn(grip, i);
@@ -788,11 +861,66 @@ namespace Workspace1C
                     selectionHandler(list.SelectedItems.Cast<object>().ToList());
             }
 
+            // issue #75: горизонтальная прокрутка таблицы — заголовок и строки лежат в общем
+            // ScrollViewer, поэтому колонки прокручиваются за границу области вместе с
+            // заголовком (как DataGrid), вертикальную прокрутку ведёт сам ListBox. Ширина
+            // контента держится не меньше суммы ширин колонок (колонки не «схлопываются»)
+            // и не меньше вьюпорта (при широком окне колонки занимают всю ширину области).
             var dock = new DockPanel { LastChildFill = true };
             DockPanel.SetDock(headerGrid, Dock.Top);
             dock.Children.Add(headerGrid);
             dock.Children.Add(list);
-            return dock;
+            tableLayout = dock;
+            var scroll = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = dock
+            };
+            tableScroll = scroll;
+            scroll.GetObservable(ScrollViewer.ViewportProperty)
+                .Subscribe(new PropertyObserver<Size>(_ => UpdateTableMinWidth()));
+            // Применяем ширины/минимумы после создания контейнеров прокрутки.
+            ApplyWidths();
+            return scroll;
+        }
+
+        /// <summary>
+        /// Собирает стартовые ширины колонок вкладки (issue #75): сохранённые пиксельные
+        /// ширины (валидные и не меньше минимума) либо дефолтные из спецификации колонки —
+        /// гибкие остаются звёздными и делят свободное место окна.
+        /// </summary>
+        private GridLength[] ResolveTableWidths(string? tabKey, IReadOnlyList<TableColumn> columns)
+        {
+            var saved = tabKey is not null
+                ? ServerMonitorColumnWidthsStore.TryLoad(_windowSettings, tabKey)
+                : null;
+            var result = new GridLength[columns.Count];
+            for (var i = 0; i < columns.Count; i++)
+            {
+                var col = columns[i];
+                var width = col.Width;
+                if (saved is not null && i < saved.Length && ServerMonitorColumnWidthsStore.IsValid(saved[i]))
+                    width = new GridLength(Math.Max(saved[i], col.MinWidth), GridUnitType.Pixel);
+                result[i] = width;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Минимальная ширина контента таблицы (issue #75): сумма фактических ширин колонок;
+        /// для гибких (звёздных) берётся их MinWidth — заголовок и стрелка сортировки не
+        /// обрезаются, при узком окне появляется горизонтальная прокрутка.
+        /// </summary>
+        private static double ComputeContentMinWidth(IReadOnlyList<TableColumn> columns, IReadOnlyList<GridLength> widths)
+        {
+            double sum = 0;
+            for (var i = 0; i < columns.Count; i++)
+            {
+                var width = widths[i];
+                sum += width.IsStar || width.Value <= 0 ? columns[i].MinWidth : Math.Max(width.Value, columns[i].MinWidth);
+            }
+            return sum;
         }
 
         private static object? GetSortValue(object item, string path)
@@ -827,6 +955,16 @@ namespace Workspace1C
                 Convert.ToString(a, CultureInfo.InvariantCulture),
                 Convert.ToString(b, CultureInfo.InvariantCulture),
                 StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        /// <summary>Простой наблюдатель значения свойства для асинхронных подписок (issue #75).</summary>
+        private sealed class PropertyObserver<T> : IObserver<T>
+        {
+            private readonly Action<T> _apply;
+            public PropertyObserver(Action<T> apply) => _apply = apply;
+            public void OnCompleted() { }
+            public void OnError(Exception error) { }
+            public void OnNext(T value) => _apply(value);
         }
 
         /// <summary>Внутренний LayoutRoot обёртки (для прямого включения без SortableTable).</summary>
@@ -924,61 +1062,72 @@ namespace Workspace1C
         private static GridLength Px(double value) => new(value, GridUnitType.Pixel);
         private static GridLength Star(double value) => new(value, GridUnitType.Star);
 
-        /// <summary>Колонки вкладки «Рабочие процессы».</summary>
+        /// <summary>
+        /// Колонки вкладки «Рабочие процессы». Минимальные ширины (issue #75) — по длине
+        /// локализованного заголовка, худший случай ru/en плюс стрелка сортировки
+        /// (<see cref="ServerMonitorColumnWidthsStore.HeaderMinWidth"/>); «звёздные» колонки
+        /// не сжимают заголовок, при узком окне таблица прокручивается по горизонтали.
+        /// </summary>
         private static readonly IReadOnlyList<TableColumn> ProcessColumns = new[]
         {
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Type"), "Type", "Type", Px(110)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Host"), "Host", "Host", Star(1.2)),
-            new TableColumn("PID", "Pid", "Pid", Px(90)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Port"), "Port", "Port", Px(80)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.StartedAt"), "StartedAtText", "StartedAtText", Px(150)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Memory"), "MemorySizeText", "MemorySizeText", Px(110)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Threads"), "Threads", "Threads", Px(100)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Cpu"), "CpuText", "CpuText", Px(100)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Running"), "RunningText", "Running", Px(100)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Infobases"), "Infobases", "Infobases", Px(80)),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Type"), "Type", "Type", Px(110), 70),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Host"), "Host", "Host", Star(1.2), 70),
+            new TableColumn("PID", "Pid", "Pid", Px(90), 60),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Port"), "Port", "Port", Px(80), 70),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.StartedAt"), "StartedAtText", "StartedAtText", Px(150), 130),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Memory"), "MemorySizeText", "MemorySizeText", Px(110), 85),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Threads"), "Threads", "Threads", Px(100), 93),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Cpu"), "CpuText", "CpuText", Px(100), 63),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Running"), "RunningText", "Running", Px(100), 93),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Process.Infobases"), "Infobases", "Infobases", Px(80), 63),
             new TableColumn("●", string.Empty, null, Px(30))
         };
 
-        /// <summary>Колонки вкладки «Сеансы».</summary>
+        /// <summary>
+        /// Колонки вкладки «Сеансы» (MinWidth — issue #75, см. <see cref="ProcessColumns"/>).
+        /// </summary>
         private static readonly IReadOnlyList<TableColumn> SessionColumns = new[]
         {
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.User"), "User", "User", Star(1.2)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Infobase"), "InfobaseName", "InfobaseName", Star(1.1)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Host"), "Host", "Host", Star(1.1)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.App"), "AppId", "AppId", Px(110)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.StartedAt"), "StartedAtText", "StartedAtText", Px(150)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.LastActive"), "LastActiveAtText", "LastActiveAtText", Px(150)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.State"), "StateText", "State", Px(120)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Blocked"), "BlockedSymbol", "BlockedByLs", Px(40)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Memory"), "MemoryText", "MemoryText", Px(110)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Duration"), "DurationAllText", "DurationAllText", Px(110)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.DurationCurrent"), "DurationCurrentText", "DurationCurrentText", Px(110)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Hibernate"), "HibernateText", "Hibernate", Px(100))
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.User"), "User", "User", Star(1.2), 130),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Infobase"), "InfobaseName", "InfobaseName", Star(1.1), 183),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Host"), "Host", "Host", Star(1.1), 70),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.App"), "AppId", "AppId", Px(123), 123),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.StartedAt"), "StartedAtText", "StartedAtText", Px(150), 130),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.LastActive"), "LastActiveAtText", "LastActiveAtText", Px(160), 160),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.State"), "StateText", "State", Px(120), 108),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Blocked"), "BlockedSymbol", "BlockedByLs", Px(93), 93),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Memory"), "MemoryText", "MemoryText", Px(110), 85),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Duration"), "DurationAllText", "DurationAllText", Px(130), 130),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.DurationCurrent"), "DurationCurrentText", "DurationCurrentText", Px(130), 130),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Session.Hibernate"), "HibernateText", "Hibernate", Px(108), 108)
         };
 
-        /// <summary>Колонки вкладки «Соединения».</summary>
+        /// <summary>
+        /// Колонки вкладки «Соединения» (MinWidth — issue #75, см. <see cref="ProcessColumns"/>).
+        /// </summary>
         private static readonly IReadOnlyList<TableColumn> ConnectionColumns = new[]
         {
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Host"), "Host", "Host", Star(1.2)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Port"), "Port", "Port", Px(90)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Connector"), "Connector", "Connector", Px(120)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Established"), "EstablishedAtText", "EstablishedAtText", Px(150)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.LastActive"), "LastConnectionTimeText", "LastConnectionTimeText", Px(150)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Duration"), "DurationText", "DurationText", Px(120)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Descr"), "Descr", "Descr", Star(1.3)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Blocked"), "BlockedText", "Blocked", Px(130))
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Host"), "Host", "Host", Star(1.2), 70),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Port"), "Port", "Port", Px(90), 70),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Connector"), "Connector", "Connector", Px(120), 108),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Established"), "EstablishedAtText", "EstablishedAtText", Px(150), 123),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.LastActive"), "LastConnectionTimeText", "LastConnectionTimeText", Px(153), 153),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Duration"), "DurationText", "DurationText", Px(130), 130),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Descr"), "Descr", "Descr", Star(1.3), 123),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Connection.Blocked"), "BlockedText", "Blocked", Px(138), 138)
         };
 
-        /// <summary>Колонки вкладки «Блокировки».</summary>
+        /// <summary>
+        /// Колонки вкладки «Блокировки» (MinWidth — issue #75, см. <see cref="ProcessColumns"/>).
+        /// </summary>
         private static readonly IReadOnlyList<TableColumn> LockColumns = new[]
         {
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Object"), "Object", "Object", Star(2)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Waiting"), "WaitingSymbol", "Waiting", Px(110)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Blocking"), "BlockingSymbol", "Blocking", Px(110)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Session"), "SessionId", "SessionId", Star(1.1)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Connection"), "ConnectionId", "ConnectionId", Star(1.1)),
-            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Transaction"), "TransactionId", "TransactionId", Star(1.1))
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Object"), "Object", "Object", Star(2), 85),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Waiting"), "WaitingSymbol", "Waiting", Px(110), 93),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Blocking"), "BlockingSymbol", "Blocking", Px(110), 108),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Session"), "SessionId", "SessionId", Star(1.1), 93),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Connection"), "ConnectionId", "ConnectionId", Star(1.1), 115),
+            new TableColumn(LocalizationManager.T("ServerMonitor.Columns.Lock.Transaction"), "TransactionId", "TransactionId", Star(1.1), 123)
         };
 
         // ===================== Вкладки-конструкторы =====================

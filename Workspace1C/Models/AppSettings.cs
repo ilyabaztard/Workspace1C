@@ -490,6 +490,15 @@ public class AppSettings
     public bool ServerMonitorMaximized { get; set; }
 
     /// <summary>
+    /// Сохранённые ширины колонок вкладок окна «Серверы 1С» (issue #75): ключ — вкладка
+    /// (<c>Sessions</c>/<c>Connections</c>/<c>Locks</c>/<c>Processes</c>), значение —
+    /// фактические ширины колонок слева направо (0 — колонка не сохранялась, применяется
+    /// дефолтный/минимальный размер). Хранится словарём, чтобы вкладки не зависели друг
+    /// от друга и добавление новой вкладки не ломало старые конфиги.
+    /// </summary>
+    public Dictionary<string, double[]> ServerMonitorColumnWidths { get; set; } = new();
+
+    /// <summary>
     /// Показывать стандартный системный заголовок окна (с кнопками закрытия/сворачивания).
     /// false (по умолчанию) — Linux/Avalonia рисует собственный безрамковый заголовок.
     /// true — используется системная рамка, как в Windows (issue #152). На Windows
@@ -1026,6 +1035,9 @@ public class AppSettings
         UpdateCheckCache ??= new Dictionary<string, ConfigUpdateCheckResult>();
         BackupTargetDirectories ??= new List<string>();
         LaunchConfigDefaults ??= new LaunchConfigDefaults();
+        // issue #75: ширины колонок вкладок окна «Серверы 1С» — легаси-файл без поля
+        // инициализируется пустым словарём (обращение по ключу вкладки безопасно).
+        ServerMonitorColumnWidths ??= new Dictionary<string, double[]>();
 
         // Нормализуем строковые поля, чтобы избежать null-значений у потребителей.
         NoGroupIcon ??= string.Empty;

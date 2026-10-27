@@ -128,6 +128,30 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
+    public async Task LoadSourceBases_SortsRowsByName_OrdinalIgnoreCase()
+    {
+        // Issue #41, комментарий 7OH от 2026-10-26 «сортировать по имени сразу»: список
+        // баз источника ранжируется по имени при чтении. StringComparer.OrdinalIgnoreCase —
+        // стабилен для кириллицы и не зависит от региональных настроек: латиница идёт
+        // до кириллицы по кодовым точкам, регистр не влияет.
+        var client = new FakeRacClient(sourceBaseNames: new[] { "бета", "Alpha", "Альфа", "beta", "Гамма" });
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+
+        await AwaitSourceRows(vm);
+
+        Assert.Equal(5, vm.SourceRows.Count);
+        Assert.Equal(
+            new[] { "Alpha", "beta", "Альфа", "бета", "Гамма" },
+            vm.SourceRows.Select(r => r.Name).ToArray());
+        // После сортировки галочки — ВСЕ (как при несортированном списке).
+        Assert.All(vm.SourceRows, r => Assert.True(r.IsChecked));
+        Assert.Equal(5, vm.CheckedCount);
+    }
+
+    [Fact]
     public async Task GetTargetStatuses_SetsInTarget_UnchecksExisting()
     {
         var client = new FakeRacClient(singleCluster: true, targetBaseNames: new[] { "База1" });
@@ -380,6 +404,48 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
+    public async Task Migrate_FirstBaseNameShown_WhileFirstOperationInProgress()
+    {
+        // Issue #41, комментарий 7OH от 2026-10-26 «Первая без имени — просто "1 из 3"»:
+        // строка «1 из K: <Имя>» устанавливается НА СТАРТЕ обработки первой базы (до
+        // rac-операции), а не после её завершения. Воспроизведение: «infobase create»
+        // заморожена гейтом — пока операция первой базы ещё НЕ завершена, CurrentBaseName
+        // и счётчик «1 из K» уже видны.
+        var client = new FakeRacClient
+        {
+            CreateGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        var createStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.OnBeforeCreate = () => createStarted.TrySetResult(true);
+
+        var migrate = vm.MigrateAsync();
+        await createStarted.Task.WaitAsync(TimeSpan.FromSeconds(10)); // первая операция началась
+
+        // Прогресс первой строки стоит, хотя операция ещё НЕ завершена (гейт закрыт).
+        Assert.Equal("База1", vm.CurrentBaseName);
+        Assert.Equal(1, vm.ProgressIndex);
+        Assert.Equal(2, vm.ProgressTotal);
+        Assert.Equal(1, vm.ProcessedCount);
+        Assert.False(vm.MigrationCompleted);
+
+        client.CreateGate.SetResult(true); // отпускаем «infobase create»
+        await migrate.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(2, vm.Result!.MigratedBaseNames.Count);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
     public async Task Migrate_CreateFailure_ContinuesWithNextBase_MarksErrorRow_KeepsCheckmark()
     {
         // Issue #41 (continue-on-error): ошибка создания ПЕРВОЙ базы не прерывает перенос —
@@ -598,6 +664,40 @@ public sealed class ClusterMigrationViewModelTests
         Assert.Equal(1, firstTotal);
         Assert.Equal("База2", vm.CurrentBaseName);
         Assert.True(vm.MigrationCompleted);
+    }
+
+    [Fact]
+    public async Task Migrate_WithErrors_SecondRun_AccumulatesMigratedBasesInResult()
+    {
+        // Issue #41, комментарий 7OH от 2026-10-26 «закрывать окно не надо»: окно НЕ
+        // закрывается по завершении (в т.ч. при ошибках), чтобы увидеть ошибки и можно
+        // было перенести остаток на другой сервер/кластер повторным прогоном. Result
+        // НАКАПЛИВАЕТ перенесённые базы за прогоны: после ручного закрытия окна в список
+        // приложения попадут все перенесённые базы, а не только последнего прогона.
+        var client = new FakeRacClient(sourceBaseCount: 3, failCreateOnIndex: 2);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        // Первый прогон: «База1» и «База3» перенесены, «База2» — ошибка создания.
+        await vm.MigrateAsync();
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(new[] { "База1", "База3" }, vm.Result!.MigratedBaseNames);
+        Assert.Equal(1, vm.CheckedCount); // ошибка — галочка осталась (переход к другому серверу)
+
+        // Второй прогон: «База2» переносится — результат НАКАПЛИВАЕТСЯ.
+        await vm.MigrateAsync();
+
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(new[] { "База1", "База3", "База2" }, vm.Result.MigratedBaseNames);
+        Assert.Equal(3, vm.Result.AddedInfobases.Count);
+        Assert.Equal(0, vm.CheckedCount);
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]
@@ -1245,10 +1345,15 @@ public sealed class ClusterMigrationViewModelTests
         private readonly bool? _sourceScheduledJobsDeny;
         private readonly bool? _sourceSessionsDeny;
 
+        // Имена баз источника в ЗАДАННОМ порядке (issue #41, сортировка по имени):
+        // null — прежнее поведение («База1»…«БазаN» по возрастанию).
+        private readonly string[]? _sourceBaseNames;
+
         public FakeRacClient(bool singleCluster = true, bool failCreate = false, bool failDrop = false,
             string[]? targetBaseNames = null, string? sourceDbms = null, string? sourceDbName = null,
             string? sourceLocale = null, int? failCreateOnIndex = null, bool throwOnCreate = false,
-            int sourceBaseCount = 2, bool? sourceScheduledJobsDeny = null, bool? sourceSessionsDeny = null)
+            int sourceBaseCount = 2, string[]? sourceBaseNames = null,
+            bool? sourceScheduledJobsDeny = null, bool? sourceSessionsDeny = null)
         {
             _singleCluster = singleCluster;
             _failCreateOnIndex = failCreate ? 1 : failCreateOnIndex;
@@ -1259,6 +1364,7 @@ public sealed class ClusterMigrationViewModelTests
             _sourceDbName = sourceDbName;
             _sourceLocale = sourceLocale;
             _sourceBaseCount = sourceBaseCount;
+            _sourceBaseNames = sourceBaseNames;
             _sourceScheduledJobsDeny = sourceScheduledJobsDeny;
             _sourceSessionsDeny = sourceSessionsDeny;
         }
@@ -1312,14 +1418,16 @@ public sealed class ClusterMigrationViewModelTests
             // Источник: две базы; приёмник: заданные имена (по умолчанию — пусто).
             if (clusterId == SourceClusterId)
             {
-                var source = new RacInfobaseSummary[_sourceBaseCount];
-                for (var i = 0; i < _sourceBaseCount; i++)
+                var names = _sourceBaseNames ??
+                    Enumerable.Range(1, _sourceBaseCount).Select(n => "База" + n).ToArray();
+                var source = new RacInfobaseSummary[names.Length];
+                for (var i = 0; i < names.Length; i++)
                 {
                     var n = i + 1;
                     source[i] = new RacInfobaseSummary
                     {
                         InfobaseId = Guid.Parse($"66000000-0000-0000-0000-{n:D12}"),
-                        Name = "База" + n,
+                        Name = names[i],
                         Descr = "Описание",
                         Dbms = _sourceDbms,
                         DbServer = "sql-01",
@@ -1341,22 +1449,31 @@ public sealed class ClusterMigrationViewModelTests
                 targetNames.Select(name => new RacInfobaseSummary { Name = name }).ToList());
         }
 
-        public Task<bool> CreateInfobaseAsync(
+        /// <summary>
+        /// Гейт «долгой» rac-операции создания базы (issue #41, имя первой базы видно
+        /// сразу): если задан, «infobase create» не завершается, пока гейт не открыт —
+        /// тест проверяет прогресс «в полёте», до завершения операции.
+        /// </summary>
+        public TaskCompletionSource<bool>? CreateGate { get; set; }
+
+        public async Task<bool> CreateInfobaseAsync(
             RacConnectionParams parameters, Guid clusterId, RacInfobaseCreateRequest request,
             CancellationToken cancellationToken = default)
         {
             OnBeforeCreate?.Invoke();
             Created.Add((clusterId, request));
+            if (CreateGate is not null)
+                await CreateGate.Task.ConfigureAwait(false);
             if (_throwOnCreate)
                 throw new InvalidOperationException("сбой соединения с RAS (имитация)");
             if (_failCreateOnIndex is int failIndex && Created.Count == failIndex)
             {
                 LastActionError = "нет прав на создание базы (имитация)";
-                return Task.FromResult(false);
+                return false;
             }
             LastActionError = string.Empty;
             CreatedNames.Add(request.Name ?? string.Empty);
-            return Task.FromResult(true);
+            return true;
         }
 
         public Task<bool> DropInfobaseAsync(

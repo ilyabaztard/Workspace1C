@@ -15,14 +15,17 @@ namespace Workspace1C.Themes
         /// <summary>Основная кнопка: акцентная заливка, скругление 6, высота от 36.</summary>
         public const string ModernButton = "ModernButton";
 
-        /// <summary>Вторичная кнопка: в светлой теме мягкая заливка, в тёмной карточка в контуре.</summary>
+        /// <summary>Вторичная кнопка: фон карточки, контур и текст темы (единый контракт, issue #26).</summary>
         public const string SecondaryButton = "SecondaryButton";
 
-        /// <summary>Кнопка подтверждения нижней панели диалога: зелёная заливка.</summary>
+        /// <summary>Кнопка подтверждения нижней панели диалога: акцентная ModernButton (issue #26).</summary>
         public const string DialogConfirmButton = "DialogConfirmButton";
 
-        /// <summary>Кнопка отмены нижней панели диалога: красный контур.</summary>
+        /// <summary>Кнопка отмены нижней панели диалога: вторичная SecondaryButton (issue #26).</summary>
         public const string DialogCancelButton = "DialogCancelButton";
+
+        /// <summary>Опасная кнопка (удаление, остановка): красная заливка, белый текст (issue #26).</summary>
+        public const string DangerButton = "DangerButton";
 
         /// <summary>Набор вертикальных вкладок окна подключения.</summary>
         public const string ConnTabControl = "ConnTabControl";

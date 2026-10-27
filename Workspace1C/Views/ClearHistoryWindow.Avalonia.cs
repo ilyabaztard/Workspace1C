@@ -247,7 +247,8 @@ namespace Workspace1C
                 Height = 36,
                 IsDefault = true
             };
-            _clearButton.Styled(ControlThemes.DialogConfirmButton);
+            // Очистка истории — опасное действие: DangerButton (issue #26).
+            _clearButton.Styled(ControlThemes.DangerButton);
             _clearButton.Click += (_, _) => OnClearClick();
 
             var cancel = BuildCancelActionButton(140);

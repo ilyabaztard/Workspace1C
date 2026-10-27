@@ -45,59 +45,25 @@
                  KeyDown="OnLinkBox_KeyDown"
                  TextChanged="OnLinkBox_TextChanged"/>
 
-        <!-- ============ Кнопки (выраженные, как в настройках) ============ -->
+        <!-- ============ Кнопки — единый контракт (issue #26): акцентная
+             ModernButton и вторичная SecondaryButton. -->
         <StackPanel Grid.Row="3" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button x:Name="OkButton" Width="150" Height="38" Margin="0,0,10,0"
                     IsDefault="True" Click="OnOk_Click"
-                    Background="#16A34A" BorderThickness="0" Cursor="Hand" Foreground="White">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Padding="12,8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#15803D"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#166534"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bd" Property="Background" Value="#9CA3AF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
+                    Style="{DynamicResource ModernButton}">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Kind="ArrowRightBoldCircle" Width="16" Height="16"
-                                             Foreground="White" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{loc:Loc LinkInput.Go}" VerticalAlignment="Center" Foreground="White" FontWeight="SemiBold"/>
+                                             Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc LinkInput.Go}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                 </StackPanel>
             </Button>
             <Button Width="140" Height="38" IsCancel="True"
-                    Background="Transparent" Cursor="Hand" BorderThickness="1.5"
-                    BorderBrush="#EF4444" Foreground="#EF4444">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8" Padding="12,8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#FEF2F2"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
+                    Style="{DynamicResource SecondaryButton}">
                 <StackPanel Orientation="Horizontal">
-                    <materialDesign:PackIcon Kind="Close" Width="16" Height="16" Foreground="#EF4444"
+                    <materialDesign:PackIcon Kind="Close" Width="16" Height="16"
                                              Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center" Foreground="#EF4444" FontWeight="SemiBold"/>
+                    <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                 </StackPanel>
             </Button>
         </StackPanel>

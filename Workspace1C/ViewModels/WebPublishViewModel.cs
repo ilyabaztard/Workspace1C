@@ -325,19 +325,94 @@ public sealed class WebPublishViewModel : ViewModelBase
     /// <summary>
     /// Fallback (issue #63): единственный используемый файл алиасов 1С «1c8Aliases<n>.conf»,
     /// если он не подключён через Include-граф (IncludeOptional вне графа / маска каталога не
-    /// раскрылась). Номер <n> (OneCPort) выводится из DocumentRoot («…\htdocs\27»), имени
-    /// конфига службы («httpd27.conf» → «27») и портов Listen («80${OneCPort}» → 8027 → «27»).
-    /// Остальные 1c8Aliases*.conf каталога в список НЕ попадают. null — файл не найден.
+    /// раскрылась / переменная ${…} не определилась). Имена кандидатов берутся из
+    /// Include-строк графа («Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf"») —
+    /// «Его можно же найти в строках с include?» (7OH) — и из номера <n> (OneCPort):
+    /// DocumentRoot («…\htdocs\27»), имени конфига службы («httpd27.conf» → «27») и портов
+    /// Listen («80${OneCPort}» → 8027 → «27»). Остальные 1c8Aliases*.conf каталога в список
+    /// НЕ попадают. null — файл не найден.
     /// </summary>
     private static string? FindUsedAliasFileNear(ApacheInstance instance)
     {
-        foreach (var suffix in CandidateAliasSuffixes(instance))
+        foreach (var fileName in CandidateAliasFileNames(instance))
         {
-            var file = FindExistingAliasFile(instance.ConfPath, "1c8Aliases" + suffix + ".conf");
+            var file = FindExistingAliasFile(instance.ConfPath, fileName);
             if (file is not null)
                 return file;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Имена файлов-кандидатов алиасов для fallback (по возрастанию приоритета):
+    /// полностью раскрытые Include-цели графа («…\1c8Aliases27.conf»), шаблоны с
+    /// нераскрытыми ${…} (подставляются известные номера инстанса), затем типовое
+    /// «1c8Aliases<n>.conf» по номеру из DocumentRoot/конфига/Listen.
+    /// </summary>
+    private static IEnumerable<string> CandidateAliasFileNames(ApacheInstance instance)
+    {
+        var suffixes = CandidateAliasSuffixes(instance).ToList();
+        var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var pattern in instance.AliasTargetPatterns ?? Array.Empty<string>())
+        {
+            string? fileName;
+            try
+            {
+                fileName = Path.GetFileName(pattern.Trim());
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(fileName) || !fileName.StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (fileName.IndexOf("${", StringComparison.Ordinal) < 0)
+            {
+                if (emitted.Add(fileName))
+                    yield return fileName;
+                continue;
+            }
+
+            // Шаблон с переменными («1c8Aliases${OneCPort}.conf»): подставляем каждый
+            // известный номер инстанса и ищем файл рядом с конфигом.
+            foreach (var suffix in suffixes)
+            {
+                var candidate = SubstituteAllVariables(fileName, suffix);
+                if (candidate.IndexOf("${", StringComparison.Ordinal) < 0 && emitted.Add(candidate))
+                    yield return candidate;
+            }
+        }
+
+        foreach (var suffix in suffixes)
+        {
+            var fileName = "1c8Aliases" + suffix + ".conf";
+            if (emitted.Add(fileName))
+                yield return fileName;
+        }
+    }
+
+    /// <summary>Заменяет все вхождения «${Name}» в тексте на одно значение (без Regex).</summary>
+    private static string SubstituteAllVariables(string text, string value)
+    {
+        var result = new StringBuilder(text.Length + 16);
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '$' && i + 1 < text.Length && text[i + 1] == '{')
+            {
+                var closing = text.IndexOf('}', i + 2);
+                if (closing > i + 2)
+                {
+                    result.Append(value);
+                    i = closing;
+                    continue;
+                }
+            }
+            result.Append(text[i]);
+        }
+        return result.ToString();
     }
 
     /// <summary>Кандидаты номера инстанса «n» для имени файла «1c8Aliases<n>.conf».</summary>

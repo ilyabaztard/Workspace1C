@@ -40,13 +40,15 @@
                    Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
                    TextWrapping="Wrap" Visibility="Collapsed"/>
 
+        <!-- Единый контракт кнопок (issue #26): «OK» — акцентная ModernButton,
+             «Отмена» — вторичная SecondaryButton. -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
             <Button Width="120" Height="34" Margin="0,0,10,0" IsDefault="True" Click="OnOk_Click"
-                    Background="#16A34A" BorderThickness="0" Foreground="White" Cursor="Hand">
-                <TextBlock Text="{loc:Loc Common.Ok}" Foreground="White" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                    Style="{DynamicResource ModernButton}">
+                <TextBlock Text="{loc:Loc Common.Ok}" VerticalAlignment="Center" FontWeight="SemiBold"/>
             </Button>
             <Button Width="120" Height="34" IsCancel="True" Click="OnCancel_Click"
-                    Background="{DynamicResource ItemHoverBrush}" Cursor="Hand">
+                    Style="{DynamicResource SecondaryButton}">
                 <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center"/>
             </Button>
         </StackPanel>

@@ -33,6 +33,24 @@
   [`en.json`](Workspace1C/Localization/Languages/en.json)).
   Покрыто тестами `ServerMonitorViewModelTests` (+7).
 
+- **Серверы 1С: колонки по содержимому заголовка, горизонтальная прокрутка и
+  сохранение размеров колонок по вкладкам (issue #75, Windows и Linux)** — на
+  вкладках «Сеансы», «Соединения», «Блокировки» и «Рабочие процессы» колонки
+  получают по умолчанию ширину, достаточную для заголовка и пиктограммы
+  направления сортировки (MinWidth под самый длинный заголовок ru/en); включена
+  горизонтальная прокрутка — колонки могут уходить за границу окна, а при сужении
+  окна появляется именно полоса прокрутки, а не «схлопывание» колонок; размеры
+  колонок каждой вкладки сохраняются отдельно (хранилище
+  `ServerMonitorColumnWidthsStore`, восстановление при переключении вкладок) и
+  переживают закрытие программы
+  ([`ServerMonitorColumnWidthsStore.cs`](Workspace1C/Services/ServerMonitorColumnWidthsStore.cs),
+  [`ServerMonitorWindow.xaml`](Workspace1C/Views/ServerMonitorWindow.xaml),
+  [`ServerMonitorWindow.xaml.cs`](Workspace1C/Views/ServerMonitorWindow.xaml.cs),
+  [`ServerMonitorWindow.Avalonia.cs`](Workspace1C/Views/ServerMonitorWindow.Avalonia.cs),
+  [`AppSettings.cs`](Workspace1C/Models/AppSettings.cs)).
+  Покрыто тестами `ServerMonitorColumnWidthsTests` (+14),
+  `Issue75ServerMonitorColumnsTests` (+6).
+
 ### Исправлено
 
 - **Запуск х86 из другого места (issue #73, Windows и Linux)** — при базе с явно
@@ -96,6 +114,66 @@
   Покрыто тестами `ServerMonitorViewModelTests` (+7), `Issue69DropRetryWindowLayoutTests`
   (+2), `RacOutputParserTests`, `RacClientTests`, `ClusterMigrationServiceTests`,
   `ClusterMigrationViewModelTests` (+2).
+
+- **Публикация баз: inline-комментарии в значениях директив и fallback по
+  Include-шаблонам (issue #63, Windows и Linux)** — по последнему комментарию 7OH
+  («А вот файла нужного и как следствие портов и каталогов — нет»): при разборе
+  конфигов Apache из значений директив отбрасываются inline-комментарии
+  `# ...` (`Listen "80${OneCPort}" # порт` → `8027`); имена файлов в `Include`
+  с переменными раскрываются по полному Define-графу; fallback-поиск
+  `FindUsedAliasFileNear` учитывает Include-шаблоны и добавляет в список ConfTargets
+  только фактически используемый файл алиасов (`1c8Aliases27.conf` — один файл);
+  корректно пересчитываются каталог публикации (`…/htdocs/27`) и порт/URL (`8027`)
+  ([`ApacheConfIncludeParser.cs`](Workspace1C/Services/ApacheConfIncludeParser.cs),
+  [`ApacheInstance.cs`](Workspace1C/Models/ApacheInstance.cs),
+  [`ApacheInstanceDetector.cs`](Workspace1C/Services/ApacheInstanceDetector.cs),
+  [`WebPublishViewModel.cs`](Workspace1C/ViewModels/WebPublishViewModel.cs)).
+  Покрыто тестами `ApacheConfIncludeParserTests`, `ApacheInstanceDetectorTests`,
+  `Apache27ConfRegressionTests`, `WebPublishIssue63Tests` (+9).
+
+- **Формы и элементы: единый аудит минимальных размеров всех окон (issue #55,
+  Windows и Linux)** — по последнему комментарию ArtyoZ («зафиксировать минимальные
+  высоту и ширину каждого окна и запретить дальнейшее уменьшение размера окна»):
+  пройдены все окна приложения, каждому заданы MinWidth/MinHeight, при которых
+  содержимое не обрезается (WPF — MinWidth/MinHeight в XAML, Avalonia — MinWidth/
+  MinHeight в коде окна); закрыт обход минимумов в «Выборе баз»
+  (`BaseSelectionWindow`), минимальная высота монитора серверов увеличена до 560
+  ([`BaseSelectionWindow.axaml`](Workspace1C/Views/BaseSelectionWindow.axaml),
+  [`ServerMonitorWindow.xaml`](Workspace1C/Views/ServerMonitorWindow.xaml),
+  [`SettingsWindow.xaml`](Workspace1C/Views/SettingsWindow.xaml),
+  [`SettingsWindow.Avalonia.cs`](Workspace1C/Views/SettingsWindow.Avalonia.cs)).
+  Покрыто тестами `Issue55WindowLayoutTests`, `Issue55AdaptiveLayoutTests` (+6).
+
+- **Миграция баз: имя первой базы видно сразу, сортировка по имени, окно не
+  закрывается по завершении (issue #41, Windows и Linux)** — по последнему
+  комментарию 7OH: имя обрабатываемой базы и счётчик «N из M» устанавливаются ДО
+  начала обработки базы (для первой базы имя видно сразу — «1 из 3: Имя»); список
+  баз источника сортируется по имени (OrdinalIgnoreCase, стабильно для русских
+  имён); по завершении миграции окно больше не закрывается — статусы строк
+  остаются видимыми (накапливающийся результат), повторная миграция и закрытие —
+  по кнопкам
+  ([`ClusterMigrationViewModel.cs`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs),
+  [`ClusterMigrationWindow.xaml.cs`](Workspace1C/Views/ClusterMigrationWindow.xaml.cs),
+  [`ClusterMigrationWindow.Avalonia.cs`](Workspace1C/Views/ClusterMigrationWindow.Avalonia.cs),
+  [`MainViewModel.Tools.cs`](Workspace1C/ViewModels/MainViewModel.Tools.cs)).
+  Покрыто тестами `ClusterMigrationViewModelTests`, `Issue41WindowLayoutTests` (+5).
+
+- **Акцентные цвета и контрастность: единый контракт кнопок по всему приложению
+  (issue #26, Windows и Linux)** — по последнему комментарию ArtyoZ («сделать все
+  кнопки единообразными») все кнопки переведены на единый контракт: `ModernButton`
+  (акцентный фон + контрастный `TextOnAccentBrush`), `SecondaryButton` и новый
+  `DangerButton` для опасных действий; из окон убраны жёсткие цвета (`#16A34A`,
+  `#22C55E`, `#06B6D4`, `#DC2626`, `#EF4444`) и локальные переопределения — обновлено
+  около 50 окон в обеих платформах (WPF-темы `LightTheme`/`DarkTheme`, Avalonia
+  `Controls.axaml`, код `WpfUi`/`ModalWindowBase`)
+  ([`LightTheme.xaml`](Workspace1C/Themes/LightTheme.xaml),
+  [`DarkTheme.xaml`](Workspace1C/Themes/DarkTheme.xaml),
+  [`Controls.axaml`](Workspace1C/Themes/Controls.axaml),
+  [`WpfUi.cs`](Workspace1C/Views/WpfUi.cs),
+  [`ModalWindowBase.cs`](Workspace1C/Views/ModalWindowBase.cs)).
+  Покрыто тестами `Issue26ButtonUniformityTests` (+9).
+
+Полный прогон тестов зелёный (4635 тестов).
 
 ---
 

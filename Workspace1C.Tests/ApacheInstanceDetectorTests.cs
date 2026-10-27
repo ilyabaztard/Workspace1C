@@ -245,4 +245,65 @@ Main DocumentRoot: ""/var/www/html""
         Assert.Empty(instance.DocumentRoot);
         Assert.Equal(new[] { 80 }, instance.ListenPorts);
     }
+
+    [Fact]
+    public void PopulateIncludes_UnresolvedAliasInclude_CollectsPatternForFallback_Issue63()
+    {
+        // Include-строка алиасов с переменной, которая НЕ определена ни в одном файле
+        // графа («${SRVROOT}/conf/1c8Aliases${OneCPort}.conf»): цели в IncludeFiles нет
+        // (сырые ${...} в UI не показываем), но шаблон сохраняется — VM-фаллбэк находит
+        // используемый файл алиасов по include-строке (issue #63, комментарий 7OH
+        // 2026-10-26: «Его можно же найти в строках с include?»).
+        var instance = new ApacheInstance
+        {
+            ServerRoot = @"C:\apache",
+            ConfPath = @"C:\apache\httpd.conf",
+            Htdocs = @"C:\apache\htdocs"
+        };
+        ApacheInstanceDetector.PopulateIncludes(instance,
+            "Include \"${SRVROOT}/conf/1c8Aliases${OneCPort}.conf\"\n",
+            @"C:\apache\conf",
+            _ => null);
+
+        Assert.Empty(instance.IncludeFiles);
+        Assert.Single(instance.AliasTargetPatterns);
+        Assert.Contains(instance.AliasTargetPatterns, p =>
+            p.Contains("1c8Aliases", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(instance.AliasTargetPatterns, p => p.Contains("${", System.StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PopulateIncludes_ResolvedAliasInclude_StoredAsFullTargetInPatterns_Issue63()
+    {
+        // «Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf"» при полном раскрытии
+        // переменных (SRVROOT из включаемого файла) даёт реальную цель
+        // «…\conf\1c8Aliases27.conf» — она же фиксируется в AliasTargetPatterns.
+        const string mainConf = """
+        Define OneCPort 27
+        Include conf/site.conf
+        """;
+        const string siteConf = """
+        Define SRVROOT "c:/Apache/Apache24"
+        Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf"
+        """;
+        const string aliasesConf = "Alias \"/Demo\" \"${SRVROOT}/htdocs/${OneCPort}/Demo/\"\n";
+
+        var instance = new ApacheInstance
+        {
+            ServerRoot = @"C:\apache",
+            ConfPath = @"C:\apache\httpd.conf",
+            Htdocs = @"C:\apache\htdocs"
+        };
+        ApacheInstanceDetector.PopulateIncludes(instance, mainConf, @"C:\apache\conf",
+            path => path.EndsWith("site.conf", System.StringComparison.OrdinalIgnoreCase) ? siteConf
+                : path.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase) ? aliasesConf
+                : null);
+
+        Assert.Contains(instance.IncludeFiles, p =>
+            p.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(instance.AliasTargetPatterns, p =>
+            p.EndsWith("1c8Aliases27.conf", System.StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(instance.AliasTargetPatterns, p =>
+            p.Contains("${", System.StringComparison.Ordinal));
+    }
 }

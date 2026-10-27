@@ -4,7 +4,7 @@
         xmlns:loc="clr-namespace:Workspace1C.Localization"
         xmlns:conv="clr-namespace:Workspace1C.Converters"
         Icon="{StaticResource AppIcon}"
-        Height="680" Width="1400" MinHeight="480" MinWidth="1120"
+        Height="680" Width="1400" MinHeight="560" MinWidth="1120"
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="True"
         Background="{DynamicResource ContentBackgroundBrush}">
@@ -501,11 +501,16 @@
                             <TextBlock Text="{loc:Loc ServerMonitor.TerminateSession}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    <!-- Горизонтальная прокрутка (issue #75): у колонок задан MinWidth по
+                         содержимому заголовка (см. ServerMonitorColumnWidthsStore), поэтому
+                         при узком окне колонки не «схлопываются», а прокручиваются за границу
+                         области — для инструмента монитора это нормально. -->
                     <DataGrid x:Name="SessionsGrid" AutoGenerateColumns="False" IsReadOnly="True"
                               SelectedItem="{Binding SelectedSession}"
                               HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
                               CanUserSortColumns="True" Sorting="OnGridSorting"
                               ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           SelectionMode="Extended" SelectionUnit="FullRow" GridLinesVisibility="All" CanUserResizeColumns="True"
                           SelectionChanged="OnSessionsGrid_SelectionChanged"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrushColor}"
@@ -520,21 +525,25 @@
                         </Style>
                     </DataGrid.CellStyle>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Width="1.2*" Header="{loc:Loc ServerMonitor.Columns.Session.User}"
+                        <!-- issue #75: MinWidth колонок — по длине локализованного заголовка
+                             (худший случай ru/en, см. ServerMonitorColumnWidthsStore.HeaderMinWidth)
+                             плюс запас на стрелку сортировки: заголовок не «схлопывается», при
+                             узком окне колонки уходят за границу области по горизонтали. -->
+                        <DataGridTextColumn Width="1.2*" MinWidth="130" Header="{loc:Loc ServerMonitor.Columns.Session.User}"
                                             Binding="{Binding User}" ElementStyle="{StaticResource CellTextAccent}"/>
                         <!-- issue #324, C2: колонка «Информационная база» (имя из
                              «infobase summary list» по infobase-id сеанса). -->
-                        <DataGridTextColumn Width="1.1*" Header="{loc:Loc ServerMonitor.Columns.Session.Infobase}"
+                        <DataGridTextColumn Width="1.1*" MinWidth="183" Header="{loc:Loc ServerMonitor.Columns.Session.Infobase}"
                                             Binding="{Binding InfobaseName}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="1.1*" Header="{loc:Loc ServerMonitor.Columns.Session.Host}"
+                        <DataGridTextColumn Width="1.1*" MinWidth="70" Header="{loc:Loc ServerMonitor.Columns.Session.Host}"
                                             Binding="{Binding Host}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="110" Header="{loc:Loc ServerMonitor.Columns.Session.App}"
+                        <DataGridTextColumn Width="123" MinWidth="123" Header="{loc:Loc ServerMonitor.Columns.Session.App}"
                                             Binding="{Binding AppId}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="150" Header="{loc:Loc ServerMonitor.Columns.Session.StartedAt}"
+                        <DataGridTextColumn Width="150" MinWidth="130" Header="{loc:Loc ServerMonitor.Columns.Session.StartedAt}"
                                             Binding="{Binding StartedAtText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="150" Header="{loc:Loc ServerMonitor.Columns.Session.LastActive}"
+                        <DataGridTextColumn Width="160" MinWidth="160" Header="{loc:Loc ServerMonitor.Columns.Session.LastActive}"
                                             Binding="{Binding LastActiveAtText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="120" Header="{loc:Loc ServerMonitor.Columns.Session.State}"
+                        <DataGridTextColumn Width="120" MinWidth="108" Header="{loc:Loc ServerMonitor.Columns.Session.State}"
                                             Binding="{Binding StateText}">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredCellText}">
@@ -559,15 +568,15 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Width="100" Header="{loc:Loc ServerMonitor.Columns.Session.Blocked}"
+                        <DataGridTextColumn Width="100" MinWidth="93" Header="{loc:Loc ServerMonitor.Columns.Session.Blocked}"
                                             Binding="{Binding BlockedSymbol}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="110" Header="{loc:Loc ServerMonitor.Columns.Session.Memory}"
+                        <DataGridTextColumn Width="110" MinWidth="85" Header="{loc:Loc ServerMonitor.Columns.Session.Memory}"
                                             Binding="{Binding MemoryText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="110" Header="{loc:Loc ServerMonitor.Columns.Session.Duration}"
+                        <DataGridTextColumn Width="130" MinWidth="130" Header="{loc:Loc ServerMonitor.Columns.Session.Duration}"
                                             Binding="{Binding DurationAllText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="110" Header="{loc:Loc ServerMonitor.Columns.Session.DurationCurrent}"
+                        <DataGridTextColumn Width="130" MinWidth="130" Header="{loc:Loc ServerMonitor.Columns.Session.DurationCurrent}"
                                             Binding="{Binding DurationCurrentText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="100" Header="{loc:Loc ServerMonitor.Columns.Session.Hibernate}"
+                        <DataGridTextColumn Width="108" MinWidth="108" Header="{loc:Loc ServerMonitor.Columns.Session.Hibernate}"
                                             Binding="{Binding HibernateText}" ElementStyle="{StaticResource CenteredCellText}"/>
                     </DataGrid.Columns>
                 </DataGrid>
@@ -589,11 +598,13 @@
                             <TextBlock Text="{loc:Loc ServerMonitor.DisconnectConnection}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
+                    <!-- Горизонтальная прокрутка колонок (issue #75; см. SessionsGrid). -->
                     <DataGrid x:Name="ConnectionsGrid" AutoGenerateColumns="False" IsReadOnly="True"
                               SelectedItem="{Binding SelectedConnection}"
                               HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
                               CanUserSortColumns="True" Sorting="OnGridSorting"
                               ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           SelectionMode="Extended" SelectionUnit="FullRow" GridLinesVisibility="All" CanUserResizeColumns="True"
                           SelectionChanged="OnConnectionsGrid_SelectionChanged"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrushColor}"
@@ -608,21 +619,23 @@
                         </Style>
                     </DataGrid.CellStyle>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Width="1.2*" Header="{loc:Loc ServerMonitor.Columns.Connection.Host}"
+                        <!-- issue #75: MinWidth колонок — по заголовку (худший случай ru/en,
+                             см. ServerMonitorColumnWidthsStore.HeaderMinWidth), см. SessionsGrid. -->
+                        <DataGridTextColumn Width="1.2*" MinWidth="70" Header="{loc:Loc ServerMonitor.Columns.Connection.Host}"
                                             Binding="{Binding Host}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="90" Header="{loc:Loc ServerMonitor.Columns.Connection.Port}"
+                        <DataGridTextColumn Width="90" MinWidth="70" Header="{loc:Loc ServerMonitor.Columns.Connection.Port}"
                                             Binding="{Binding Port}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="120" Header="{loc:Loc ServerMonitor.Columns.Connection.Connector}"
+                        <DataGridTextColumn Width="120" MinWidth="108" Header="{loc:Loc ServerMonitor.Columns.Connection.Connector}"
                                             Binding="{Binding Connector}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="150" Header="{loc:Loc ServerMonitor.Columns.Connection.Established}"
+                        <DataGridTextColumn Width="150" MinWidth="123" Header="{loc:Loc ServerMonitor.Columns.Connection.Established}"
                                             Binding="{Binding EstablishedAtText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="150" Header="{loc:Loc ServerMonitor.Columns.Connection.LastActive}"
+                        <DataGridTextColumn Width="153" MinWidth="153" Header="{loc:Loc ServerMonitor.Columns.Connection.LastActive}"
                                             Binding="{Binding LastConnectionTimeText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="120" Header="{loc:Loc ServerMonitor.Columns.Connection.Duration}"
+                        <DataGridTextColumn Width="130" MinWidth="130" Header="{loc:Loc ServerMonitor.Columns.Connection.Duration}"
                                             Binding="{Binding DurationText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="1.3*" Header="{loc:Loc ServerMonitor.Columns.Connection.Descr}"
+                        <DataGridTextColumn Width="1.3*" MinWidth="123" Header="{loc:Loc ServerMonitor.Columns.Connection.Descr}"
                                             Binding="{Binding Descr}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="130" Header="{loc:Loc ServerMonitor.Columns.Connection.Blocked}"
+                        <DataGridTextColumn Width="138" MinWidth="138" Header="{loc:Loc ServerMonitor.Columns.Connection.Blocked}"
                                             Binding="{Binding BlockedText}">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredCellText}">
@@ -642,10 +655,12 @@
 
             <!-- Блокировки -->
             <TabItem Header="{Binding LocksTabText}">
+                <!-- Горизонтальная прокрутка колонок (issue #75; см. SessionsGrid). -->
                 <DataGrid x:Name="LocksGrid" AutoGenerateColumns="False" IsReadOnly="True"
                           HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
                           CanUserSortColumns="True" Sorting="OnGridSorting"
                           ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="All" CanUserResizeColumns="True"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrushColor}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrushColor}"
@@ -659,9 +674,10 @@
                         </Style>
                     </DataGrid.CellStyle>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Width="2*" Header="{loc:Loc ServerMonitor.Columns.Lock.Object}"
+                        <!-- issue #75: MinWidth колонок — по заголовку (см. SessionsGrid). -->
+                        <DataGridTextColumn Width="2*" MinWidth="85" Header="{loc:Loc ServerMonitor.Columns.Lock.Object}"
                                             Binding="{Binding Object}" ElementStyle="{StaticResource CellTextAccent}"/>
-                        <DataGridTextColumn Width="110" Header="{loc:Loc ServerMonitor.Columns.Lock.Waiting}"
+                        <DataGridTextColumn Width="110" MinWidth="93" Header="{loc:Loc ServerMonitor.Columns.Lock.Waiting}"
                                             Binding="{Binding WaitingSymbol}">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredCellText}">
@@ -669,7 +685,7 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Width="110" Header="{loc:Loc ServerMonitor.Columns.Lock.Blocking}"
+                        <DataGridTextColumn Width="110" MinWidth="108" Header="{loc:Loc ServerMonitor.Columns.Lock.Blocking}"
                                             Binding="{Binding BlockingSymbol}">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredCellText}">
@@ -677,11 +693,11 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Width="1.1*" Header="{loc:Loc ServerMonitor.Columns.Lock.Session}"
+                        <DataGridTextColumn Width="1.1*" MinWidth="93" Header="{loc:Loc ServerMonitor.Columns.Lock.Session}"
                                             Binding="{Binding SessionId}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="1.1*" Header="{loc:Loc ServerMonitor.Columns.Lock.Connection}"
+                        <DataGridTextColumn Width="1.1*" MinWidth="115" Header="{loc:Loc ServerMonitor.Columns.Lock.Connection}"
                                             Binding="{Binding ConnectionId}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="1.1*" Header="{loc:Loc ServerMonitor.Columns.Lock.Transaction}"
+                        <DataGridTextColumn Width="1.1*" MinWidth="123" Header="{loc:Loc ServerMonitor.Columns.Lock.Transaction}"
                                             Binding="{Binding TransactionId}" ElementStyle="{StaticResource CenteredCellText}"/>
                     </DataGrid.Columns>
                 </DataGrid>
@@ -689,10 +705,12 @@
 
             <!-- Рабочие процессы (issue #3: перенесена перед «Информация о кластере»). -->
             <TabItem Header="{Binding ProcessesTabText}">
+                <!-- Горизонтальная прокрутка колонок (issue #75; см. SessionsGrid). -->
                 <DataGrid x:Name="ProcessesGrid" AutoGenerateColumns="False" IsReadOnly="True"
                           HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
                           CanUserSortColumns="True" Sorting="OnGridSorting"
                           ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="All" CanUserResizeColumns="True"
                           HorizontalGridLinesBrush="{DynamicResource BorderBrushColor}"
                           VerticalGridLinesBrush="{DynamicResource BorderBrushColor}"
@@ -706,25 +724,26 @@
                         </Style>
                     </DataGrid.CellStyle>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Width="110" Header="{loc:Loc ServerMonitor.Columns.Process.Type}"
+                        <!-- issue #75: MinWidth колонок — по заголовку (см. SessionsGrid). -->
+                        <DataGridTextColumn Width="110" MinWidth="70" Header="{loc:Loc ServerMonitor.Columns.Process.Type}"
                                             Binding="{Binding Type}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="1.2*" Header="{loc:Loc ServerMonitor.Columns.Process.Host}"
+                        <DataGridTextColumn Width="1.2*" MinWidth="70" Header="{loc:Loc ServerMonitor.Columns.Process.Host}"
                                             Binding="{Binding Host}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="90" Header="PID"
+                        <DataGridTextColumn Width="90" MinWidth="60" Header="PID"
                                             Binding="{Binding Pid}" ElementStyle="{StaticResource CellTextAccent}"/>
-                        <DataGridTextColumn Width="80" Header="{loc:Loc ServerMonitor.Columns.Process.Port}"
+                        <DataGridTextColumn Width="80" MinWidth="70" Header="{loc:Loc ServerMonitor.Columns.Process.Port}"
                                             Binding="{Binding Port}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="150" Header="{loc:Loc ServerMonitor.Columns.Process.StartedAt}"
+                        <DataGridTextColumn Width="150" MinWidth="130" Header="{loc:Loc ServerMonitor.Columns.Process.StartedAt}"
                                             Binding="{Binding StartedAtText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="110" Header="{loc:Loc ServerMonitor.Columns.Process.Memory}"
+                        <DataGridTextColumn Width="110" MinWidth="85" Header="{loc:Loc ServerMonitor.Columns.Process.Memory}"
                                             Binding="{Binding MemorySizeText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="100" Header="{loc:Loc ServerMonitor.Columns.Process.Threads}"
+                        <DataGridTextColumn Width="100" MinWidth="93" Header="{loc:Loc ServerMonitor.Columns.Process.Threads}"
                                             Binding="{Binding Threads}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="100" Header="{loc:Loc ServerMonitor.Columns.Process.Cpu}"
+                        <DataGridTextColumn Width="100" MinWidth="63" Header="{loc:Loc ServerMonitor.Columns.Process.Cpu}"
                                             Binding="{Binding CpuText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="100" Header="{loc:Loc ServerMonitor.Columns.Process.Running}"
+                        <DataGridTextColumn Width="100" MinWidth="93" Header="{loc:Loc ServerMonitor.Columns.Process.Running}"
                                             Binding="{Binding RunningText}" ElementStyle="{StaticResource CenteredCellText}"/>
-                        <DataGridTextColumn Width="80" Header="{loc:Loc ServerMonitor.Columns.Process.Infobases}"
+                        <DataGridTextColumn Width="80" MinWidth="63" Header="{loc:Loc ServerMonitor.Columns.Process.Infobases}"
                                             Binding="{Binding Infobases}" ElementStyle="{StaticResource CenteredCellText}"/>
                     </DataGrid.Columns>
                 </DataGrid>

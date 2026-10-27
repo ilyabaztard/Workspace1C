@@ -3348,19 +3348,15 @@ namespace Workspace1C
                 Margin = new Thickness(0, 12, 0, 0),
                 Spacing = 10
             };
-            // Подвал как в разметке WPF: зелёная «Сохранить» со значком дискеты
-            // и красная контурная «Отмена» со значком крестика.
-            // Цвета взяты из разметки WPF числами: зелёный фон сохранения и белый
-            // текст на нём заданы там напрямую, ключей темы под них нет.
-            var saveBrush = new SolidColorBrush(Color.Parse("#16A34A"));
-            var onSaveBrush = Brushes.White;
+            // Подвал: единый контракт (issue #26) — «Сохранить» акцентная
+            // DialogConfirmButton (заливка акцентом темы, значок и подпись —
+            // контрастный TextOnAccentBrush), «Отмена» — вторичная DialogCancelButton.
             var okContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            okContent.Children.Add(IconHelper.MakeIcon("IconSave", UiMetrics.Scaled(16), onSaveBrush));
+            okContent.Children.Add(IconHelper.MakeIcon("IconSave", UiMetrics.Scaled(16), "TextOnAccentBrush"));
             okContent.Children.Add(new TextBlock
             {
                 Text = LocalizationManager.T("Common.Save"),
                 FontWeight = FontWeight.SemiBold,
-                Foreground = onSaveBrush,
                 VerticalAlignment = VerticalAlignment.Center
             });
             var ok = new Button
@@ -3370,14 +3366,9 @@ namespace Workspace1C
                 // и высота жёсткие, а не минимум по содержимому.
                 Width = 140,
                 Height = 36,
-                CornerRadius = new CornerRadius(8),
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                BorderThickness = new Thickness(0),
                 IsDefault = true
             };
-            PaintButtonStates(ok, saveBrush,
-                new SolidColorBrush(Color.Parse("#15803D")),
-                new SolidColorBrush(Color.Parse("#166534")));
+            ok.Styled(ControlThemes.DialogConfirmButton);
             ok.Click += (_, _) =>
             {
                 // Проверка дублей идёт первой: иначе при конфликте окно
@@ -3634,17 +3625,14 @@ namespace Workspace1C
                 DialogResult = true;
                 Close();
             };
-            // Красный в этом проекте задан числом, а не ключом темы: в разметке WPF
-            // отмена нарисована цветом #EF4444 напрямую, кисти под него нет ни там,
-            // ни здесь.
-            var dangerBrush = new SolidColorBrush(Color.Parse("#EF4444"));
+            // Отмена — вторичная DialogCancelButton: фон карточки, контур и текст
+            // темы (единый контракт issue #26), жёсткого красного больше нет.
             var cancelContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            cancelContent.Children.Add(IconHelper.MakeIcon("IconClose", UiMetrics.Scaled(16), dangerBrush));
+            cancelContent.Children.Add(IconHelper.MakeIcon("IconClose", UiMetrics.Scaled(16), "SecondaryButtonTextBrush"));
             cancelContent.Children.Add(new TextBlock
             {
                 Text = LocalizationManager.T("Common.Cancel"),
                 FontWeight = FontWeight.SemiBold,
-                Foreground = dangerBrush,
                 VerticalAlignment = VerticalAlignment.Center
             });
             var cancel = new Button
@@ -3652,17 +3640,9 @@ namespace Workspace1C
                 Content = cancelContent,
                 Width = 140,
                 Height = 36,
-                CornerRadius = new CornerRadius(8),
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                BorderThickness = new Thickness(1.5),
                 IsCancel = true
             };
-            // У автора у отмены только наведение, нажатого состояния нет
-            // (SettingsWindow.xaml:1560), поэтому цвет нажатия равен наведению.
-            PaintButtonStates(cancel, Brushes.Transparent,
-                new SolidColorBrush(Color.Parse("#FEF2F2")),
-                new SolidColorBrush(Color.Parse("#FEF2F2")));
-            cancel.BorderBrush = dangerBrush;
+            cancel.Styled(ControlThemes.DialogCancelButton);
             // Отмена закрывает окно так же, как крестик: DialogResult остаётся
             // ложным, и вызывающая сторона ничего не применяет. Предпросмотр темы
             // отменяется — возвращается прежняя тема без сохранения (issue #378).

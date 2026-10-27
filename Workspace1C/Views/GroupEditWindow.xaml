@@ -293,52 +293,23 @@
         <Border Grid.Row="1" Padding="16,10,16,16"
                 BorderBrush="{DynamicResource BorderBrushColor}" BorderThickness="0,1,0,0"
                 Background="{DynamicResource CardBackgroundBrush}">
+            <!-- Единый контракт кнопок (issue #26): «Сохранить» — акцентная
+                 ModernButton, «Отмена» — вторичная SecondaryButton. -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Width="130" Height="36" Margin="0,0,10,0" IsDefault="True" Click="OnSave_Click"
-                        Background="#16A34A" BorderThickness="0" Cursor="Hand" Foreground="White">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="12,8">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#15803D"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#166534"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
+                        Style="{DynamicResource ModernButton}">
                     <StackPanel Orientation="Horizontal">
-                        <Path Data="{DynamicResource IconSave}" Fill="White" Width="16" Height="16"
+                        <Path Data="{DynamicResource IconSave}" Width="16" Height="16"
                               Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="{loc:Loc Common.Save}" VerticalAlignment="Center" Foreground="White" FontWeight="SemiBold"/>
+                        <TextBlock Text="{loc:Loc Common.Save}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Button>
                 <Button Width="120" Height="36" IsCancel="True"
-                        Background="Transparent" Cursor="Hand" BorderThickness="1.5"
-                        BorderBrush="#EF4444" Foreground="#EF4444">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8" Padding="12,8">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#FEF2F2"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
+                        Style="{DynamicResource SecondaryButton}">
                     <StackPanel Orientation="Horizontal">
-                        <Path Data="{DynamicResource IconClear}" Fill="#EF4444" Width="14" Height="14"
+                        <Path Data="{DynamicResource IconClear}" Width="14" Height="14"
                               Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center" Foreground="#EF4444" FontWeight="SemiBold"/>
+                        <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Button>
             </StackPanel>

@@ -132,9 +132,8 @@ namespace Workspace1C
             error.Bind(TextBlock.TextProperty, new Binding("ErrorMessage"));
 
             // ---- Кнопки: Заменить (с подтверждением), Отменить, Закрыть. ----
+            // Жёсткая циановая заливка и белый текст убраны: акцент темы (issue #26).
             var applyButton = BuildActionButton(LocalizationManager.T("ConnectionReplace.ApplyButton"), "✓", OnApplyClick);
-            applyButton.Background = new SolidColorBrush(Color.Parse("#06B6D4"));
-            applyButton.Foreground = Brushes.White;
             applyButton.Bind(Button.IsEnabledProperty, new Binding("CanApply"));
 
             var undoButton = BuildActionButton(LocalizationManager.T("ConnectionReplace.UndoButton"), "↩",

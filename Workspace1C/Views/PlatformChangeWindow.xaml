@@ -70,15 +70,17 @@
         <TextBlock Text="{Binding SummaryText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,12,0,0"/>
         <TextBlock Text="{Binding ResultText}" FontSize="12" Opacity="0.85" TextWrapping="Wrap" Margin="0,6,0,0"/>
 
-        <!-- Действия: Сменить / Отмена. -->
+        <!-- Действия: Сменить / Отмена — единый контракт кнопок (issue #26):
+             «Сменить» — акцентная ModernButton (заливка акцентом темы, текст по
+             WCAG), «Отмена» — вторичная SecondaryButton. -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
             <Button x:Name="ApplyButton" Style="{StaticResource ModernButton}"
-                    Background="#22C55E" Foreground="White" Padding="18,6"
+                    Padding="18,6"
                     Margin="0,0,8,0" IsEnabled="{Binding CanApply}" Click="OnApply_Click">
-                <TextBlock Text="{loc:Loc PlatformChange.ApplyButton}" Foreground="White"/>
+                <TextBlock Text="{loc:Loc PlatformChange.ApplyButton}"/>
             </Button>
-            <Button x:Name="CancelButton" Style="{StaticResource ModernButton}"
-                    Background="{DynamicResource ItemHoverBrush}" Padding="18,6"
+            <Button x:Name="CancelButton" Style="{StaticResource SecondaryButton}"
+                    Padding="18,6"
                     IsCancel="True" Click="OnCancel_Click">
                 <TextBlock Text="{loc:Loc Common.Cancel}"/>
             </Button>

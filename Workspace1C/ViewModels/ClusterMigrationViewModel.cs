@@ -750,12 +750,20 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Применяет список баз источника в UI-потоке: чеклист, ВСЕ галочки, статус источника.</summary>
+    /// <summary>
+    /// Применяет список баз источника в UI-потоке: чеклист (отсортирован по имени),
+    /// ВСЕ галочки, статус источника.
+    /// </summary>
     private void ApplySourceBases(IReadOnlyList<RacInfobaseSummary> summaries, RacCluster cluster)
     {
+        // Сортировка по имени сразу при чтении (issue #41, комментарий 7OH от 2026-10-26
+        // «сортировать по имени сразу»): OrdinalIgnoreCase стабилен для кириллицы и не
+        // зависит от региональных настроек (как CurrentCulture). OrderBy — устойчивая
+        // сортировка: равные имена сохраняют порядок вывода rac.
         var rows = summaries
             .Where(s => s is not null)
             .Select(s => BuildRow(s, cluster))
+            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         // «Тип СУБД»/«Сервер СУБД» (issue #41, комментарий 7OH): rac «infobase create»
@@ -1000,7 +1008,11 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     /// фактически успешному списку — перенесённые базы добавляются в список приложения,
     /// даже если другие строки завершились ошибкой (не бывает «в кластере, но не в
     /// списке»); при успехе хотя бы одной базы ставится <see cref="MigrationCompleted"/>
-    /// и показывается сводка «Перенесено: N · Ошибок: M».
+    /// и показывается сводка «Перенесено: N · Ошибок: M». Окно НЕ закрывается по
+    /// завершении (issue #41, комментарий 7OH от 2026-10-26 «закрывать окно не надо»):
+    /// при повторных прогонах перенесённые базы НАКАПЛИВАЮТСЯ в <see cref="Result"/>,
+    /// чтобы после ручного закрытия окна в список приложения попали все перенесённые
+    /// базы (в т.ч. на разные серверы-приёмники).
     /// </summary>
     public async Task MigrateAsync()
     {
@@ -1067,6 +1079,22 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             var sourceParams = BuildParams(sourceServer);
             var targetParams = BuildParams(targetServer);
 
+            // Прогресс ПЕРВОЙ обрабатываемой базы (issue #41, комментарий 7OH от
+            // 2026-10-26 «Первая без имени — просто "1 из 3"»): строка «1 из K: <Имя>»
+            // выставляется ЗДЕСЬ — на старте прогона, ДО первой rac-операции. MigrateAsync
+            // запускается командой кнопки в UI-потоке, поэтому прямое присваивание
+            // обновляет окно немедленно, а не после возврата из первого await (как
+            // отложенная dispatch-очередь, которая на быстрых rac-операциях успевала
+            // применить имя только к завершению обработки первой базы). Имена и отмеченные
+            // строки уже известны (rows), поэтому заранее знаем и «1 из K», и имя. Для
+            // последующих строк индекс/имя обновляются Dispatch'ем в цикле ниже.
+            var firstRow = rows[0];
+            ProgressTotal = rows.Count;
+            ProgressIndex = 1;
+            ProcessedCount = 1;
+            CurrentBaseName = firstRow.Name;
+            firstRow.MigrationStatus = string.Empty;
+
             // Хост строки подключения после миграции: «cluster info» кластера приёмника
             // (корректен для удалённого RAS) → host-часть адреса сервера приёмника.
             RacClusterInfo? info = null;
@@ -1105,14 +1133,9 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             // отмеченных баз в текущем прогоне (rows.Count, стабильно в рамках прогона);
             // ProgressIndex — порядковый номер обрабатываемой базы в текущем прогоне
             // (1-based, «1 из K», «2 из K»…); ProcessedCount — счётчик обработанных строк
-            // (совпадает с ProgressIndex).
-            Dispatch(() =>
-            {
-                ProgressTotal = rows.Count;
-                ProgressIndex = 0;
-                ProcessedCount = 0;
-                CurrentBaseName = string.Empty;
-            });
+            // (совпадает с ProgressIndex). Стартовые значения ПЕРВОЙ строки выставлены
+            // выше напрямую (до первого await, на UI-потоке) — в цикле переустанавливаются
+            // те же значения через Dispatch для единообразия.
 
             for (var i = 0; i < rows.Count; i++)
             {
@@ -1210,11 +1233,12 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
             }
 
             // Финальный блок (Result/MigrationCompleted) — ТОЛЬКО в UI-потоке: по
-            // MigrationCompleted окно показывает диалог и закрывается (issue #41).
-            // Результат строится по ФАКТИЧЕСКИ успешному списку — перенесённые базы
-            // попадают в список приложения, даже если другие строки завершились ошибкой.
-            // Сводка: «Перенесено: N · Ошибок: M». Если не перенеслось НИЧЕГО — результат
-            // не формируется, окно остаётся открытым: строки помечены ошибкой и видны.
+            // MigrationCompleted окно задаёт вопрос «Заменить строку подключения?», но
+            // НЕ закрывается (issue #41, комментарий 7OH от 2026-10-26 «закрывать окно
+            // не надо»). Результат строится по ФАКТИЧЕСКИ успешному списку — перенесённые
+            // базы попадают в список приложения, даже если другие строки завершились
+            // ошибкой. Сводка: «Перенесено: N · Ошибок: M». Если не перенеслось НИЧЕГО —
+            // результат не формируется, окно остаётся открытым: строки помечены ошибкой и видны.
             Dispatch(() =>
             {
                 StatusText = failedCount == 0
@@ -1222,8 +1246,22 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                     : string.Format(LocalizationManager.T("ClusterMigration.Summary.ResultFormat"), migrated.Count, failedCount);
                 if (migrated.Count > 0)
                 {
+                    // Накопление результата за несколько прогонов в одном окне (issue #41,
+                    // комментарий 7OH от 2026-10-26 «базы раскидываются по разным серверам»):
+                    // окно не закрывается по завершении, повторные «Мигрировать» добавляют
+                    // перенесённые базы к ранее накопленным, чтобы после ручного закрытия
+                    // окна в список приложения попали ВСЕ перенесённые базы (в т.ч. в разные
+                    // кластеры-приёмники). NewServer/NewPort берутся из последнего прогона —
+                    // они же используются при подтверждённой замене строк подключения.
+                    var previous = Result;
+                    IReadOnlyList<string> allNames = previous is null
+                        ? migrated
+                        : previous.MigratedBaseNames.Concat(migrated).ToList();
+                    IReadOnlyList<Infobase> allBases = previous is null
+                        ? addedInfobases
+                        : previous.AddedInfobases.Concat(addedInfobases).ToList();
                     Result = new ClusterMigrationResult(
-                        migrated, addedInfobases, newServer, newPort, ReplaceConnectionStrings: false);
+                        allNames, allBases, newServer, newPort, previous?.ReplaceConnectionStrings ?? false);
                     MigrationCompleted = true;
                 }
             });

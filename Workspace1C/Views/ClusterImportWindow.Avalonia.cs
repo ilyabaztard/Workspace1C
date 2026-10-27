@@ -326,9 +326,8 @@ namespace Workspace1C
 
         private Button BuildImportButton()
         {
+            // Жёсткая циановая заливка и белый текст убраны: акцент темы (issue #26).
             var button = BuildActionButton(LocalizationManager.T("ClusterImport.ImportButton"), "⇩", OnImportClick);
-            button.Background = new SolidColorBrush(Color.Parse("#06B6D4"));
-            button.Foreground = Brushes.White;
             return button;
         }
 

@@ -184,6 +184,11 @@ public static partial class ApacheInstanceDetector
         var includeFiles = new List<string>();
         var includeDirs = new List<string>();
         var seenTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Include-цели файлов алиасов 1С (в т.ч. с нераскрытыми ${...}) — для fallback
+        // «найти используемый файл по Include-строке» (issue #63, комментарий 7OH
+        // 2026-10-26: «Его можно же найти в строках с include?»).
+        var aliasTargetPatterns = new List<string>();
+        var seenAliasPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Раскрытие графа до стабилизации: копия списка на проход (список пополняется
         // во время обхода, менять коллекцию в foreach нельзя).
@@ -196,6 +201,10 @@ public static partial class ApacheInstanceDetector
                 {
                     if (!seenTargets.Add(target))
                         continue;
+                    // Запоминаем include-цель файла алиасов 1С, даже если переменная
+                    // (${...}) в ней не раскрылась: имя/шаблон используется VM-фаллбэком.
+                    if (IsAliasIncludeFileName(target) && seenAliasPatterns.Add(NormalizeVisitKey(target)))
+                        aliasTargetPatterns.Add(target);
                     if (target.Contains('*') || target.Contains('?'))
                     {
                         // Include/IncludeOptional с маской (например «Include conf/aliases/*.conf» —
@@ -243,6 +252,7 @@ public static partial class ApacheInstanceDetector
 
         instance.IncludeFiles = includeFiles;
         instance.IncludeDirs = includeDirs;
+        instance.AliasTargetPatterns = aliasTargetPatterns;
 
         // Точный DocumentRoot и порты Listen (issue #63): каталог публикации по умолчанию
         // (может включать подкаталог сайта — «ServerRoot\htdocs\27») и порт URL. DocumentRoot
@@ -469,6 +479,23 @@ public static partial class ApacheInstanceDetector
                && char.IsLetter(path[0])
                && path[1] == ':'
                && (path[2] == '\\' || path[2] == '/');
+    }
+
+    /// <summary>
+    /// Цель Include — файл алиасов 1С («1c8Aliases*.conf»)? Используется для сбора
+    /// шаблонов алиасов в include-графе (issue #63).
+    /// </summary>
+    private static bool IsAliasIncludeFileName(string target)
+    {
+        try
+        {
+            var fileName = Path.GetFileName(target.TrimEnd('\\', '/'));
+            return fileName.StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>Ключ посещённого файла графа Include: без учёта регистра и разделителей пути.</summary>

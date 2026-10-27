@@ -48,12 +48,12 @@ namespace Workspace1C
             var root = new DockPanel { Margin = new Thickness(16), LastChildFill = true };
 
             // Кнопки внизу.
+            // Удаление базы кластера — опасное действие: DangerButton (issue #26).
             var drop = new Button { Content = LocalizationManager.T("ServerMonitor.Infobase.Drop.Confirm"), Width = 140, Height = 36, IsDefault = true };
-            drop.Styled(ControlThemes.DialogConfirmButton);
+            drop.Styled(ControlThemes.DangerButton);
             drop.Click += (_, _) => OnDrop();
             var cancel = new Button { Content = LocalizationManager.T("Updates.Cancel"), Width = 120, Height = 36 };
-            cancel.Styled(ControlThemes.ModernButton);
-            ThemeBrushes.Bind(cancel, Button.BackgroundProperty, "ItemHoverBrush");
+            cancel.Styled(ControlThemes.SecondaryButton);
             cancel.Click += (_, _) =>
             {
                 DialogResult = false;

@@ -15,38 +15,39 @@
     </Window.Resources>
 
     <DockPanel Margin="16" LastChildFill="True">
-        <!-- OK / Отмена — над списком одной строкой (issue #11, 7OH 17.10). -->
+        <!-- OK / Отмена — единый контракт (issue #26): акцентная ModernButton и
+             вторичная SecondaryButton. -->
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
             <Button x:Name="OkButton" Style="{StaticResource ModernButton}"
-                    Background="{DynamicResource AccentBrush}" Padding="16,6" Margin="0,0,8,0"
+                    Padding="16,6" Margin="0,0,8,0"
                     MinWidth="90">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="✔" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="White"/>
-                    <TextBlock Text="{loc:Loc Common.Ok}" VerticalAlignment="Center" Foreground="White"/>
+                    <TextBlock Text="✔" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc Common.Ok}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button x:Name="CancelButton" Style="{StaticResource ModernButton}"
-                    Background="{DynamicResource ItemHoverBrush}" Padding="16,6" MinWidth="90">
+            <Button x:Name="CancelButton" Style="{StaticResource SecondaryButton}"
+                    Padding="16,6" MinWidth="90">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="✖" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#DC2626"/>
+                    <TextBlock Text="✖" Margin="0,0,6,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{loc:Loc Common.Cancel}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
         </StackPanel>
 
-        <!-- Поиск и кнопки «Выбрать все / Сбросить». -->
+        <!-- Поиск и кнопки «Выбрать все / Сбросить» — вторичные SecondaryButton. -->
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
             <TextBlock Text="{loc:Loc Services.Picker.Search}" VerticalAlignment="Center" Margin="0,0,8,0"/>
             <TextBox x:Name="SearchBox" Width="220" Height="30" VerticalContentAlignment="Center"
                      Style="{StaticResource ModernTextBox}"
                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"/>
-            <Button x:Name="SelectAllButton" Style="{StaticResource ModernButton}"
-                    Background="{DynamicResource ItemHoverBrush}" Padding="10,5" Margin="12,0,6,0"
+            <Button x:Name="SelectAllButton" Style="{StaticResource SecondaryButton}"
+                    Padding="10,5" Margin="12,0,6,0"
                     Command="{Binding SelectAllCommand}">
                 <TextBlock Text="{loc:Loc Services.Picker.SelectAll}" VerticalAlignment="Center"/>
             </Button>
-            <Button x:Name="SelectNoneButton" Style="{StaticResource ModernButton}"
-                    Background="{DynamicResource ItemHoverBrush}" Padding="10,5"
+            <Button x:Name="SelectNoneButton" Style="{StaticResource SecondaryButton}"
+                    Padding="10,5"
                     Command="{Binding SelectNoneCommand}">
                 <TextBlock Text="{loc:Loc Services.Picker.SelectNone}" VerticalAlignment="Center"/>
             </Button>

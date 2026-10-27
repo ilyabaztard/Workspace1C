@@ -473,6 +473,63 @@ public sealed class WebPublishIssue63Tests
         }
     }
 
+    [Fact]
+    public void ViewModel_Fallback_FindsAliasFromIncludePatternWhenVarsUnresolved_Issue63()
+    {
+        // Include «${SRVROOT}/conf/1c8Aliases${OneCPort}.conf» с НЕРАСКРЫТОЙ переменной
+        // (Define нигде нет): в Include-графе файла нет, но детектор запомнил шаблон
+        // (AliasTargetPatterns), а VM-фаллбэк подставляет номер инстанса («27» из имени
+        // конфига службы httpd27.conf) и находит ровно ОДИН файл алиасов — 1c8Aliases27.conf
+        // (issue #63, 7OH: «Его можно же найти в строках с include?»).
+        var tempDir = Path.Combine(Path.GetTempPath(), "W1C_Issue63_Pattern_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var confDir = Path.Combine(tempDir, "conf");
+            Directory.CreateDirectory(confDir);
+            var mainPath = Path.Combine(confDir, "httpd27.conf");
+            File.WriteAllText(mainPath,
+                "Include \"${SRVROOT}/conf/1c8Aliases${OneCPort}.conf\"\r\n");
+            File.WriteAllText(Path.Combine(confDir, "1c8Aliases25.conf"), AliasContent(tempDir, 25));
+            File.WriteAllText(Path.Combine(confDir, "1c8Aliases27.conf"), AliasContent(tempDir, 27));
+
+            var instance = new ApacheInstance
+            {
+                Id = "httpd27",
+                Name = "Apache 2.4 (httpd-27)",
+                ConfPath = mainPath,
+                ServerRoot = tempDir,
+                Htdocs = Path.Combine(tempDir, "htdocs"),
+                Kind = WebServerKind.Apache24
+            };
+            // Определений переменных нет — Include-цель не раскрылась, файл алиасов в
+            // Include-граф не попал; шаблон включения сохранён детектором.
+            ApacheInstanceDetector.PopulateIncludes(instance, File.ReadAllText(mainPath), confDir);
+            Assert.Empty(instance.IncludeFiles);
+            Assert.NotEmpty(instance.AliasTargetPatterns);
+
+            var infobase = new Infobase
+            {
+                Name = "Тестовая база",
+                Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+            };
+            var vm = new WebPublishViewModel(new[] { infobase }, infobase, new[] { instance });
+            vm.ServerIndex = vm.ServerIndexFor(instance);
+            vm.VirtualDirectory = "demo_27";
+
+            // Fallback по include-шаблону: РОВНО ОДИН файл алиасов — используемый 27-й.
+            var aliasTargets = vm.ConfTargetPaths
+                .Where(p => Path.GetFileName(p).StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            Assert.Single(aliasTargets);
+            Assert.EndsWith("1c8Aliases27.conf", aliasTargets[0], StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); }
+            catch { /* временный каталог не влияет на результат теста */ }
+        }
+    }
+
     private static string AliasContent(string htdocs, int n)
         => "# 1c publication\nAlias \"/Demo\" \"" + htdocs.Replace('\\', '/') + "/" + n + "/Demo/\"\n";
 

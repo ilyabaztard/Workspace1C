@@ -46,4 +46,13 @@ public sealed class ApacheInstance
 
     /// <summary>Каталоги-маски Include с wildcard «*» (абсолютные пути).</summary>
     public IReadOnlyList<string> IncludeDirs { get; set; } = System.Array.Empty<string>();
+
+    /// <summary>
+    /// Include-цели файлов алиасов 1С («1c8Aliases*.conf»), встреченные в include-графе
+    /// (issue #63, комментарий 7OH от 2026-10-26: «Его можно же найти в строках с
+    /// include?»). Содержат нераскрытые <c>${…}</c>, если переменная не определена ни в
+    /// одном файле графа, — по шаблону и номеру инстанса VM находит используемый файл
+    /// алиасов рядом с конфигом (fallback), даже когда Include-граф не прочитал файл.
+    /// </summary>
+    public IReadOnlyList<string> AliasTargetPatterns { get; set; } = System.Array.Empty<string>();
 }

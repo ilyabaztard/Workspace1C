@@ -32,6 +32,12 @@
     <Color x:Key="SecondaryButtonBackgroundColor">#FFF3CD</Color>
     <Color x:Key="SecondaryButtonHoverColor">#FFE69C</Color>
     <Color x:Key="SecondaryButtonPressedColor">#FFD54D</Color>
+    <!-- Опасная кнопка (удаление, остановка): единый красный для обеих тем (issue #26);
+         текст на ней всегда белый — контраст с #DC2626 по WCAG ≈ 4.97:1 (≥ 4.5). -->
+    <Color x:Key="DangerColor">#DC2626</Color>
+    <Color x:Key="DangerHoverColor">#B91C1C</Color>
+    <Color x:Key="DangerPressedColor">#991B1B</Color>
+    <Color x:Key="DangerTextColor">#FFFFFF</Color>
     <Color x:Key="TreeHoverColor">#334155</Color>
     <Color x:Key="TreeSelectedColor">#B45309</Color>
 
@@ -67,6 +73,12 @@
     <SolidColorBrush x:Key="SecondaryButtonBackgroundBrush" Color="{DynamicResource SecondaryButtonBackgroundColor}"/>
     <SolidColorBrush x:Key="SecondaryButtonHoverBrush" Color="{DynamicResource SecondaryButtonHoverColor}"/>
     <SolidColorBrush x:Key="SecondaryButtonPressedBrush" Color="{DynamicResource SecondaryButtonPressedColor}"/>
+    <!-- Кисти опасной кнопки (issue #26): единая красная заливка и белый текст
+         (контраст по WCAG ≥ 4.5 для базового #DC2626). -->
+    <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource DangerColor}"/>
+    <SolidColorBrush x:Key="DangerHoverBrush" Color="{DynamicResource DangerHoverColor}"/>
+    <SolidColorBrush x:Key="DangerPressedBrush" Color="{DynamicResource DangerPressedColor}"/>
+    <SolidColorBrush x:Key="DangerTextBrush" Color="{DynamicResource DangerTextColor}"/>
     <SolidColorBrush x:Key="TreeHoverBrush" Color="{DynamicResource TreeHoverColor}"/>
     <SolidColorBrush x:Key="TreeSelectedBrush" Color="{DynamicResource TreeSelectedColor}"/>
 
@@ -77,8 +89,12 @@
 
     <!-- ===================== Стиль кнопки ===================== -->
     <Style x:Key="ModernButton" TargetType="Button">
+        <!-- Контракт акцентной кнопки (issue #26): заливка акцентом темы, а текст —
+             TextOnAccentBrush, который ThemeManager пересчитывает по WCAG (≥ 4.5:1)
+             для каждого пользовательского акцента. Жёсткие Foreground="White" в окнах
+             запрещены. -->
         <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-        <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBrush}"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding" Value="14,9"/>
         <Setter Property="FontSize" Value="13"/>
@@ -91,7 +107,8 @@
                             Background="{TemplateBinding Background}"
                             CornerRadius="6"
                             Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -145,6 +162,39 @@
         </Setter>
     </Style>
 
+    <!-- ===================== Стиль опасной кнопки =====================
+         Единая «красная» кнопка (issue #26): удаление, остановка и другие необратимые
+         действия. Заливка DangerBrush и белый текст (контраст по WCAG ≥ 4.5), hover
+         и pressed затемняют заливку — одинаково во всех окнах обеих платформ. -->
+    <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
+        <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource DangerTextBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource DangerPressedBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ===================== Стиль кнопки-переключателя фильтра ===================== -->
     <Style x:Key="FilterToggleButton" TargetType="ToggleButton">
         <Setter Property="Background" Value="{DynamicResource SecondaryButtonBackgroundBrush}"/>
@@ -174,9 +224,11 @@
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryButtonPressedBrush}"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
+                            <!-- Включённый фильтр — акцентная заливка, поэтому текст контрастный
+                                 к акценту (issue #26), а не фиксированный чёрный. -->
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource AccentBrush}"/>
                             <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                            <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="Opacity" Value="0.5"/>
@@ -209,8 +261,10 @@
                             <Setter TargetName="bd" Property="Background" Value="{DynamicResource ItemHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
+                            <!-- Включённый тумблер лежит на акцентной заливке: текст/иконка
+                                 контрастны к акценту по WCAG (issue #26). -->
                             <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentBrush}"/>
-                            <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBrush}"/>
                         </Trigger>
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
@@ -1357,13 +1411,11 @@
         </Setter>
     </Style>
 
-    <!-- Вторичные кнопки панели: светлый фон + тёмный текст — контраст и в светлой, и в тёмной теме -->
-    <Style x:Key="ActionPanelSecondaryButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
+    <!-- Вторичные кнопки панели: контракт SecondaryButton (issue #26) — фон карточки,
+         контур и текст темы; здесь только растяжение и компактная высота панели. -->
+    <Style x:Key="ActionPanelSecondaryButton" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-        <Setter Property="Background" Value="{DynamicResource SecondaryButtonBackgroundBrush}"/>
-        <Setter Property="Foreground" Value="{DynamicResource ButtonTextBrush}"/>
-        <Setter Property="BorderThickness" Value="0"/>
         <!-- Компактная высота кнопок панели действий: единый MinHeight гарантирует,
              что split-кнопка «Очистить кеш» и соседние кнопки («Закрепить», «Удалить»
              и др.) имеют одинаковый размер в обоих состояниях правой панели. -->
@@ -1373,6 +1425,8 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="8"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"
@@ -1380,10 +1434,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryButtonHoverBrush}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource ItemHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource SecondaryButtonPressedBrush}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource SidebarHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="Opacity" Value="0.5"/>

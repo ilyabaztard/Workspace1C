@@ -78,7 +78,11 @@ namespace Workspace1C
             return block;
         }
 
-        /// <summary>Кнопка в стиле темы (ModernButton) с подписью по ключу.</summary>
+        /// <summary>
+        /// Кнопка в стиле темы с подписью по ключу. Единый контракт (issue #26):
+        /// accent — акцентная ModernButton (заливка акцентом, текст по WCAG),
+        /// иначе — вторичная SecondaryButton (карточка + контур + текст темы).
+        /// </summary>
         public static Button Button(string key, RoutedEventHandler onClick, double minWidth = 110, bool accent = false)
         {
             var button = new Button
@@ -89,13 +93,9 @@ namespace Workspace1C
                 Margin = new Thickness(0, 0, 8, 0),
                 Cursor = System.Windows.Input.Cursors.Hand
             };
-            if (Application.Current?.TryFindResource("ModernButton") is Style style)
+            var styleKey = accent ? "ModernButton" : "SecondaryButton";
+            if (Application.Current?.TryFindResource(styleKey) is Style style)
                 button.Style = style;
-            if (!accent)
-            {
-                button.SetResourceReference(Control.BackgroundProperty, "ItemHoverBrush");
-                button.SetResourceReference(Control.ForegroundProperty, "TextPrimaryBrush");
-            }
             button.Click += onClick;
             return button;
         }

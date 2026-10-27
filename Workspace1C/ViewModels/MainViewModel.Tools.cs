@@ -2948,9 +2948,12 @@ public partial class MainViewModel : ViewModelBase
         {
             Owner = WindowOwnerResolver.ActiveOrMain()
         };
-        if (window.ShowDialog() != true)
-            return;
-
+        // Окно НЕ закрывается автоматически по завершении миграции (issue #41, комментарий
+        // 7OH от 2026-10-26 «закрывать окно не надо») — чтобы увидеть ошибки и при
+        // необходимости повторить перенос на другой сервер. Результат применяется после
+        // ручного закрытия окна (кнопка «Закрыть»/крестик); без переноса Result == null —
+        // ApplyClusterMigrationResult выходит рано.
+        window.ShowDialog();
         ApplyClusterMigrationResult(window.Result);
     }
 

@@ -168,18 +168,17 @@ namespace Workspace1C
                 IsCancel = true,
                 Padding = new Thickness(14, 6)
             };
-            cancel.Styled(ControlThemes.ModernButton);
-            ThemeBrushes.Bind(cancel, Button.BackgroundProperty, "ItemHoverBrush");
-            ThemeBrushes.Bind(cancel, Button.ForegroundProperty, "TextPrimaryBrush");
+            cancel.Styled(ControlThemes.SecondaryButton);
             cancel.Click += (_, _) => Close();
 
+            // Удаление старых версий платформы — опасное действие: DangerButton (issue #26).
             _deleteButton = new Button
             {
                 Content = LocalizationManager.T("PlatformUpdate.OldVersions.Delete"),
                 Padding = new Thickness(14, 6),
                 Margin = new Thickness(8, 0, 0, 0)
             };
-            _deleteButton.Styled(ControlThemes.DialogConfirmButton);
+            _deleteButton.Styled(ControlThemes.DangerButton);
             _deleteButton.IsEnabled = _choices.Any(c => c.IsChecked);
             _deleteButton.Click += (_, _) =>
             {

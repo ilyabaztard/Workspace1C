@@ -528,7 +528,8 @@ namespace Workspace1C
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 8,
-                    Children = { IconHelper.MakeIcon("IconDatabase", 16, Brushes.White), createCaption }
+                    // Значок на акцентной кнопке — контрастный TextOnAccentBrush (issue #26).
+                    Children = { IconHelper.MakeIcon("IconDatabase", 16, "TextOnAccentBrush"), createCaption }
                 },
                 Width = 140,
                 Height = 36,

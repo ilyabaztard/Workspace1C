@@ -25,6 +25,11 @@
     <Color x:Key="SecondaryButtonBackgroundColor">#FFF3CD</Color>
     <Color x:Key="SecondaryButtonHoverColor">#FFE69C</Color>
     <Color x:Key="SecondaryButtonPressedColor">#FFD54D</Color>
+    <!-- Опасная кнопка (issue #26): единый красный и белый текст (WCAG ≥ 4.5). -->
+    <Color x:Key="DangerColor">#DC2626</Color>
+    <Color x:Key="DangerHoverColor">#B91C1C</Color>
+    <Color x:Key="DangerPressedColor">#991B1B</Color>
+    <Color x:Key="DangerTextColor">#FFFFFF</Color>
     <Color x:Key="TreeHoverColor">#334155</Color>
     <Color x:Key="TreeSelectedColor">#B45309</Color>
     <Color x:Key="ScrollTrackBrush">#16202E</Color>
@@ -58,6 +63,11 @@
     <SolidColorBrush x:Key="SecondaryButtonBackgroundBrush" Color="{DynamicResource SecondaryButtonBackgroundColor}"/>
     <SolidColorBrush x:Key="SecondaryButtonHoverBrush" Color="{DynamicResource SecondaryButtonHoverColor}"/>
     <SolidColorBrush x:Key="SecondaryButtonPressedBrush" Color="{DynamicResource SecondaryButtonPressedColor}"/>
+    <!-- Кисти опасной кнопки (issue #26): единая красная заливка и белый текст. -->
+    <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource DangerColor}"/>
+    <SolidColorBrush x:Key="DangerHoverBrush" Color="{DynamicResource DangerHoverColor}"/>
+    <SolidColorBrush x:Key="DangerPressedBrush" Color="{DynamicResource DangerPressedColor}"/>
+    <SolidColorBrush x:Key="DangerTextBrush" Color="{DynamicResource DangerTextColor}"/>
     <SolidColorBrush x:Key="TreeHoverBrush" Color="{DynamicResource TreeHoverColor}"/>
     <SolidColorBrush x:Key="TreeSelectedBrush" Color="{DynamicResource TreeSelectedColor}"/>
 </ResourceDictionary>

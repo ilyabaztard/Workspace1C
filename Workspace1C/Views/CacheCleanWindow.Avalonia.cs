@@ -592,7 +592,8 @@ namespace Workspace1C
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 6,
-                Children = { IconHelper.MakeIcon("IconBroom", 16, Brushes.White), cleanCaption }
+                // Значок на акцентной кнопке — контрастный TextOnAccentBrush (issue #26).
+                Children = { IconHelper.MakeIcon("IconBroom", 16, "TextOnAccentBrush"), cleanCaption }
             };
             RegisterConfirmCaption(cleanCaption, "CacheClean.Clean");
             _cleanButton.Click += (_, _) => OnClean_Click();

@@ -200,22 +200,23 @@
                     <TextBlock Text="{loc:Loc Selection.None}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
+            <!-- Единый контракт кнопок (issue #26): «Импортировать» — акцентная
+                 ModernButton (без жёсткой циановой заливки и белого текста),
+                 «Закрыть» — вторичная SecondaryButton. -->
             <Button x:Name="ImportButton" Style="{StaticResource ModernButton}"
-                    Background="#06B6D4" Foreground="White" Padding="16,5" Margin="18,0,8,0"
+                    Padding="16,5" Margin="18,0,8,0"
                     Click="OnImport_Click">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="⇩" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="White"/>
-                    <TextBlock Text="{loc:Loc ClusterImport.ImportButton}" VerticalAlignment="Center" Foreground="White"/>
+                    <TextBlock Text="⇩" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc ClusterImport.ImportButton}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <!-- «Закрыть»: отодвинута дальше (отступ как между «Снять все»
-                 и «Импортировать» — 18), красный шрифт и иконка (красная подсветка). -->
-            <Button x:Name="CloseButton" Style="{StaticResource ModernButton}" IsCancel="True"
-                    Background="{DynamicResource ItemHoverBrush}" Padding="12,5" Margin="18,0,0,0"
+            <Button x:Name="CloseButton" Style="{StaticResource SecondaryButton}" IsCancel="True"
+                    Padding="12,5" Margin="18,0,0,0"
                     Click="OnClose_Click">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="✖" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#DC2626"/>
-                    <TextBlock Text="{loc:Loc Common.Close}" VerticalAlignment="Center" Foreground="#DC2626"/>
+                    <TextBlock Text="✖" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc Common.Close}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
         </StackPanel>

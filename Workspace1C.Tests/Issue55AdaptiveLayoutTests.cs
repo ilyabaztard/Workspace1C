@@ -237,4 +237,27 @@ public sealed class Issue55AdaptiveLayoutTests
         Assert.Contains("MinWidth=\"560\" MinHeight=\"400\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"PreviewBox\" IsReadOnly=\"True\" TextWrapping=\"Wrap\"", xaml, StringComparison.Ordinal);
     }
+
+    // ------------------------------------------------------------------
+    // Монитор серверов (issue #55/#75): минимумы окна 1120x560 и горизонтальная
+    // прокрутка таблиц — при сужении колонки не сжимаются и не обрезаются,
+    // а уходят в прокрутку вместе с заголовком (стратегия чтения данных).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void ServerMonitorWindow_MinSizes_And_TablesHorizontalScroll_WpfAndAvalonia()
+    {
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.xaml"));
+        Assert.Contains("MinWidth=\"1120\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"560\"", xaml, StringComparison.Ordinal);
+        Assert.True(
+            Count(xaml, "ScrollViewer.HorizontalScrollBarVisibility=\"Auto\"") >= 4,
+            "Все четыре таблицы монитора серверов должны иметь горизонтальную полосу Auto (issue #75).");
+
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.Avalonia.cs"));
+        Assert.Contains("MinWidth = 1120;", code, StringComparison.Ordinal);
+        Assert.Contains("MinHeight = 560;", code, StringComparison.Ordinal);
+        // Заголовок и строки лежат в общем горизонтальном ScrollViewer (issue #75).
+        Assert.Contains("HorizontalScrollBarVisibility = ScrollBarVisibility.Auto", code, StringComparison.Ordinal);
+    }
 }

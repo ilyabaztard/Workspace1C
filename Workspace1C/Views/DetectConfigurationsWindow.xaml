@@ -230,82 +230,33 @@
                            TextTrimming="CharacterEllipsis"/>
             </StackPanel>
 
+            <!-- Единый контракт кнопок (issue #26): «Остановить» — опасная DangerButton,
+                 «Найти» — акцентная ModernButton, «Закрыть» — вторичная SecondaryButton. -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="StopButton" Width="120" Height="36" Margin="0,0,10,0" IsEnabled="False"
-                        Click="OnStop_Click" Cursor="Hand" Background="#EF4444" BorderThickness="0"
-                        ToolTip="{loc:Loc DetectConfigs.Button.StopTooltip}" Foreground="White">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="12,8">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#DC2626"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#B91C1C"/>
-                                </Trigger>
-                                <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
+                        Click="OnStop_Click"
+                        ToolTip="{loc:Loc DetectConfigs.Button.StopTooltip}"
+                        Style="{DynamicResource DangerButton}">
                     <StackPanel Orientation="Horizontal">
-                        <materialDesign:PackIcon Kind="StopCircleOutline" Width="16" Height="16" Foreground="White"
+                        <materialDesign:PackIcon Kind="StopCircleOutline" Width="16" Height="16"
                                                  Margin="0,0,6,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{loc:Loc DetectConfigs.Button.Stop}" VerticalAlignment="Center"
-                                   Foreground="White" FontWeight="SemiBold"/>
+                                   FontWeight="SemiBold"/>
                     </StackPanel>
                 </Button>
                 <Button x:Name="DetectButton" Width="180" Height="36" Margin="0,0,10,0" IsDefault="True"
                         Click="OnDetect_Click"
-                        Background="#16A34A" BorderThickness="0" Cursor="Hand" Foreground="White">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="12,8">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#15803D"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#166534"/>
-                                </Trigger>
-                                <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
+                        Style="{DynamicResource ModernButton}">
                     <StackPanel Orientation="Horizontal">
-                        <materialDesign:PackIcon Kind="MagnifyScan" Width="16" Height="16" Foreground="White" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="{loc:Loc DetectConfigs.Button.Detect}" VerticalAlignment="Center" Foreground="White" FontWeight="SemiBold"/>
+                        <materialDesign:PackIcon Kind="MagnifyScan" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Loc DetectConfigs.Button.Detect}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Button>
                 <Button Width="140" Height="36" IsCancel="True"
-                        Background="Transparent" Cursor="Hand" BorderThickness="1.5"
-                        BorderBrush="#EF4444" Foreground="#EF4444" Click="OnClose_Click">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8" Padding="12,8">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#FEF2F2"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
+                        Style="{DynamicResource SecondaryButton}" Click="OnClose_Click">
                     <StackPanel Orientation="Horizontal">
-                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" Foreground="#EF4444" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="{loc:Loc Common.Close}" VerticalAlignment="Center" Foreground="#EF4444" FontWeight="SemiBold"/>
+                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Loc Common.Close}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Button>
             </StackPanel>

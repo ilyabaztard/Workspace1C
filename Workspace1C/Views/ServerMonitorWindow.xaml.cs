@@ -39,6 +39,19 @@ namespace Workspace1C
         /// </summary>
         private readonly Action<ManagementServer?, Guid?>? _openClusterMigration;
 
+        /// <summary>
+        /// Настройки окна «Серверы 1С» (issue #75): сюда пишутся сохранённые ширины
+        /// колонок вкладок при закрытии окна. Загружаются один раз в конструкторе.
+        /// </summary>
+        private AppSettings _windowSettings = new();
+
+        /// <summary>
+        /// Текущие фактические ширины колонок по вкладкам (issue #75): ключ — вкладка
+        /// (<c>Sessions</c>/<c>Connections</c>/<c>Locks</c>/<c>Processes</c>). Обновляется
+        /// при изменении размеров заголовков колонок и сохраняется в настройки при закрытии.
+        /// </summary>
+        private readonly Dictionary<string, double[]> _columnWidths = new();
+
         /// <summary>Фоновое обновление кэша статусов служб (5 с; issue #3, часть 2).</summary>
         private System.Threading.Timer? _servicesStatusTimer;
 
@@ -104,12 +117,18 @@ namespace Workspace1C
             ProcessesGrid.ItemsSource = _vm.Processes;
 
             // Состояние окна запоминается (issue #3, комментарий 7OH): максимизировано или нет.
+            // Ширины колонок вкладок (issue #75): применяем сохранённые (если есть), «минимальные»
+            // ширины по содержимому заголовка заложены в XAML (MinWidth), отслеживаем изменение
+            // фактических ширин через заголовки колонок и сохраняем при закрытии окна.
             try
             {
                 var repository = AppServices.GetRequiredService<IInfobaseRepository>();
                 var settings = repository.LoadSettings();
+                _windowSettings = settings;
                 if (settings.ServerMonitorMaximized)
                     WindowState = WindowState.Maximized;
+                ApplySavedColumnWidths();
+                AttachColumnWidthTracking();
             }
             catch
             {
@@ -117,7 +136,7 @@ namespace Workspace1C
             }
 
             // Таймер автообновления останавливается при закрытии окна (без утечки);
-            // состояние «максимизировано» сохраняется в настройки.
+            // состояние «максимизировано» и ширины колонок сохраняются в настройки.
             Closed += (_, _) =>
             {
                 // Фоновый таймер статусов служб останавливается при закрытии окна (без утечки).
@@ -126,10 +145,13 @@ namespace Workspace1C
                 _vm.Dispose();
                 try
                 {
-                    var repository = AppServices.GetRequiredService<IInfobaseRepository>();
-                    var settings = repository.LoadSettings();
-                    settings.ServerMonitorMaximized = WindowState == WindowState.Maximized;
-                    repository.SaveSettings(settings);
+                    // issue #75: фиксируем фактические ширины всех вкладок и сохраняем
+                    // их в настройки — сохранение переживает закрытие программы.
+                    CaptureAllColumnWidths();
+                    _windowSettings.ServerMonitorMaximized = WindowState == WindowState.Maximized;
+                    foreach (var (tabKey, widths) in _columnWidths)
+                        ServerMonitorColumnWidthsStore.Save(_windowSettings, tabKey, widths);
+                    AppServices.GetRequiredService<IInfobaseRepository>().SaveSettings(_windowSettings);
                 }
                 catch
                 {
@@ -215,6 +237,121 @@ namespace Workspace1C
                     column.SortDirection = null;
             }
             e.Handled = false;
+        }
+
+        // ===================== Ширины колонок вкладок (issue #75) =====================
+        // Колонки вкладок «Сеансы/Соединения/Блокировки/Рабочие процессы» по умолчанию
+        // имеют размер, достаточный для заголовка и стрелки сортировки (MinWidth задан
+        // в XAML по расчёту ServerMonitorColumnWidthsStore, «звёздные» колонки не сжимают
+        // заголовок). Фактические ширины отслеживаются через заголовки гридов и сохраняются
+        // в настройки приложения при закрытии окна — восстановление переживает закрытие
+        // программы.
+
+        /// <summary>
+        /// Применяет сохранённые ширины колонок всех вкладок (issue #75): для каждой
+        /// колонки берётся сохранённая ширина, если она записана и валидна; значение
+        /// ограничивается снизу MinWidth колонки (заголовок + стрелка). При отсутствии
+        /// записи колонка остаётся с шириной из XAML (дефолтной, уже ≥ MinWidth).
+        /// </summary>
+        private void ApplySavedColumnWidths()
+        {
+            ApplySavedWidths(SessionsGrid, ServerMonitorColumnWidthsStore.SessionsKey);
+            ApplySavedWidths(ConnectionsGrid, ServerMonitorColumnWidthsStore.ConnectionsKey);
+            ApplySavedWidths(LocksGrid, ServerMonitorColumnWidthsStore.LocksKey);
+            ApplySavedWidths(ProcessesGrid, ServerMonitorColumnWidthsStore.ProcessesKey);
+        }
+
+        private void ApplySavedWidths(DataGrid grid, string tabKey)
+        {
+            var widths = ServerMonitorColumnWidthsStore.TryLoad(_windowSettings, tabKey);
+            if (widths is null)
+                return;
+            _columnWidths[tabKey] = widths;
+            for (var i = 0; i < grid.Columns.Count && i < widths.Length; i++)
+            {
+                var width = widths[i];
+                if (!ServerMonitorColumnWidthsStore.IsValid(width))
+                    continue;
+                var min = grid.Columns[i].MinWidth;
+                if (min > 0 && width < min)
+                    width = min;
+                grid.Columns[i].Width = new DataGridLength(width);
+            }
+        }
+
+        /// <summary>
+        /// Отслеживает изменение ширины колонок гридов (issue #75): на каждый загруженный
+        /// (видимый) заголовок колонки вешается SizeChanged — при перетаскивании границы
+        /// фиксируются фактические ширины вкладки. Заголовки пересоздаются при переключении
+        /// вкладок, поэтому подписка ставится на каждый Loaded грида.
+        /// </summary>
+        private void AttachColumnWidthTracking()
+        {
+            AttachColumnWidthTracking(SessionsGrid, ServerMonitorColumnWidthsStore.SessionsKey);
+            AttachColumnWidthTracking(ConnectionsGrid, ServerMonitorColumnWidthsStore.ConnectionsKey);
+            AttachColumnWidthTracking(LocksGrid, ServerMonitorColumnWidthsStore.LocksKey);
+            AttachColumnWidthTracking(ProcessesGrid, ServerMonitorColumnWidthsStore.ProcessesKey);
+        }
+
+        private void AttachColumnWidthTracking(DataGrid grid, string tabKey)
+        {
+            grid.Loaded += (_, _) =>
+            {
+                // Заголовки материализуются после первичной компоновки — обрабатываем
+                // по низкому приоритету диспетчера, когда визуальное дерево стабильно.
+                Dispatcher.BeginInvoke(
+                    new Action(() => AttachHeaderWidthTracking(grid, tabKey)),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            };
+        }
+
+        private void AttachHeaderWidthTracking(DataGrid grid, string tabKey)
+        {
+            var presenter = FindVisualChild<System.Windows.Controls.Primitives.DataGridColumnHeadersPresenter>(grid);
+            if (presenter is null)
+                return;
+            foreach (var header in presenter.Items.Cast<System.Windows.Controls.Primitives.DataGridColumnHeader>())
+                header.SizeChanged += (_, _) => CaptureColumnWidths(grid, tabKey);
+        }
+
+        /// <summary>
+        /// Фиксирует фактические ширины колонок грида по ключу вкладки (issue #75).
+        /// Гибкие колонки (*/Auto) записываются нулём — «не сохранять»: восстановление
+        /// оставит такой колонке дефолтную (звёздную) ширину из разметки, и она
+        /// продолжит занимать свободное место окна.
+        /// </summary>
+        private void CaptureColumnWidths(DataGrid grid, string tabKey)
+        {
+            _columnWidths[tabKey] = grid.Columns
+                .Select(c => c.Width.IsStar || c.Width.IsAuto ? 0.0 : c.ActualWidth)
+                .ToArray();
+        }
+
+        /// <summary>Фиксирует фактические ширины всех четырёх вкладок перед сохранением (issue #75).</summary>
+        private void CaptureAllColumnWidths()
+        {
+            CaptureColumnWidths(SessionsGrid, ServerMonitorColumnWidthsStore.SessionsKey);
+            CaptureColumnWidths(ConnectionsGrid, ServerMonitorColumnWidthsStore.ConnectionsKey);
+            CaptureColumnWidths(LocksGrid, ServerMonitorColumnWidthsStore.LocksKey);
+            CaptureColumnWidths(ProcessesGrid, ServerMonitorColumnWidthsStore.ProcessesKey);
+        }
+
+        /// <summary>
+        /// Ищет в визуальном дереве элемент заданного типа (для доступа к контейнерам
+        /// заголовков DataGrid, issue #75).
+        /// </summary>
+        private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+        {
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T typed)
+                    return typed;
+                var result = FindVisualChild<T>(child);
+                if (result is not null)
+                    return result;
+            }
+            return null;
         }
 
         /// <summary>

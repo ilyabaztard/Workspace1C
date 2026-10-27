@@ -43,11 +43,12 @@
                 <TextBlock Text="{loc:Loc ServerMonitor.Infobase.Drop.TerminateSessionsButton}"
                            TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center"/>
             </Button>
-            <Button x:Name="RetryButton" Style="{StaticResource ModernButton}"
-                    Background="{DynamicResource AccentBrush}" Padding="18,6"
+            <!-- Повтор удаления базы — опасное действие: DangerButton (issue #26). -->
+            <Button x:Name="RetryButton" Style="{StaticResource DangerButton}"
+                    Padding="18,6"
                     Margin="0,0,8,0" IsDefault="True" Click="OnRetry_Click">
                 <TextBlock Text="{loc:Loc ServerMonitor.Infobase.Drop.RetryButton}"
-                           VerticalAlignment="Center" Foreground="White"/>
+                           VerticalAlignment="Center"/>
             </Button>
             <Button Style="{StaticResource ModernButton}"
                     Background="{DynamicResource ItemHoverBrush}" Padding="16,6"

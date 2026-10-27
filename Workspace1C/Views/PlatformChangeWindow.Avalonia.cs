@@ -103,21 +103,21 @@ namespace Workspace1C
             // ---- Кнопки: Сменить / Отмена. ----
             var applyButton = new Button
             {
+                // Текст берёт контрастный цвет ModernButton (TextOnAccentBrush),
+                // жёсткий белый убран (issue #26).
                 Content = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 6,
                     Children =
                     {
-                        new TextBlock { Text = "✓", VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White },
-                        new TextBlock { Text = LocalizationManager.T("PlatformChange.ApplyButton"), VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
+                        new TextBlock { Text = "✓", VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = LocalizationManager.T("PlatformChange.ApplyButton"), VerticalAlignment = VerticalAlignment.Center }
                     }
                 },
                 Padding = new Thickness(16, 6)
             };
             applyButton.Styled(ControlThemes.ModernButton);
-            applyButton.Background = new SolidColorBrush(Color.Parse("#22C55E"));
-            applyButton.Foreground = Brushes.White;
             applyButton.Bind(Button.IsEnabledProperty, new Binding("CanApply"));
             applyButton.Click += (_, _) => OnApplyClick();
 
@@ -126,8 +126,7 @@ namespace Workspace1C
                 Content = LocalizationManager.T("Common.Cancel"),
                 Padding = new Thickness(16, 6)
             };
-            cancelButton.Styled(ControlThemes.ModernButton);
-            ThemeBrushes.Bind(cancelButton, Button.BackgroundProperty, "ItemHoverBrush");
+            cancelButton.Styled(ControlThemes.SecondaryButton);
             cancelButton.Click += (_, _) =>
             {
                 DialogResult = false;

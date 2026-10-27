@@ -4,7 +4,7 @@
                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                        xmlns:local="clr-namespace:Workspace1C"
                        x:Class="Workspace1C.BaseSelectionWindow"
-                       Width="480" Height="480"
+                       Width="480" Height="480" MinWidth="420" MinHeight="360"
                        FontSize="13"
                        CanResize="True"
                        SystemDecorations="None">

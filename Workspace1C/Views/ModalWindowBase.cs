@@ -942,8 +942,9 @@ namespace Workspace1C
         }
 
         /// <summary>
-        /// Кнопка подтверждения нижней панели диалога: зелёная заливка, белые
-        /// значок и подпись. Так эта кнопка задана в разметке WPF у десяти окон.
+        /// Кнопка подтверждения нижней панели диалога: акцентная ModernButton
+        /// (заливка акцентом темы, значок и подпись — контрастный TextOnAccentBrush,
+        /// единый контракт issue #26).
         /// </summary>
         /// <param name="textKey">Ключ локализации подписи.</param>
         /// <param name="iconKey">Ключ значка.</param>
@@ -974,7 +975,7 @@ namespace Workspace1C
                     Spacing = iconGap,
                     Children =
                     {
-                        IconHelper.MakeIcon(iconKey, iconSize, Brushes.White),
+                        IconHelper.MakeIcon(iconKey, iconSize, "TextOnAccentBrush"),
                         caption
                     }
                 },
@@ -1005,8 +1006,8 @@ namespace Workspace1C
         }
 
         /// <summary>
-        /// Кнопка отмены нижней панели диалога: прозрачная заливка, красный контур,
-        /// красные значок и подпись, как в разметке WPF.
+        /// Кнопка отмены нижней панели диалога: вторичная SecondaryButton — фон
+        /// карточки, контур и текст темы, единый контракт (issue #26).
         /// </summary>
         /// <param name="width">Ширина кнопки.</param>
         /// <param name="height">Высота кнопки.</param>
@@ -1029,7 +1030,7 @@ namespace Workspace1C
                     Spacing = iconGap,
                     Children =
                     {
-                        IconHelper.MakeIcon("IconClose", iconSize, DangerBrush),
+                        IconHelper.MakeIcon("IconClose", iconSize, "SecondaryButtonTextBrush"),
                         caption
                     }
                 },
@@ -1045,9 +1046,6 @@ namespace Workspace1C
             EnsureLanguageSubscription();
             return button;
         }
-
-        /// <summary>Красный цвет отмены и удаления: в разметке WPF он задан числом.</summary>
-        protected static readonly IBrush DangerBrush = new SolidColorBrush(Color.Parse("#EF4444"));
 
         /// <summary>
         /// Берёт на себя перевод подписи кнопки, которую окно собрало само.

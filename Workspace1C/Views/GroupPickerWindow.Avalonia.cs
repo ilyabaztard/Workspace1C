@@ -424,9 +424,10 @@ namespace Workspace1C
                 minWidth: 116, isCancel: false, isDefault: true, onClick: OnSelect_Click);
             buttons.Children.Add(_selectButton);
 
+            // Отмена — вторичная: фон карточки, контур и текст темы (issue #26).
             buttons.Children.Add(BuildActionButton(
-                "", "SecondaryButtonHoverBrush", "SecondaryButtonPressedBrush", "SecondaryButtonBackgroundBrush",
-                ActionContent("IconClose", LocalizationManager.T("Common.Cancel"), "ButtonTextBrush", iconSize: 15),
+                "CardBackgroundBrush", "ItemHoverBrush", "SidebarHoverBrush", "BorderColorBrush",
+                ActionContent("IconClose", LocalizationManager.T("Common.Cancel"), "SecondaryButtonTextBrush", iconSize: 15),
                 minWidth: 116, isCancel: true, isDefault: false, onClick: () => Close()));
             Grid.SetColumn(buttons, 1);
             footer.Children.Add(buttons);

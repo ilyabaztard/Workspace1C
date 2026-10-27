@@ -52,7 +52,9 @@ public static class ApacheConfIncludeParser
             if (!IsInclude(directive))
                 continue;
 
-            var rest = ExpandVariables(TrimQuotes(line.Substring(separator).Trim()), vars);
+            // Литерал «# …» в конце строки — комментарий (встречается в реальных
+            // конфигах): без обрезки путь/имя получали бы хвостовой мусор (issue #63).
+            var rest = ExpandVariables(TrimQuotes(StripInlineComment(line.Substring(separator).Trim())), vars);
             if (string.IsNullOrWhiteSpace(rest))
                 continue;
 
@@ -100,7 +102,13 @@ public static class ApacheConfIncludeParser
             var name = nameSeparator > 0 ? rest[..nameSeparator] : rest;
             if (name.Length == 0)
                 continue;
-            var value = nameSeparator > 0 ? TrimQuotes(rest[(nameSeparator + 1)..].Trim()) : string.Empty;
+            // Значение может заканчиваться комментарием («Define OneCPort 27  # порт»):
+            // обрезаем «# …» вне кавычек, иначе в путь/порт попадёт мусор (issue #63).
+            // Сначала убираем комментарий, затем снимаем кавычки — иначе кавычки вокруг
+            // значения с комментарием не распознались бы (кавычка не последний символ).
+            var value = nameSeparator > 0
+                ? TrimQuotes(StripInlineComment(rest[(nameSeparator + 1)..].Trim()))
+                : string.Empty;
             defines[name] = value;
         }
 
@@ -202,7 +210,7 @@ public static class ApacheConfIncludeParser
             var directive = line.Substring(0, separator);
             if (!string.Equals(directive, "DocumentRoot", StringComparison.OrdinalIgnoreCase))
                 continue;
-            var target = ExpandVariables(TrimQuotes(line.Substring(separator).Trim()), vars);
+            var target = ExpandVariables(TrimQuotes(StripInlineComment(line.Substring(separator).Trim())), vars);
             if (string.IsNullOrWhiteSpace(target))
                 continue;
             return string.IsNullOrWhiteSpace(resolveBase) ? target : Resolve(target, resolveBase);
@@ -236,7 +244,7 @@ public static class ApacheConfIncludeParser
             var directive = line.Substring(0, separator);
             if (!string.Equals(directive, "Listen", StringComparison.OrdinalIgnoreCase))
                 continue;
-            var value = ExpandVariables(TrimQuotes(line.Substring(separator).Trim()), vars);
+            var value = ExpandVariables(TrimQuotes(StripInlineComment(line.Substring(separator).Trim())), vars);
             if (string.IsNullOrEmpty(value))
                 continue;
 
@@ -271,6 +279,36 @@ public static class ApacheConfIncludeParser
         value = value.Trim();
         if (value.Length >= 2 && value[0] == '"' && value[^1] == '"')
             return value.Substring(1, value.Length - 2).Trim();
+        return value;
+    }
+
+    /// <summary>
+    /// Обрезает комментарий «# …» в конце значения директивы (вне двойных кавычек),
+    /// например «Define OneCPort 27  # порт» → «27» (issue #63: реальные конфиги
+    /// нередко содержат пояснения в конце строк). Символ «#» внутри кавычек или
+    /// внутри раскрываемой переменной ${VAR} не трогается. Без «#» текст без изменений.
+    /// </summary>
+    private static string StripInlineComment(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return value ?? string.Empty;
+
+        var inQuotes = false;
+        for (var i = 0; i < value.Length; i++)
+        {
+            var ch = value[i];
+            if (ch == '"')
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+            if (ch == '#' && !inQuotes)
+            {
+                // Перед «#» оставляем хвостовой пробел, а весь «# …» отрезаем.
+                var trimmed = value.Substring(0, i).TrimEnd();
+                return trimmed;
+            }
+        }
         return value;
     }
 }

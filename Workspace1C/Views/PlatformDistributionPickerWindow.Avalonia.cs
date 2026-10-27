@@ -109,13 +109,11 @@ namespace Workspace1C
 
             var cancel = new Button
             {
-                Content = IconHelper.IconAndText("IconClose", LocalizationManager.T("Common.Close"), 14, "TextPrimaryBrush"),
+                Content = IconHelper.IconAndText("IconClose", LocalizationManager.T("Common.Close"), 14, "SecondaryButtonTextBrush"),
                 IsCancel = true,
                 Padding = new Thickness(14, 6)
             };
-            cancel.Styled(ControlThemes.ModernButton);
-            ThemeBrushes.Bind(cancel, Button.BackgroundProperty, "ItemHoverBrush");
-            ThemeBrushes.Bind(cancel, Button.ForegroundProperty, "TextPrimaryBrush");
+            cancel.Styled(ControlThemes.SecondaryButton);
             cancel.Click += (_, _) => Close();
 
             var choose = new Button

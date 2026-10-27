@@ -233,4 +233,68 @@ IncludeOptional built_in.conf
         Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\conf\1c8Aliases27.conf"), targets[0]);
         Assert.DoesNotContain("${", targets, System.StringComparer.Ordinal);
     }
+
+    // ---------- Реальные детали конфигов (issue #63, комментарий 7OH 2026-10-26):
+    // комментарий «# …» в конце строки директивы и порядок Define/Include ----------
+
+    [Fact]
+    public void ParseDefines_InlineHashComment_IsStrippedFromValue()
+    {
+        // Реальные конфиги нередко поясняют Define комментарием в конце строки
+        // («# порт инстанса»): без обрезки «27  # порт» не раскрывалось бы в путь/порт
+        // (issue #63, «а переменные из файла кто подставлять будет сейчас?»).
+        var defines = ApacheConfIncludeParser.ParseDefines(
+            "Define SRVROOT \"c:/Apache/Apache24\"  # корень\r\n" +
+            "Define OneCPort 27 # порт инстанса\r\n");
+
+        Assert.Equal("c:/Apache/Apache24", defines["SRVROOT"]);
+        Assert.Equal("27", defines["OneCPort"]);
+    }
+
+    [Fact]
+    public void ParseListenPorts_InlineHashComment_DoesNotBreakPort()
+    {
+        // «Listen "80${OneCPort}"  # http-порт»: комментарий после значения не должен
+        // попасть в порт (иначе int.TryParse не раскрыл бы 8027 и порт остался бы 80).
+        const string conf = """
+        Define OneCPort 27
+        Listen "80${OneCPort}"  # http
+        """;
+
+        var ports = ApacheConfIncludeParser.ParseListenPorts(conf);
+
+        Assert.Equal(new[] { 8027 }, ports);
+    }
+
+    [Fact]
+    public void ParseDocumentRoot_InlineHashComment_DoesNotCorruptPath()
+    {
+        const string conf = """
+        Define SRVROOT "c:/Apache/Apache24"
+        DocumentRoot "${SRVROOT}/htdocs/27"  # каталог сайта
+        """;
+
+        var doc = ApacheConfIncludeParser.ParseDocumentRoot(conf, "c:/Apache/Apache24/conf");
+
+        Assert.Equal(Path.GetFullPath(@"c:\Apache\Apache24\htdocs\27"), doc);
+    }
+
+    [Fact]
+    public void ParseIncludeTargets_InlineHashComment_IsStrippedFromTarget()
+    {
+        // Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf"  # алиасы 1С — комментарий
+        // в конце include-строки не должен попадать в имя файла алиасов (иначе VM не
+        // увидел бы используемый 1c8Aliases27.conf, а только «мусорное» имя с «# …»).
+        const string confText = """
+        Define SRVROOT "C:/Apache/Apache24"
+        Define OneCPort 27
+        Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf"  # алиасы 1С
+        """;
+
+        var targets = ApacheConfIncludeParser.ParseIncludeTargets(confText, @"C:\Apache\Apache24\conf");
+
+        Assert.Single(targets);
+        Assert.Equal(Path.GetFullPath(@"C:\Apache\Apache24\conf\1c8Aliases27.conf"), targets[0]);
+        Assert.DoesNotContain("#", targets[0], System.StringComparison.Ordinal);
+    }
 }

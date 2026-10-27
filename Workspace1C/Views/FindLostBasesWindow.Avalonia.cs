@@ -560,7 +560,8 @@ namespace Workspace1C
                 IsEnabled = false
             };
             ToolTip.SetTip(_stopButton, LocalizationManager.T("FindLostBases.Button.StopTooltip"));
-            _stopButton.Styled(ControlThemes.DialogCancelButton);
+            // Остановка поиска — опасное действие: DangerButton (issue #26).
+            _stopButton.Styled(ControlThemes.DangerButton);
             _stopButton.Click += (_, _) => OnStopClick();
 
             _searchButton = new Button

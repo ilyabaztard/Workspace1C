@@ -102,6 +102,7 @@ namespace Workspace1C
 
             // Кнопки внизу: «Завершить сеансы и повторить» (только при занятой базе),
             // «Повторить попытку» (default) и «Отмена» (cancel).
+            // Повтор удаления базы кластера — опасное действие: DangerButton (issue #26).
             var retry = new Button
             {
                 Content = T("ServerMonitor.Infobase.Drop.RetryButton"),
@@ -109,7 +110,7 @@ namespace Workspace1C
                 Height = 36,
                 IsDefault = true
             };
-            retry.Styled(ControlThemes.DialogConfirmButton);
+            retry.Styled(ControlThemes.DangerButton);
             retry.Click += (_, _) => OnRetry();
             var cancel = new Button
             {
@@ -118,8 +119,7 @@ namespace Workspace1C
                 Height = 36,
                 IsCancel = true
             };
-            cancel.Styled(ControlThemes.ModernButton);
-            ThemeBrushes.Bind(cancel, Button.BackgroundProperty, "ItemHoverBrush");
+            cancel.Styled(ControlThemes.SecondaryButton);
             cancel.Click += (_, _) =>
             {
                 DialogResult = false;

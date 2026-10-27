@@ -361,9 +361,13 @@ namespace Workspace1C
         }
 
         /// <summary>
-        /// Перенос завершён без ошибок (issue #41): вопрос «Хотите заменить строку
-        /// подключения?» → если ДА — результат помечается (MainViewModel заменит сервер/порт
-        /// в списке приложения) → окно закрывается.
+        /// Перенос завершён (issue #41, комментарий 7OH от 2026-10-26 «закрывать окно
+        /// не надо»): вопрос «Хотите заменить строку подключения?» → если ДА — результат
+        /// помечается (MainViewModel заменит сервер/порт в списке приложения). Окно НЕ
+        /// закрывается: строки со статусами и сводка «Перенесено: N · Ошибок: M» видны,
+        /// можно повторить перенос (например, на другой кластер-приёмник) — перенесённые
+        /// базы накапливаются в <see cref="ClusterMigrationViewModel.Result"/>. Закрытие —
+        /// только кнопкой «Отмена»; MainViewModel применяет результат после закрытия окна.
         /// </summary>
         private void OnMigrationCompleted()
         {
@@ -376,9 +380,6 @@ namespace Workspace1C
             {
                 _vm.SetReplaceConnectionStrings(true);
             }
-
-            DialogResult = true;
-            Close();
         }
 
         private void OnMigrateClick() => _vm.MigrateCommand.Execute(null);
@@ -400,21 +401,21 @@ namespace Workspace1C
         {
             var button = new Button
             {
+                // Текст и иконка берут контрастный цвет ModernButton (TextOnAccentBrush);
+                // жёсткий зелёный фон и белый текст убраны (issue #26).
                 Content = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 6,
                     Children =
                     {
-                        new TextBlock { Text = icon, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White },
-                        new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White }
+                        new TextBlock { Text = icon, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center }
                     }
                 },
                 Padding = new Thickness(16, 5)
             };
             button.Styled(ControlThemes.ModernButton);
-            button.Background = new SolidColorBrush(Color.Parse("#16A34A"));
-            button.Foreground = Brushes.White;
             button.Click += (_, _) => onClick();
             return button;
         }

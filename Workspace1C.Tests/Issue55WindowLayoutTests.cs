@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -284,6 +285,150 @@ public sealed class Issue55WindowLayoutTests
         Assert.True(
             offenders.Count == 0,
             "Avalonia-окна с изменяемым размером без минимальных размеров (issue #55):\n" +
+            string.Join("\n", offenders));
+    }
+
+    // ------------------------------------------------------------------
+    // Окна Avalonia, собираемые разметкой .axaml (issue #55): изменяемые
+    // окна обязаны объявлять MinWidth/MinHeight в разметке, как XAML-аналоги.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void AllResizableAvaloniaAxamlWindows_HaveMinWidthAndMinHeight()
+    {
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(ViewsDir, "*.axaml").OrderBy(f => Path.GetFileName(f)))
+        {
+            var axaml = File.ReadAllText(file);
+            if (!axaml.Contains("ModalWindowBase", StringComparison.Ordinal) &&
+                !Regex.IsMatch(axaml, @"<(\w+:)?Window\b"))
+                continue;
+            // Окна без изменения размера исключаются: их нельзя сузить.
+            if (Regex.IsMatch(axaml, @"CanResize=""False"""))
+                continue;
+
+            var name = Path.GetFileName(file);
+            if (!Regex.IsMatch(axaml, @"MinWidth=""[0-9.]+"""))
+                offenders.Add($"{name}: отсутствует MinWidth");
+            if (!Regex.IsMatch(axaml, @"MinHeight=""[0-9.]+"""))
+                offenders.Add($"{name}: отсутствует MinHeight");
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "Avalonia-окна .axaml с изменяемым размером без минимальных размеров (issue #55):\n" +
+            string.Join("\n", offenders));
+    }
+
+    // ------------------------------------------------------------------
+    // Регрессии 1.0.0.82 (полный аудит issue #55): исправленные окна.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void BaseSelectionWindow_Avalonia_MinSizesPreventShrink()
+    {
+        // Окно выбора баз изменяемое (CanResize="True") — минимальные размеры
+        // синхронны Windows-аналогу BaseSelectionWindow.xaml (420x360).
+        var axaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "BaseSelectionWindow.axaml"));
+        Assert.Contains("CanResize=\"True\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"420\"", axaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"360\"", axaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ServerMonitorWindow_MinSizesPreventShrink_WpfAndAvalonia()
+    {
+        // Монитор серверов: минимумы 1120x560 на обеих платформах (Avalonia задавал
+        // 560 по высоте, WPF — 480; синхронизировано по верхней границе).
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.xaml"));
+        Assert.Contains("MinWidth=\"1120\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"560\"", xaml, StringComparison.Ordinal);
+
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.Avalonia.cs"));
+        Assert.Contains("MinWidth = 1120;", code, StringComparison.Ordinal);
+        Assert.Contains("MinHeight = 560;", code, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------
+    // Негативные сценарии (issue #55): минимумы не должны превышать стартовый
+    // размер окна (иначе окно открывалось бы иным размером) и должны влезать
+    // в рабочий размер маленького экрана (1280x720, ширина).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void ResizableWindowMinSizes_DoNotExceedStartupSize()
+    {
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(ViewsDir, "*.xaml").OrderBy(f => Path.GetFileName(f)))
+        {
+            var xaml = File.ReadAllText(file);
+            if (!IsWindowXaml(xaml))
+                continue;
+            // Окна без изменения размера сузить нельзя — минимумы им не нужны.
+            if (Regex.IsMatch(xaml, @"ResizeMode=""NoResize"""))
+                continue;
+
+            // Атрибуты корневого тега окна: ширины дочерних контролов не попадают.
+            var rootTagEnd = xaml.IndexOf('>');
+            var head = rootTagEnd > 0 ? xaml.Substring(0, rootTagEnd) : xaml;
+
+            static double GetAttr(string headLocal, string attr)
+            {
+                var m = Regex.Match(headLocal, attr + "\"([0-9.]+)\"");
+                return m.Success
+                    ? double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)
+                    : double.NaN;
+            }
+
+            var minWidth = GetAttr(head, "MinWidth=");
+            var minHeight = GetAttr(head, "MinHeight=");
+            if (double.IsNaN(minWidth) || double.IsNaN(minHeight))
+                continue; // поймает отдельный тест-аудит существования минимумов
+
+            var width = GetAttr(head, "Width=");
+            var height = GetAttr(head, "Height=");
+            var name = Path.GetFileName(file);
+
+            if (!double.IsNaN(width) && minWidth > width)
+                offenders.Add($"{name}: MinWidth={minWidth} > стартовой ширины {width}");
+            if (!double.IsNaN(height) && minHeight > height)
+                offenders.Add($"{name}: MinHeight={minHeight} > стартовой высоты {height}");
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "Минимумы окон не должны превышать стартовые размеры (issue #55):\n" +
+            string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void ResizableWindowMinWidth_FitsSmallScreenWidth()
+    {
+        // Рабочая ширина экрана 1280 (1366x768 и 1280x720): даже самый широкий
+        // минимум обязан открыться целиком без горизонтальных «хвостов».
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(ViewsDir, "*.xaml").OrderBy(f => Path.GetFileName(f)))
+        {
+            var xaml = File.ReadAllText(file);
+            if (!IsWindowXaml(xaml))
+                continue;
+            if (Regex.IsMatch(xaml, @"ResizeMode=""NoResize"""))
+                continue;
+
+            var rootTagEnd = xaml.IndexOf('>');
+            var head = rootTagEnd > 0 ? xaml.Substring(0, rootTagEnd) : xaml;
+            var m = Regex.Match(head, "MinWidth=\"([0-9.]+)\"");
+            if (!m.Success)
+                continue;
+
+            var minWidth = double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
+            if (minWidth > 1280)
+                offenders.Add($"{Path.GetFileName(file)}: MinWidth={minWidth} превышает рабочую ширину экрана 1280");
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "Минимумы ширины обязаны влезать в рабочий размер маленького экрана (issue #55):\n" +
             string.Join("\n", offenders));
     }
 

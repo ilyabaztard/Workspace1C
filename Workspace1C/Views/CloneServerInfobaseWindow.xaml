@@ -89,52 +89,23 @@
         </StackPanel>
         </ScrollViewer>
 
+        <!-- Единый контракт кнопок (issue #26): «Клонировать» — акцентная ModernButton,
+             «Отмена» — вторичная SecondaryButton. -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Width="150" Height="36" Margin="0,0,10,0" IsDefault="True" Click="OnClone_Click"
-                    Background="#16A34A" BorderThickness="0" Cursor="Hand" Foreground="White">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="12,8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#15803D"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#166534"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
+                    Style="{DynamicResource ModernButton}">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Kind="ContentCopy" Width="16" Height="16" Margin="0,0,8,0"
-                                             VerticalAlignment="Center" Foreground="White"/>
-                    <TextBlock Text="{loc:Loc CloneServer.Create}" VerticalAlignment="Center" Foreground="White" FontWeight="SemiBold"/>
+                                             VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc CloneServer.Create}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                 </StackPanel>
             </Button>
             <Button Width="130" Height="36" IsCancel="True"
-                    Background="Transparent" Cursor="Hand" BorderThickness="1.5"
-                    BorderBrush="#EF4444" Foreground="#EF4444">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8" Padding="12,8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#FEF2F2"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
+                    Style="{DynamicResource SecondaryButton}">
                 <StackPanel Orientation="Horizontal">
-                    <materialDesign:PackIcon Kind="Close" Width="16" Height="16" Foreground="#EF4444"
+                    <materialDesign:PackIcon Kind="Close" Width="16" Height="16"
                                              Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{loc:Loc CloneServer.Cancel}" VerticalAlignment="Center" Foreground="#EF4444" FontWeight="SemiBold"/>
+                    <TextBlock Text="{loc:Loc CloneServer.Cancel}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                 </StackPanel>
             </Button>
         </StackPanel>

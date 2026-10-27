@@ -35,21 +35,23 @@
     </Window.Resources>
 
     <DockPanel Margin="16" LastChildFill="True">
-        <!-- Сверху 2 кнопки: «Сохранить» и «Отмена» (требование 7OH 13:25). -->
+        <!-- Сверху 2 кнопки — единый контракт (issue #26): «Сохранить» — акцентная
+             ModernButton (текст наследует TextOnAccentBrush), «Отмена» — вторичная
+             SecondaryButton. -->
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
             <Button x:Name="SaveButton" Style="{StaticResource ModernButton}"
-                    Background="{DynamicResource AccentBrush}" Padding="16,6" Margin="0,0,8,0"
+                    Padding="16,6" Margin="0,0,8,0"
                     MinWidth="110" Command="{Binding SaveCommand}">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="✔" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="White"/>
-                    <TextBlock Text="{loc:Loc Services.Save}" VerticalAlignment="Center" Foreground="White"/>
+                    <TextBlock Text="✔" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc Services.Save}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button x:Name="CancelButton" Style="{StaticResource ModernButton}"
-                    Background="{DynamicResource ItemHoverBrush}" Padding="16,6" MinWidth="110"
+            <Button x:Name="CancelButton" Style="{StaticResource SecondaryButton}"
+                    Padding="16,6" MinWidth="110"
                     Command="{Binding CancelCommand}">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="✖" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="#DC2626"/>
+                    <TextBlock Text="✖" Margin="0,0,6,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{loc:Loc Services.Cancel}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>

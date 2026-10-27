@@ -180,14 +180,16 @@
                        TextWrapping="Wrap" Margin="0,2,0,0"/>
         </StackPanel>
 
-        <!-- Действия: Заменить (с подтверждением), Отменить последнюю замену, Закрыть. -->
+        <!-- Действия: Заменить (с подтверждением), Отменить последнюю замену, Закрыть.
+             Единый контракт кнопок (issue #26): «Заменить» — акцентная ModernButton
+             (без жёсткой циановой заливки и белого текста). -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
             <Button x:Name="ApplyButton" Style="{StaticResource ModernButton}"
-                    Background="#06B6D4" Foreground="White" Padding="16,5"
+                    Padding="16,5"
                     IsEnabled="{Binding CanApply}" Click="OnApply_Click">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="✓" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="White"/>
-                    <TextBlock Text="{loc:Loc ConnectionReplace.ApplyButton}" VerticalAlignment="Center" Foreground="White"/>
+                    <TextBlock Text="✓" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc ConnectionReplace.ApplyButton}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             <Button x:Name="UndoButton" Style="{StaticResource ModernButton}"
