@@ -59,10 +59,10 @@
          поэтому AssemblyVersion/FileVersion/Version ограничены 4 частями, а точная
          пользовательская версия «0.3.1.1» задаётся через InformationalVersion
          и выводится в заголовок окна. -->
-    <Version>1.0.0.89</Version>
-    <AssemblyVersion>1.0.0.89</AssemblyVersion>
-    <FileVersion>1.0.0.89</FileVersion>
-    <InformationalVersion>1.0.0.89</InformationalVersion>
+    <Version>1.0.0.90</Version>
+    <AssemblyVersion>1.0.0.90</AssemblyVersion>
+    <FileVersion>1.0.0.90</FileVersion>
+    <InformationalVersion>1.0.0.90</InformationalVersion>
     <!-- RID/SelfContained только при publish, чтобы обычный dotnet run/build не ломался -->
     <PublishReadyToRun>false</PublishReadyToRun>
     <DebugType>embedded</DebugType>
@@ -245,6 +245,9 @@
     <!-- Командная палитра (Ctrl+K): WPF code-behind исключается, Avalonia-версия
          (CommandPaletteWindow.Avalonia.cs) подключается глобом ниже. -->
     <Compile Remove="Views\CommandPaletteWindow.xaml.cs" />
+    <!-- Окно «Заметки базы» (п.8, 1.0.0.90): WPF code-behind исключается, Avalonia-версия
+         (BaseNotesWindow.Avalonia.cs) подключается глобом *Window.Avalonia.cs ниже. -->
+    <Compile Remove="Views\BaseNotesWindow.xaml.cs" />
     <!-- Окно разблокировки приватных баз (0.3.9.85): WPF code-behind исключается,
          Avalonia-версия (PrivateBasesUnlockWindow.Avalonia.cs) подключается глобом ниже. -->
     <Compile Remove="Views\PrivateBasesUnlockWindow.xaml.cs" />
@@ -496,6 +499,10 @@
          (имя не совпадает с глобом *.Avalonia.cs). -->
     <Compile Remove="ViewModels\MainViewModel.HtmlReport.cs" />
     <Compile Include="ViewModels\MainViewModel.HtmlReport.cs" />
+    <!-- Заметки баз (п.8, 1.0.0.90): общая часть вью-модели (хранилище заметок,
+         текст для поиска, чистка удалённых баз) — без платформенных зависимостей,
+         на Linux подключается явно (имя не совпадает с глобом *.Avalonia.cs). -->
+    <Compile Include="ViewModels\MainViewModel.Notes.cs" />
     <!-- ViewModels окна «Инспектор процессов 1С» (0.3.9.93): чистый .NET без
          платформенных зависимостей, используются обеими платформами — на Linux
          подключаются явно (имена не совпадают с глобом *.Avalonia.cs). -->

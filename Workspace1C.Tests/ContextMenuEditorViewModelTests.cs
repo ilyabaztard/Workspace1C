@@ -24,8 +24,8 @@ public sealed class ContextMenuEditorViewModelTests
     public void Constructor_BuildsTreeFromDefaultLayout()
     {
         var vm = CreateViewModel();
-        // 19 пунктов/групп + 5 разделителей.
-        Assert.Equal(24, vm.Roots.Count);
+        // 20 пунктов/групп + 5 разделителей.
+        Assert.Equal(25, vm.Roots.Count);
         Assert.Equal("LaunchEnterprise", vm.Roots[0].Node.ItemId);
         Assert.Equal("separator", vm.Roots[3].Node.Kind);
         // Группы собраны в список для «Поместить в группу».
@@ -246,11 +246,11 @@ public sealed class ContextMenuEditorViewModelTests
     {
         var vm = CreateViewModel();
         vm.AddGroupCommand.Execute(new ContextMenuGroupEditParams("Лишняя группа"));
-        Assert.Equal(25, vm.Roots.Count);
+        Assert.Equal(26, vm.Roots.Count);
 
         vm.ResetDefaultCommand.Execute(null);
 
-        Assert.Equal(24, vm.Roots.Count);
+        Assert.Equal(25, vm.Roots.Count);
         Assert.Equal("LaunchEnterprise", vm.Roots[0].Node.ItemId);
     }
 

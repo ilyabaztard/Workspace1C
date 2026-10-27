@@ -47,11 +47,15 @@ public static class InfobaseJsonTransfer
 
     /// <summary>
     /// Формирует полный снимок списка: базы (фильтрация приватных выполняется
-    /// вызывающей стороной) + группы целиком.
+    /// вызывающей стороной) + группы целиком + заметки баз (п.8, 1.0.0.90).
+    /// Значения секретов в снимок НЕ попадают (зашифрованы ключом текущей машины) —
+    /// переносятся только markdown-карточки и имена секретов
+    /// (см. <see cref="InfobaseNoteTransfer"/>).
     /// </summary>
     public static InfobaseListSnapshot BuildSnapshot(
         IEnumerable<Infobase> infobases,
-        IEnumerable<Group> groups)
+        IEnumerable<Group> groups,
+        IEnumerable<InfobaseNote>? notes = null)
     {
         ArgumentNullException.ThrowIfNull(infobases);
         ArgumentNullException.ThrowIfNull(groups);
@@ -60,8 +64,35 @@ public static class InfobaseJsonTransfer
         {
             Version = InfobaseListSnapshot.CurrentVersion,
             Infobases = infobases.ToList(),
-            Groups = groups.ToList()
+            Groups = groups.ToList(),
+            Notes = ToTransfers(notes)
         };
+    }
+
+    /// <summary>
+    /// Преобразует заметки в переносимые DTO: markdown + имена секретов (без значений).
+    /// null/пустой источник — пустой список.
+    /// </summary>
+    public static List<InfobaseNoteTransfer> ToTransfers(IEnumerable<InfobaseNote>? notes)
+    {
+        var result = new List<InfobaseNoteTransfer>();
+        if (notes is null)
+            return result;
+        foreach (var note in notes)
+        {
+            if (note is null || string.IsNullOrWhiteSpace(note.InfobaseId))
+                continue;
+            if (!note.HasContent)
+                continue;
+            result.Add(new InfobaseNoteTransfer
+            {
+                InfobaseId = note.InfobaseId,
+                Markdown = note.Markdown ?? string.Empty,
+                SecretNames = note.SecretNames?.ToList() ?? new List<string>(),
+                UpdatedAt = note.UpdatedAt
+            });
+        }
+        return result;
     }
 
     /// <summary>Сериализует снимок в JSON (читаемая кириллица, отступы).</summary>

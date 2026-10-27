@@ -121,7 +121,8 @@ public partial class MainViewModel
         {
             var directory = PlatformPaths.AppDataDirectory;
             Directory.CreateDirectory(directory);
-            var snapshot = InfobaseJsonTransfer.BuildSnapshot(Infobases, Groups);
+            // JSON-бэкап перед заменой строк подключения сохраняет и заметки баз (п.8, 1.0.0.90).
+            var snapshot = InfobaseJsonTransfer.BuildSnapshot(Infobases, Groups, GetOrCreateNotesStore().GetAll());
             var fileName = $"connection_replace_backup_{DateTime.Now:yyyyMMdd_HHmmss}.json";
             File.WriteAllText(Path.Combine(directory, fileName), InfobaseJsonTransfer.Serialize(snapshot));
             _logger.Info($"Создан JSON-бэкап перед заменой строк подключения: {fileName}");

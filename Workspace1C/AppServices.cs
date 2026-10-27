@@ -170,6 +170,10 @@ public static class AppServices
         // п.7 «История размеров баз и прогноз диска» (1.0.0.89): дневные снимки
         // размеров в каталоге данных профиля (size_history.json).
         services.AddSingleton<SizeHistoryStore>(_ => new SizeHistoryStore());
+        // п.8 «Заметки к базе» (1.0.0.90): markdown-карточки баз и зашифрованные
+        // секреты внешних сервисов (infobase_notes.json в каталоге данных профиля).
+        services.AddSingleton<NoteStore>(_ => new NoteStore());
+        services.AddSingleton<NoteCrypto>(_ => NoteCrypto.CreateDefault());
         services.AddSingleton<TelegramBotCommandService>(sp => new TelegramBotCommandService(
             sp.GetRequiredService<INotificationSettingsStore>(), sp.GetRequiredService<IScheduledTaskStore>(),
             sp.GetRequiredService<SchedulerService>(), sp.GetRequiredService<ServerAlertsService>(),

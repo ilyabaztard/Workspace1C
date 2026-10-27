@@ -11,6 +11,48 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.90] — 2026-10-27
+
+### Добавлено
+
+- **Заметки к базе (п.8 «Заметки к базе», Windows и Linux)** — markdown-карточка у каждой
+  базы (для кого, контакты, особенности обновления) и зашифрованный раздел паролей/ключей
+  внешних сервисов:
+  - модель [`InfobaseNote.cs`](Workspace1C/Models/InfobaseNote.cs): ключ базы
+    (ID 1С или имя), markdown-текст, секреты «имя → зашифрованное значение», дата
+    обновления; привязка по ID — заметка сохраняется при импорте/переименовании;
+  - хранилище [`NoteStore.cs`](Workspace1C/Services/NoteStore.cs) — файл
+    `infobase_notes.json` в каталоге данных профиля (как `FeatureDataStore`);
+    `Get`/`Save`/`Delete`/`Search` (по markdown и именам секретов), ротация записей
+    удалённых баз; чистые функции — покрыты тестами;
+  - шифрование [`NoteCrypto.cs`](Workspace1C/Services/NoteCrypto.cs): Windows — DPAPI
+    текущего пользователя (P/Invoke `crypt32.dll`, ключ на диск не пишется); Linux —
+    AES-256-GCM ключом профиля (`notes_crypto.key`, права 0600). При недоступности
+    ключа (перенос между ПК) — статус «зашифровано, ключ недоступен» без падения;
+  - окно «Заметки базы» (WPF [`BaseNotesWindow.xaml`](Workspace1C/Views/BaseNotesWindow.xaml)
+    и Avalonia [`BaseNotesWindow.Avalonia.cs`](Workspace1C/Views/BaseNotesWindow.Avalonia.cs)):
+    редактор markdown с предпросмотром (`MarkdownRenderer`), список секретов с показом
+    по кнопке «глаз», маскирование в логах/выводе;
+  - пункт «Заметки…» в контекстном меню базы
+    ([`ContextMenuCatalog.cs`](Workspace1C/Services/ContextMenuCatalog.cs), иконка
+    `IconNote` для всех наборов тем);
+  - заметки включены в **поиск** (палитра команд Ctrl+K и фильтр дерева) и в
+    **HTML-отчёт** — секция «Заметки» с безопасным рендером markdown
+    ([`HtmlReportExporter.MarkdownToHtml`](Workspace1C/Services/HtmlReportExporter.cs));
+  - **перенос через общие списки/JSON**: снимок списка баз включает заметки
+    (markdown-карточки и имена секретов; значения не переносятся — зашифрованы ключом
+    исходной машины), при импорте локальная заметка с тем же ключом сохраняется.
+
+### Тесты
+
+- [`InfobaseNoteTests.cs`](Workspace1C.Tests/InfobaseNoteTests.cs): AES-GCM round-trip
+  и отказ при неверном ключе, `NoteCrypto` (префиксы `v1:`/`v2:`, статус «ключ
+  недоступен», статусные ключи локализации), `NoteStore` get/save/delete/search/purge/
+  import, включение заметок в фильтр палитры команд, секция «Заметки» в HTML-отчёте,
+  перенос заметок через JSON-снимок и пункт меню в каталоге.
+
+---
+
 ## [1.0.0.89] — 2026-10-27
 
 ### Добавлено

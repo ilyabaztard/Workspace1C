@@ -747,7 +747,9 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
-            var snapshot = InfobaseJsonTransfer.BuildSnapshot(exportable, Groups);
+            // Заметки баз (п.8, 1.0.0.90): в снимок входят markdown-карточки и имена
+            // секретов (значения зашифрованы ключом текущей машины и не переносятся).
+            var snapshot = InfobaseJsonTransfer.BuildSnapshot(exportable, Groups, GetOrCreateNotesStore().GetAll());
             var json = InfobaseJsonTransfer.Serialize(snapshot);
             File.WriteAllText(dialog.FileName, json);
 
@@ -838,6 +840,18 @@ public partial class MainViewModel : ViewModelBase
         var mergedGroups = InfobaseJsonTransfer.MergeNewGroups(Groups, plan.GroupsToAdd);
         foreach (var group in mergedGroups)
             Groups.Add(group);
+
+        // Заметки баз (п.8, 1.0.0.90): переносятся markdown-карточки (значения секретов
+        // зашифрованы на исходной машине и не переносятся). Локальная заметка с тем же
+        // ключом базы остаётся нетронутой — перенос добавляет только отсутствующие.
+        try
+        {
+            GetOrCreateNotesStore().ImportTransferred(snapshot.Notes);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Ошибка импорта заметок баз (JSON)", ex);
+        }
 
         SelectedInfobase = null;
         InfobasesView.Refresh();

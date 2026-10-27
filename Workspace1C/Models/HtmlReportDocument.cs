@@ -1,6 +1,24 @@
 namespace Workspace1C.Models;
 
 /// <summary>
+/// Заметка базы в HTML-отчёте (п.8 «Заметки к базе», 1.0.0.90): markdown-текст карточки,
+/// сконвертированный в HTML (экранирование + простые теги), имя базы и группа.
+/// Чистый .NET без зависимостей — конвертация выполняется генератором
+/// (<c>HtmlReportExporter.MarkdownToHtml</c>).
+/// </summary>
+public sealed class HtmlReportNoteRow
+{
+    /// <summary>Имя базы (заголовок секции заметки в отчёте).</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Группа (полный путь/имя) для сортировки/навигации.</summary>
+    public string GroupPath { get; init; } = string.Empty;
+
+    /// <summary>Текст заметки, сконвертированный в HTML (безопасный, экранированный).</summary>
+    public string MarkdownHtml { get; init; } = string.Empty;
+}
+
+/// <summary>
 /// Строка таблицы HTML-отчёта по базам (0.3.9.131): все значения уже готовы к выводу
 /// (тексты локализованы, размеры отформатированы) — генератор только экранирует их.
 /// Данные собираются из существующих источников: <see cref="Infobase"/> (доступность,
@@ -132,6 +150,12 @@ public sealed class HtmlReportLabels
 
     /// <summary>Статус «Недоступна».</summary>
     public string Unavailable { get; init; } = string.Empty;
+
+    /// <summary>Заголовок секции «Заметки» (с числом): формат подписи, {0} — количество.</summary>
+    public string NotesHeaderFormat { get; init; } = string.Empty;
+
+    /// <summary>Текст «Заметок нет» для секции «Заметки» в отчёте.</summary>
+    public string NotesEmpty { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -173,4 +197,10 @@ public sealed class HtmlReportDocument
 
     /// <summary>Строки таблицы (видимые базы, приватные скрыты как в CSV-экспорте).</summary>
     public IReadOnlyList<HtmlReportRow> Rows { get; init; } = Array.Empty<HtmlReportRow>();
+
+    /// <summary>
+    /// Заметки баз для секции «Заметки» (п.8, 1.0.0.90): базы с непустой markdown-карточкой,
+    /// отсортированные по группе/имени. Пусто — секция не выводится в отчёте.
+    /// </summary>
+    public IReadOnlyList<HtmlReportNoteRow> NoteRows { get; init; } = Array.Empty<HtmlReportNoteRow>();
 }

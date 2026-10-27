@@ -98,7 +98,10 @@ public enum ContextMenuCommandKind
     CopyConnectionString,
 
     /// <summary>Изменить настройки базы.</summary>
-    EditSettings
+    EditSettings,
+
+    /// <summary>Заметки базы (п.8, 1.0.0.90): markdown-карточка и секреты внешних сервисов.</summary>
+    Notes
 }
 
 /// <summary>
@@ -370,6 +373,10 @@ public static class ContextMenuCatalog
             // «Изменить настройки» (аналог «Свойств» в ОС) размещён внизу меню (issue #242).
             new("EditSettings", "Main.EditSettings", GroupTopLevel,
                 "Pencil", "IconEdit", "#3B82F6", ContextMenuCommandKind.EditSettings, "HotkeyEdit"),
+            // «Заметки базы» (п.8, 1.0.0.90): markdown-карточка + секреты внешних сервисов.
+            new("Notes", "Main.Notes", GroupTopLevel,
+                "Note", "IconNote", "#8B5CF6", ContextMenuCommandKind.Notes,
+                isNew: true),
         };
     }
 }
@@ -451,7 +458,9 @@ public static class ContextMenuLayouts
             Item("CreateDesktopShortcut"),
             Item("CopyConnectionString"),
             Separator(),
-            Item("EditSettings")
+            Item("EditSettings"),
+            // Заметки базы (п.8, 1.0.0.90) — внизу меню, рядом с настройками базы.
+            Item("Notes")
         };
         return layout;
     }

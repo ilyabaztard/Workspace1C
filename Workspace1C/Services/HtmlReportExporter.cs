@@ -107,6 +107,16 @@ public static class HtmlReportExporter
         sb.AppendLine("    .badge-bad{background:#FEE2E2;color:#B91C1C}");
         sb.AppendLine("    .legend{font-size:12px;color:#6B7280;margin-bottom:20px}");
         sb.AppendLine("    .only-problems tr.data-row:not(.problem){display:none}");
+        sb.AppendLine("    .note{background:#FFFFFF;border:1px solid #E5E7EB;border-radius:8px;padding:10px 14px;margin-bottom:12px}");
+        sb.AppendLine("    .note h3{margin:0 0 6px;font-size:14px;color:#111827}");
+        sb.AppendLine("    .note .note-group{color:#6B7280;font-weight:400;font-size:12px}");
+        sb.AppendLine("    .note ul,.note ol{margin:6px 0 6px 22px;padding:0}");
+        sb.AppendLine("    .note li{margin:2px 0}");
+        sb.AppendLine("    .note pre{background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;padding:8px;overflow:auto;font-size:12px}");
+        sb.AppendLine("    .note code{background:#F3F4F6;font-family:Consolas,Menlo,monospace;font-size:12px;padding:1px 4px;border-radius:3px}");
+        sb.AppendLine("    .note pre code{background:transparent;padding:0}");
+        sb.AppendLine("    .note blockquote{border-left:3px solid #E5E7EB;margin:6px 0;padding:2px 10px;color:#6B7280}");
+        sb.AppendLine("    .note hr{border:none;border-top:1px solid #E5E7EB;margin:10px 0}");
         sb.AppendLine("    @media print{body{background:#FFFFFF}.nav{display:none}}");
         sb.AppendLine("  </style>");
         sb.AppendLine("</head>");
@@ -117,6 +127,7 @@ public static class HtmlReportExporter
         AppendNavigation(sb, doc, l);
         AppendSummary(sb, doc, l);
         AppendSections(sb, doc, l);
+        AppendNotes(sb, doc, l);
 
         sb.AppendLine("<script>");
         sb.AppendLine("function toggleProblems(){document.body.classList.toggle('only-problems');}");
@@ -151,6 +162,14 @@ public static class HtmlReportExporter
                 if (seen.Add(groupKey.Key))
                     sb.AppendLine($"    <a href=\"#{groupKey.Id}\">{Escape(doc.Rows[i].GroupPath)}</a>");
             }
+        }
+        // Секция «Заметки» (п.8, 1.0.0.90): якорь в навигации, если есть хоть одна заметка.
+        if (doc.NoteRows is { Count: > 0 })
+        {
+            var title = !string.IsNullOrWhiteSpace(l.NotesHeaderFormat)
+                ? string.Format(l.NotesHeaderFormat, doc.NoteRows.Count)
+                : "Notes";
+            sb.AppendLine($"    <a href=\"#notes\">{Escape(title)}</a>");
         }
         sb.AppendLine("  </div>");
     }
@@ -273,5 +292,118 @@ public static class HtmlReportExporter
     private static string FormatSize(long bytes)
     {
         return bytes <= 0 ? "—" : Infobase.FormatSize(bytes);
+    }
+
+    /// <summary>
+    /// Секция «Заметки» (п.8 «Заметки к базе», 1.0.0.90): после таблиц групп выводится
+    /// список баз с непустыми markdown-карточками. Рендер — результат
+    /// <see cref="MarkdownToHtml"/> (безопасный HTML); секция отсутствует, если заметок нет.
+    /// </summary>
+    private static void AppendNotes(StringBuilder sb, HtmlReportDocument doc, HtmlReportLabels l)
+    {
+        if (doc?.NoteRows is not { Count: > 0 })
+            return;
+
+        var title = !string.IsNullOrWhiteSpace(l?.NotesHeaderFormat)
+            ? string.Format(l.NotesHeaderFormat, doc.NoteRows.Count)
+            : "Notes";
+        sb.AppendLine("  <section id=\"notes\">");
+        sb.AppendLine("    <h2>" + Escape(title) + "</h2>");
+        foreach (var note in doc.NoteRows)
+        {
+            if (note is null || string.IsNullOrWhiteSpace(note.MarkdownHtml))
+                continue;
+            sb.AppendLine("    <div class=\"note\">");
+            sb.AppendLine("      <h3>" + Escape(note.Name)
+                + (string.IsNullOrWhiteSpace(note.GroupPath)
+                    ? string.Empty
+                    : " <span class=\"note-group\">(" + Escape(note.GroupPath) + ")</span>")
+                + "</h3>");
+            // MarkdownHtml уже безопасен (экранирование выполнялось при конвертации).
+            sb.AppendLine("      " + note.MarkdownHtml);
+            sb.AppendLine("    </div>");
+        }
+        sb.AppendLine("  </section>");
+    }
+
+    /// <summary>
+    /// Конвертирует markdown-текст заметки в безопасный HTML (п.8, 1.0.0.90). Использует
+    /// тот же парсер, что и предпросмотр окна заметок (<see cref="MarkdownRenderer"/>),
+    /// но без UI-зависимостей: заголовки, абзацы, списки, код-блоки, разделители,
+    /// жирный/курсив/инлайн-код и ссылки. Весь пользовательский текст экранируется
+    /// через <see cref="Escape"/> — HTML-инъекция невозможна.
+    /// </summary>
+    public static string MarkdownToHtml(string? markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return string.Empty;
+
+        var sb = new StringBuilder(markdown.Length + 128);
+        foreach (var block in MarkdownParser.Parse(markdown))
+        {
+            switch (block.Kind)
+            {
+                case MdBlockKind.Header:
+                {
+                    var level = Math.Clamp(block.Level, 1, 6);
+                    sb.Append("<h").Append(level).Append('>')
+                        .Append(RenderInlines(block.Inlines))
+                        .Append("</h").Append(level).AppendLine(">");
+                    break;
+                }
+                case MdBlockKind.Paragraph:
+                    sb.Append("<p>").Append(RenderInlines(block.Inlines)).AppendLine("</p>");
+                    break;
+                case MdBlockKind.BulletList:
+                case MdBlockKind.OrderedList:
+                {
+                    var tag = block.Kind == MdBlockKind.BulletList ? "ul" : "ol";
+                    sb.Append('<').Append(tag).AppendLine(">");
+                    foreach (var item in block.Items)
+                        sb.Append("  <li>").Append(RenderInlines(item)).AppendLine("</li>");
+                    sb.Append("</").Append(tag).AppendLine(">");
+                    break;
+                }
+                case MdBlockKind.CodeBlock:
+                    sb.AppendLine("<pre><code>");
+                    foreach (var line in block.CodeLines)
+                        sb.Append(Escape(line)).Append('\n');
+                    sb.AppendLine("</code></pre>");
+                    break;
+                case MdBlockKind.HorizontalRule:
+                    sb.AppendLine("<hr/>");
+                    break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Все inline-фрагменты подряд (для строки абзаца/заголовка/элемента списка).</summary>
+    private static string RenderInlines(IReadOnlyList<MdInline>? inlines)
+    {
+        if (inlines is null || inlines.Count == 0)
+            return string.Empty;
+        var sb = new StringBuilder();
+        foreach (var inline in inlines)
+            sb.Append(RenderInline(inline));
+        return sb.ToString();
+    }
+
+    /// <summary>Один inline-фрагмент: жирный/курсив/код/ссылка оборачиваются в HTML-теги.</summary>
+    private static string RenderInline(MdInline inline)
+    {
+        if (inline is null)
+            return string.Empty;
+        var inner = inline.Children is { Count: > 0 }
+            ? RenderInlines(inline.Children)
+            : Escape(inline.Text ?? string.Empty);
+        return inline.Kind switch
+        {
+            MdInlineKind.Bold => "<strong>" + inner + "</strong>",
+            MdInlineKind.Italic => "<em>" + inner + "</em>",
+            MdInlineKind.Code => "<code>" + inner + "</code>",
+            MdInlineKind.Link => "<a href=\"" + Escape(inline.Url ?? string.Empty) + "\">" + inner + "</a>",
+            _ => inner
+        };
     }
 }

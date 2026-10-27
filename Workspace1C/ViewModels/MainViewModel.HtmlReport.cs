@@ -41,10 +41,15 @@ public partial class MainViewModel
         var freeSpaceWarningGb = MaintenanceFreeSpaceWarningGb;
 
         var rows = new List<HtmlReportRow>();
+        var noteRows = new List<HtmlReportNoteRow>();
         long totalSizeBytes = 0;
         var availableCount = 0;
         var withBackupsCount = 0;
         var problemCount = 0;
+
+        // Заметки баз (п.8, 1.0.0.90): карточки попадают в отчёт отдельной секцией.
+        NoteStore? noteStore = null;
+        try { noteStore = NoteStoreAccess.GetOrCreate(); } catch { noteStore = null; }
 
         foreach (var ib in bases)
         {
@@ -82,7 +87,26 @@ public partial class MainViewModel
                     : string.Empty,
                 HasProblem = rowVm.HasProblem
             });
+
+            // Заметка базы (п.8, 1.0.0.90): только непустые markdown-карточки.
+            var note = noteStore?.Get(InfobaseNote.KeyFor(ib));
+            if (note is { HasContent: true } && !string.IsNullOrWhiteSpace(note.Markdown))
+            {
+                noteRows.Add(new HtmlReportNoteRow
+                {
+                    Name = ib.Name,
+                    GroupPath = ib.GroupDisplay,
+                    MarkdownHtml = HtmlReportExporter.MarkdownToHtml(note.Markdown)
+                });
+            }
         }
+
+        // Секция «Заметки» сортируется по группе/имени — как таблицы отчёта.
+        noteRows.Sort((a, b) =>
+        {
+            var byGroup = string.Compare(a.GroupPath, b.GroupPath, StringComparison.OrdinalIgnoreCase);
+            return byGroup != 0 ? byGroup : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+        });
 
         return new HtmlReportDocument
         {
@@ -97,7 +121,8 @@ public partial class MainViewModel
             TotalSizeBytes = totalSizeBytes,
             ProblemCount = problemCount,
             Labels = BuildHtmlReportLabels(),
-            Rows = rows
+            Rows = rows,
+            NoteRows = noteRows
         };
     }
 
@@ -127,6 +152,8 @@ public partial class MainViewModel
         ColTags = LocalizationManager.T("ExportHtml.ColTags"),
         ColFavorite = LocalizationManager.T("ExportHtml.ColFavorite"),
         Available = LocalizationManager.T("Maintenance.Available"),
-        Unavailable = LocalizationManager.T("Maintenance.Unavailable")
+        Unavailable = LocalizationManager.T("Maintenance.Unavailable"),
+        NotesHeaderFormat = LocalizationManager.T("ExportHtml.NotesHeader"),
+        NotesEmpty = LocalizationManager.T("ExportHtml.NotesEmpty")
     };
 }

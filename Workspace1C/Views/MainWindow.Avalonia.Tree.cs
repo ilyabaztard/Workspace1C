@@ -2214,6 +2214,7 @@ namespace Workspace1C
             ContextMenuCommandKind.CreateDesktopShortcut => ("IconDesktopClassic", "#6366F1"),
             ContextMenuCommandKind.CopyConnectionString => ("IconCopy", "#06B6D4"),
             ContextMenuCommandKind.EditSettings => ("IconEdit", "#3B82F6"),
+            ContextMenuCommandKind.Notes => ("IconNote", "#8B5CF6"),
             _ => (null, null) // ConfigLink/ShowExportsList/кэш-пункты — без иконки (как было)
         };
 
@@ -2311,6 +2312,8 @@ namespace Workspace1C
                     item.Command = _vm!.CopyConnectionStringCommand; break;
                 case ContextMenuCommandKind.EditSettings:
                     item.Command = _vm!.EditInfobaseCommand; break;
+                case ContextMenuCommandKind.Notes:
+                    item.Command = _vm!.ShowBaseNotesCommand; break;
             }
         }
 

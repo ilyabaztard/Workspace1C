@@ -318,6 +318,8 @@ public partial class MainWindow
                 item.Command = _viewModel.CopyConnectionStringCommand; break;
             case ContextMenuCommandKind.EditSettings:
                 item.Command = _viewModel.EditInfobaseCommand; break;
+            case ContextMenuCommandKind.Notes:
+                item.Command = _viewModel.ShowBaseNotesCommand; break;
         }
     }
 

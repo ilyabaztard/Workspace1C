@@ -29,6 +29,12 @@ public sealed class CommandPaletteItem
     /// <summary>Пояснение: группа/подключение базы или подсказка команды.</summary>
     public string Subtitle { get; init; } = "";
 
+    /// <summary>
+    /// Дополнительный текст поиска (п.8 «Заметки к базе», 1.0.0.90): markdown-карточка
+    /// заметки базы. Участвует в фильтрации, но НЕ показывается в строке палитры.
+    /// </summary>
+    public string SearchText { get; init; } = "";
+
     /// <summary>Подсказка режима запуска для базы («Enter — Предприятие, Shift+Enter — Конфигуратор»).</summary>
     public string Hint { get; init; } = "";
 }
@@ -128,8 +134,10 @@ public sealed class CommandPaletteViewModel
 
         foreach (var item in source)
         {
+            // Поиск ведётся по заголовку, пояснению и дополнительному тексту (заметка базы).
             var title = item.Title ?? "";
             var subtitle = item.Subtitle ?? "";
+            var searchText = item.SearchText ?? "";
             var ok = true;
             var rank = 0;
 
@@ -137,7 +145,8 @@ public sealed class CommandPaletteViewModel
             {
                 var inTitle = title.IndexOf(word, System.StringComparison.OrdinalIgnoreCase);
                 var inSubtitle = subtitle.IndexOf(word, System.StringComparison.OrdinalIgnoreCase);
-                if (inTitle < 0 && inSubtitle < 0)
+                var inSearch = searchText.IndexOf(word, System.StringComparison.OrdinalIgnoreCase);
+                if (inTitle < 0 && inSubtitle < 0 && inSearch < 0)
                 {
                     ok = false;
                     break;
@@ -147,6 +156,11 @@ public sealed class CommandPaletteViewModel
                 else if (inTitle > 0)
                     rank += 2;
                 if (inSubtitle >= 0)
+                    rank += 1;
+                // Совпадение только в заметке — низший приоритет (не вытесняет имя/группу).
+                if (inSearch >= 0)
+                    rank += 0;
+                if (inSubtitle < 0 && inTitle < 0 && inSearch >= 0)
                     rank += 1;
             }
 

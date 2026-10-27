@@ -328,7 +328,9 @@ public partial class MainViewModel : ViewModelBase
                 Title = b.Name,
                 Subtitle = string.Join(" · ",
                     new[] { b.GroupDisplay, b.ConnectionTypeDisplay, b.ServerDatabaseDisplay }
-                        .Where(s => !string.IsNullOrWhiteSpace(s) && s != "—"))
+                        .Where(s => !string.IsNullOrWhiteSpace(s) && s != "—")),
+                // Заметка базы (п.8, 1.0.0.90): текст карточки участвует в поиске.
+                SearchText = NoteSearchText(b)
             })
             .ToList();
 
@@ -384,6 +386,39 @@ public partial class MainViewModel : ViewModelBase
 
         if (command is { } cmd && cmd.CanExecute(null))
             cmd.Execute(null);
+    }
+
+    // ====================== Заметки базы (п.8, 1.0.0.90) ======================
+
+    private ICommand? _showBaseNotesCommand;
+
+    /// <summary>
+    /// Команда «Заметки базы»: markdown-карточка (для кого база, контакты, особенности
+    /// обновления) и зашифрованные секреты внешних сервисов (п.8, 1.0.0.90).
+    /// </summary>
+    public ICommand ShowBaseNotesCommand =>
+        _showBaseNotesCommand ??= new RelayCommand(
+            _ => ShowBaseNotes(),
+            _ => SelectedInfobase != null);
+
+    /// <summary>Открывает окно «Заметки базы» для выбранной базы (Avalonia/Linux).</summary>
+    private void ShowBaseNotes()
+    {
+        var ib = SelectedInfobase;
+        if (ib is null)
+            return;
+        try
+        {
+            var win = new BaseNotesWindow(ib);
+            win.ShowDialogSync(OwnerWindow());
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Ошибка открытия окна «Заметки базы»", ex);
+            _dialog.ShowError(
+                string.Format(LocalizationManager.T("Notes.OpenError"), ex.Message),
+                LocalizationManager.T("Notes.Title"));
+        }
     }
 
     // ====================== Дублирование ИБ (файловой и серверной) ======================

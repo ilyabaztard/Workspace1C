@@ -44,8 +44,8 @@ public sealed class ContextMenuResolverTests
         var settings = new AppSettings { ContextMenuEditingEnabled = true };
         var layout = ContextMenuResolver.Resolve(settings, null);
         Assert.NotNull(layout);
-        // 19 пунктов/групп + 5 узлов-разделителей.
-        Assert.Equal(24, layout!.Root.Count);
+        // 20 пунктов/групп + 5 узлов-разделителей.
+        Assert.Equal(25, layout!.Root.Count);
     }
 
     [Fact]
@@ -203,9 +203,9 @@ public sealed class ContextMenuResolverTests
         var group = result.Root[0];
         Assert.Equal(ContextMenuCatalog.GroupNewItems, group.GroupId);
         Assert.True(group.Visible);
-        // «WebPublish» — неразмещённая новинка (перенесена из «Утилиты», #63) —
-        // добавляется в существующую группу «Новинки».
-        Assert.Equal(3, group.Children.Count);
+        // «WebPublish» и «Заметки» — неразмещённые новинки (перенесены из «Утилиты»/новые,
+        // #63 / п.8 1.0.0.90) — добавляются в существующую группу «Новинки».
+        Assert.Equal(4, group.Children.Count);
     }
 
     [Fact]

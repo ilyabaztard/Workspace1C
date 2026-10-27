@@ -33,4 +33,32 @@ public class InfobaseListSnapshot
 
     /// <summary>Список групп информационных баз (с иерархией ParentId).</summary>
     public List<Group> Groups { get; set; } = new();
+
+    /// <summary>
+    /// Заметки баз для переноса (п.8 «Заметки к базе», 1.0.0.90). Переносится markdown-текст
+    /// карточки и ИМЕНА секретов; значения секретов зашифрованы ключом исходной машины
+    /// (DPAPI Windows / ключ профиля Linux) и с другой машины не расшифруются — поэтому
+    /// в JSON-снимок не включаются. Пустой список — заметок нет/не было в снимке.
+    /// </summary>
+    public List<InfobaseNoteTransfer> Notes { get; set; } = new();
+}
+
+/// <summary>
+/// Заметка базы в JSON-снимке списка (п.8, 1.0.0.90): ключ базы, markdown-карточка и
+/// только имена секретов (значения не переносятся — они зашифрованы ключом исходной
+/// машины). Чистый DTO для сериализации.
+/// </summary>
+public sealed class InfobaseNoteTransfer
+{
+    /// <summary>Ключ базы (см. <see cref="InfobaseNote.InfobaseId"/>).</summary>
+    public string InfobaseId { get; set; } = string.Empty;
+
+    /// <summary>Markdown-текст карточки.</summary>
+    public string Markdown { get; set; } = string.Empty;
+
+    /// <summary>Имена секретов (без значений).</summary>
+    public List<string> SecretNames { get; set; } = new();
+
+    /// <summary>Дата последнего обновления заметки (UTC).</summary>
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

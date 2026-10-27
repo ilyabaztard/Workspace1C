@@ -1274,7 +1274,9 @@ public partial class MainViewModel : ViewModelBase
             if (!ContainsIgnoreCase(ib.Name, q)
                 && !ContainsIgnoreCase(ib.ServerDatabaseDisplay, q)
                 && !ContainsIgnoreCase(ib.ConfigurationName, q)
-                && !ContainsIgnoreCase(ib.PlatformVersion, q))
+                && !ContainsIgnoreCase(ib.PlatformVersion, q)
+                // Заметка базы (п.8, 1.0.0.90): текст карточки участвует в поиске дерева.
+                && !ContainsIgnoreCase(NoteSearchText(ib), q))
                 return false;
         }
 
