@@ -72,7 +72,9 @@ namespace Workspace1C
                 AvaloniaUi.BoundTextBox(nameof(ExtensionsViewModel.ExtensionName), 260)));
             var installButton = AvaloniaUi.Button("Extensions.Install", async (_, _) => await OnInstallAsync(), 220, accent: true);
             installButton.Bind(IsEnabledProperty, new Binding(nameof(ExtensionsViewModel.IsIdle)));
-            install.Children.Add(AvaloniaUi.ButtonRow(installButton));
+            var useIbcmd = AvaloniaUi.BoundCheckBox("Extensions.UseIbcmd", nameof(ExtensionsViewModel.UseIbcmd));
+            useIbcmd.Margin = new Thickness(16, 0, 0, 0);
+            install.Children.Add(AvaloniaUi.ButtonRow(installButton, useIbcmd));
             install.Children.Add(AvaloniaUi.Label("Extensions.InstallHint", 11));
             AvaloniaUi.Place(right, AvaloniaUi.Card(install), 0);
 

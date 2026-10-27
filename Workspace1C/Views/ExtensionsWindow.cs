@@ -62,7 +62,9 @@ namespace Workspace1C
                 WpfUi.BoundTextBox(nameof(ExtensionsViewModel.ExtensionName), 260)));
             var installButton = WpfUi.Button("Extensions.Install", async (_, _) => await OnInstallAsync(), 220, accent: true);
             installButton.SetBinding(IsEnabledProperty, new Binding(nameof(ExtensionsViewModel.IsIdle)));
-            install.Children.Add(WpfUi.ButtonRow(installButton));
+            var useIbcmd = WpfUi.BoundCheckBox("Extensions.UseIbcmd", nameof(ExtensionsViewModel.UseIbcmd));
+            useIbcmd.Margin = new Thickness(16, 0, 0, 0);
+            install.Children.Add(WpfUi.ButtonRow(installButton, useIbcmd));
             install.Children.Add(WpfUi.Label("Extensions.InstallHint", 11));
             WpfUi.Place(right, WpfUi.Card(install), 0);
 

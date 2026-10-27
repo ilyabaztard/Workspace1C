@@ -16,6 +16,7 @@ public class BackupScenarioEditViewModel : ViewModelBase
             Name = scenario.Name;
             FileNameTemplate = scenario.FileNameTemplate;
             Format = scenario.Format;
+            Engine = scenario.Engine;
             BasePrefix = scenario.BasePrefix ?? "";
             IncludeTimestamp = scenario.IncludeTimestamp;
             KeepCount = Math.Max(0, scenario.KeepCount);
@@ -35,6 +36,23 @@ public class BackupScenarioEditViewModel : ViewModelBase
     public string FileNameTemplate { get; set; } = "{Base}_{Timestamp}";
     public ObservableCollection<string> TargetDirectories { get; } = new();
     public BackupFormat Format { get; set; } = BackupFormat.Dt;
+
+    /// <summary>Движок выгрузки (1.0.0.84).</summary>
+    public BackupEngine Engine { get; set; } = BackupEngine.Designer;
+
+    /// <summary>Индекс движка для выпадающего списка (0 — Конфигуратор, 1 — ibcmd).</summary>
+    public int EngineIndex
+    {
+        get => (int)Engine;
+        set => Engine = value == 1 ? BackupEngine.Ibcmd : BackupEngine.Designer;
+    }
+
+    /// <summary>Подписи движков в порядке <see cref="BackupEngine"/>.</summary>
+    public static IReadOnlyList<string> EngineNames => new[]
+    {
+        Localization.LocalizationManager.T("Backup.EngineDesigner"),
+        Localization.LocalizationManager.T("Backup.EngineIbcmd")
+    };
     public string BasePrefix { get; set; } = "";
     public bool IncludeTimestamp { get; set; } = true;
 
@@ -89,6 +107,7 @@ public class BackupScenarioEditViewModel : ViewModelBase
             ? "{Base}_{Timestamp}"
             : FileNameTemplate.Trim();
         scenario.Format = Format;
+        scenario.Engine = Engine;
         scenario.BasePrefix = BasePrefix?.Trim() ?? "";
         scenario.IncludeTimestamp = IncludeTimestamp;
         scenario.KeepCount = Math.Max(0, KeepCount);

@@ -24,6 +24,7 @@ public sealed class BackupScenarioEditWindow : ModalWindowBase
     private readonly TextBox _templateBox = new TextBox().Styled(ControlThemes.ModernTextBox);
     private readonly CheckBox _timestampCheck = new CheckBox().Styled(ControlThemes.CacheCleanCheckBox);
     private readonly ComboBox _formatCombo = new ComboBox().Styled(ControlThemes.ModernComboBox);
+    private readonly ComboBox _engineCombo = new ComboBox().Styled(ControlThemes.ModernComboBox);
     private readonly TextBox _prefixBox = new TextBox().Styled(ControlThemes.ModernTextBox);
     private readonly ListBox _dirList = new();
     private readonly TextBox _keepCountBox = new TextBox().Styled(ControlThemes.ModernTextBox);
@@ -107,6 +108,14 @@ public sealed class BackupScenarioEditWindow : ModalWindowBase
         _formatCombo.HorizontalAlignment = HorizontalAlignment.Left;
         _formatCombo.MinWidth = 160;
         panel.Children.Add(_formatCombo);
+
+        panel.Children.Add(Label(T("Backup.Engine")));
+        _engineCombo.ItemsSource = BackupScenarioEditViewModel.EngineNames;
+        _engineCombo.SelectedIndex = _vm.EngineIndex;
+        _engineCombo.HorizontalAlignment = HorizontalAlignment.Left;
+        _engineCombo.MinWidth = 240;
+        panel.Children.Add(_engineCombo);
+        panel.Children.Add(HintLabel(T("Backup.EngineHint")));
 
         panel.Children.Add(Label(T("Backup.BasePrefix")));
         _prefixBox.Text = _vm.BasePrefix;
@@ -201,6 +210,7 @@ public sealed class BackupScenarioEditWindow : ModalWindowBase
         _vm.FileNameTemplate = _templateBox.Text ?? "";
         _vm.IncludeTimestamp = _timestampCheck.IsChecked == true;
         _vm.Format = _formatCombo.SelectedItem is BackupFormat f ? f : BackupFormat.Dt;
+        _vm.EngineIndex = Math.Max(0, _engineCombo.SelectedIndex);
         _vm.BasePrefix = _prefixBox.Text ?? "";
         // Числовые поля ротации парсим явно: привязка к int на некорректном тексте не сработала бы.
         _vm.KeepCount = TryParseInt(_keepCountBox.Text, 0);

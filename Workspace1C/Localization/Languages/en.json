@@ -4049,6 +4049,18 @@
     "ComScript.Timeout": "The COM operation timed out.",
     "ComScript.ConnectFailed": "Could not connect to the infobase via COM: {0}",
     "ComScript.OperationFailed": "Operation error: {0}",
-    "ComScript.NoConnectString": "Could not build a COM connection string for the infobase (web infobases are not supported via COM)."
+    "ComScript.NoConnectString": "Could not build a COM connection string for the infobase (web infobases are not supported via COM).",
+
+    "Backup.Engine": "Dump engine",
+    "Backup.EngineDesigner": "Designer (1cv8 DESIGNER)",
+    "Backup.EngineIbcmd": "ibcmd (no Designer)",
+    "Backup.EngineHint": "ibcmd is faster, opens no windows and needs no Designer license. A client-server infobase needs a DBMS profile in the \"DBMS backups\" window (ibcmd connects to the DBMS directly).",
+    "Extensions.UseIbcmd": "Via ibcmd",
+    "Ibcmd.NotFound": "ibcmd was not found next to the infobase platform (platform 8.3.14 or later is required).",
+    "Ibcmd.NoConnection": "The infobase connection parameters are empty.",
+    "Ibcmd.NeedDbmsProfile": "For a client-server infobase ibcmd connects to the DBMS directly: fill in the infobase profile in the \"DBMS backups\" window (server, database, user).",
+    "Ibcmd.WebNotSupported": "ibcmd does not support web infobases.",
+    "Ibcmd.ExitCodeFormat": "ibcmd exited with code {0}: {1}",
+    "Ibcmd.EmptyResult": "ibcmd finished without errors, but the dump file is missing or empty."
   }
 }

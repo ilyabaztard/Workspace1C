@@ -68,18 +68,39 @@ public class BackupService : IBackupService
                 ? OneCLauncher.DesignerBatchOperation.DumpCfg
                 : OneCLauncher.DesignerBatchOperation.DumpIB;
 
-            var started = OneCLauncher.RunDesignerBatch(infobase, operation, primaryPath, scenario.Credential);
-            if (!started)
+            if (scenario.Engine == BackupEngine.Ibcmd)
             {
-                result.ErrorMessage = LocalizationManager.T("Backup.StartFailed");
-                return result;
+                // Движок ibcmd (1.0.0.84): выгрузка без «Конфигуратора» — без окна и лицензии.
+                var ibcmd = scenario.Format == BackupFormat.Cf
+                    ? await IbcmdService.SaveConfigAsync(infobase, primaryPath, scenario.Credential)
+                    : await IbcmdService.DumpAsync(infobase, primaryPath, scenario.Credential);
+                if (!ibcmd.Success)
+                {
+                    result.ErrorMessage = ibcmd.Error ?? LocalizationManager.T("Backup.Failed");
+                    return result;
+                }
+                if (!File.Exists(primaryPath) || new FileInfo(primaryPath).Length == 0)
+                {
+                    result.ErrorMessage = LocalizationManager.T("Ibcmd.EmptyResult");
+                    return result;
+                }
+                _logger?.Info($"Выгрузка ibcmd «{infobase.Name}» → {primaryPath}");
             }
-
-            var dumpInfo = await WaitForCompletionAsync(operation, primaryPath);
-            if (dumpInfo is null || !dumpInfo.Success)
+            else
             {
-                result.ErrorMessage = dumpInfo?.ErrorMessage ?? LocalizationManager.T("Backup.Timeout");
-                return result;
+                var started = OneCLauncher.RunDesignerBatch(infobase, operation, primaryPath, scenario.Credential);
+                if (!started)
+                {
+                    result.ErrorMessage = LocalizationManager.T("Backup.StartFailed");
+                    return result;
+                }
+
+                var dumpInfo = await WaitForCompletionAsync(operation, primaryPath);
+                if (dumpInfo is null || !dumpInfo.Success)
+                {
+                    result.ErrorMessage = dumpInfo?.ErrorMessage ?? LocalizationManager.T("Backup.Timeout");
+                    return result;
+                }
             }
 
             var finalPath = primaryPath;

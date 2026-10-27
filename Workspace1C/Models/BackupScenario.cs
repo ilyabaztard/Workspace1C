@@ -30,6 +30,9 @@ public class BackupScenario
     /// <summary>Формат файла резервной копии.</summary>
     public BackupFormat Format { get; set; } = BackupFormat.Dt;
 
+    /// <summary>Движок выгрузки: «Конфигуратор» (по умолчанию) или ibcmd (1.0.0.84).</summary>
+    public BackupEngine Engine { get; set; } = BackupEngine.Designer;
+
     /// <summary>
     /// Префикс базы: подставляется в подстановку {Base} вместе с именем ИБ
     /// (для единообразия имён выгрузок разных баз).

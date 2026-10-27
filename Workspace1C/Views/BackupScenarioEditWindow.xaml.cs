@@ -34,6 +34,8 @@ public partial class BackupScenarioEditWindow : Window
         TemplateHint.Text = T("Backup.TemplateHint");
         TimestampCheck.Content = T("Backup.IncludeTimestamp");
         FormatLabel.Text = T("Backup.Format");
+        EngineLabel.Text = T("Backup.Engine");
+        EngineHint.Text = T("Backup.EngineHint");
         PrefixLabel.Text = T("Backup.BasePrefix");
         DirsLabel.Text = T("Backup.TargetDirectories");
         AddDirButton.Content = T("Common.Browse");
@@ -49,6 +51,8 @@ public partial class BackupScenarioEditWindow : Window
         OkButton.Content = T("Common.Save");
 
         FormatCombo.ItemsSource = System.Enum.GetValues<BackupFormat>();
+        EngineCombo.ItemsSource = BackupScenarioEditViewModel.EngineNames;
+        EngineCombo.SelectedIndex = _vm.EngineIndex;
         PasswordBox.Password = _vm.Password;
 
         // Фокус в поле «Наименование» (issue #299): отложенный вызов после показа окна —
@@ -82,6 +86,7 @@ public partial class BackupScenarioEditWindow : Window
     private void Ok_Click(object sender, RoutedEventArgs e)
     {
         _vm.Password = PasswordBox.Password;
+        _vm.EngineIndex = System.Math.Max(0, EngineCombo.SelectedIndex);
         // Числовые поля ротации: привязка к int не срабатывает на некорректном
         // тексте, поэтому парсим явно и кладём в модель (0 — хранить всё / не чистить).
         _vm.KeepCount = TryParseInt(KeepCountBox.Text, 0);

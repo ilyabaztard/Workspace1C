@@ -70,6 +70,10 @@
                 <TextBlock x:Name="FormatLabel" Text="Формат" FontWeight="SemiBold" Margin="0,0,0,4"/>
                 <ComboBox x:Name="FormatCombo" SelectedItem="{Binding Format}" HorizontalAlignment="Left" MinWidth="160" Margin="0,0,0,10"/>
 
+                <TextBlock x:Name="EngineLabel" Text="Движок выгрузки" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <ComboBox x:Name="EngineCombo" HorizontalAlignment="Left" MinWidth="240" Margin="0,0,0,2"/>
+                <TextBlock x:Name="EngineHint" Text="" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" Margin="2,0,0,10"/>
+
                 <TextBlock x:Name="PrefixLabel" Text="Префикс базы" FontWeight="SemiBold" Margin="0,0,0,4"/>
                 <TextBox x:Name="PrefixBox" Text="{Binding BasePrefix, UpdateSourceTrigger=PropertyChanged}" Padding="4" Margin="0,0,0,10"/>
 

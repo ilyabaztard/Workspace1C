@@ -21,6 +21,7 @@ public sealed class ExtensionsViewModel : ViewModelBase
     private string? _selectedExtension;
     private ExtensionTargetRow? _selectedTarget;
     private bool _isBusy;
+    private bool _useIbcmd;
     private readonly StringBuilder _log = new();
 
     public ExtensionsViewModel(IEnumerable<Infobase> infobases, Infobase? selected)
@@ -119,6 +120,13 @@ public sealed class ExtensionsViewModel : ViewModelBase
     }
 
     public bool IsIdle => !_isBusy;
+
+    /// <summary>Устанавливать расширение утилитой ibcmd вместо «Конфигуратора» (1.0.0.84).</summary>
+    public bool UseIbcmd
+    {
+        get => _useIbcmd;
+        set => SetProperty(ref _useIbcmd, value);
+    }
 
     public string LogText => _log.ToString();
 
@@ -229,7 +237,9 @@ public sealed class ExtensionsViewModel : ViewModelBase
                 }
                 row.Status = LocalizationManager.T("Extensions.StatusRunning");
                 AppendLog(string.Format(LocalizationManager.T("Extensions.LogInstalling"), ExtensionName, row.Name));
-                var result = await ConfigExtensionService.InstallAsync(row.Infobase, CfePath, ExtensionName, token);
+                var result = UseIbcmd
+                    ? await InstallViaIbcmdAsync(row.Infobase, token)
+                    : await ConfigExtensionService.InstallAsync(row.Infobase, CfePath, ExtensionName, token);
                 if (result.Success)
                 {
                     ok++;
@@ -249,6 +259,14 @@ public sealed class ExtensionsViewModel : ViewModelBase
             IsBusy = false;
         }
         return ok;
+    }
+
+    private async Task<DesignerCommandResult> InstallViaIbcmdAsync(Infobase infobase, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(CfePath) || !System.IO.File.Exists(CfePath))
+            return DesignerCommandResult.Fail(LocalizationManager.T("Extensions.FileNotFound"));
+        var r = await IbcmdService.InstallExtensionAsync(infobase, CfePath, ExtensionName, token);
+        return new DesignerCommandResult { Success = r.Success, ExitCode = r.ExitCode, Log = r.Output, Error = r.Error };
     }
 
     /// <summary>Выгружает выбранное расширение выбранной базы в файл.</summary>
