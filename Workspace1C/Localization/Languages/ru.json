@@ -3656,6 +3656,7 @@
 
     "EventLog.MenuItem": "Журнал регистрации…",
     "EventLog.Title": "Журнал регистрации",
+    "EventLog.Base": "База:",
     "EventLog.LocationFormat": "Формат: {0} · каталог: {1}",
     "EventLog.Period": "Период:",
     "EventLog.Period.Hour": "Последний час",
@@ -3674,6 +3675,7 @@
     "EventLog.Loading": "Чтение журнала…",
     "EventLog.Cancelled": "Чтение прервано.",
     "EventLog.NotFound": "Журнал регистрации не найден.",
+    "EventLog.NoBase": "База не выбрана.",
     "EventLog.NotFoundForBase": "Журнал регистрации базы не найден: {0}\nУкажите каталог журнала вручную.",
     "EventLog.ServerBaseHint": "Журнал регистрации клиент-серверной базы хранится на сервере 1С в каталоге srvinfo\\reg_<порт>\\<идентификатор базы>\\1Cv8Log. Укажите этот каталог (можно сетевой путь или скопированную папку).",
     "EventLog.ReadError": "Ошибка чтения журнала: {0}",

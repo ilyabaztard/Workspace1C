@@ -33,9 +33,11 @@ namespace Workspace1C
             var root = WpfUi.Rows(0, 0, 0, -3, 5, -1, 0);
             root.Margin = new Thickness(16);
 
-            // Заголовок: расположение журнала.
+            // Заголовок: выбор базы (issue #74) и расположение журнала.
             var header = new StackPanel();
             header.Children.Add(WpfUi.Text(Title, 15, bold: true));
+            header.Children.Add(WpfUi.Wrap(WpfUi.Label("EventLog.Base"),
+                WpfUi.BoundCombo(_vm.InfobaseNames, nameof(EventLogViewModel.SelectedIndex), 420)));
             header.Children.Add(WpfUi.BoundText(nameof(EventLogViewModel.LocationText)));
             header.Margin = new Thickness(0, 0, 0, 10);
             WpfUi.Place(root, header, 0);

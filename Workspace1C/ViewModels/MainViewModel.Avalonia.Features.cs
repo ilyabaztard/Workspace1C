@@ -19,19 +19,15 @@ public partial class MainViewModel
     private System.Windows.Input.ICommand? _eventLogCommand;
 
     /// <summary>
-    /// Команда «Журнал регистрации…»: журнал выбранной файловой базы или каталог
-    /// 1Cv8Log, указанный пользователем (клиент-серверные базы).
+    /// Команда «Журнал регистрации…»: журнал выбранной базы подставляется
+    /// автоматически, базу можно сменить селектором вверху формы (issue #74).
     /// </summary>
     public System.Windows.Input.ICommand EventLogCommand =>
         _eventLogCommand ??= new RelayCommand(_ => ExecuteEventLog());
 
     private void ExecuteEventLog()
     {
-        var infobase = SelectedInfobase;
-        var location = EventLogLocationPicker.Pick(infobase, _dialog);
-        if (location is null)
-            return;
-        var vm = new EventLogViewModel(infobase?.Name ?? location.LogDir, location);
+        var vm = new EventLogViewModel(_allInfobases.ToList(), SelectedInfobase);
         var window = new Workspace1C.EventLogWindow(vm);
         window.ShowDialogSync(OwnerWindow());
     }

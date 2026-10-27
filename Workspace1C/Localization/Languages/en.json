@@ -3657,6 +3657,7 @@
 
     "EventLog.MenuItem": "Event log…",
     "EventLog.Title": "Event log",
+    "EventLog.Base": "Base:",
     "EventLog.LocationFormat": "Format: {0} · folder: {1}",
     "EventLog.Period": "Period:",
     "EventLog.Period.Hour": "Last hour",
@@ -3675,6 +3676,7 @@
     "EventLog.Loading": "Reading the log…",
     "EventLog.Cancelled": "Reading cancelled.",
     "EventLog.NotFound": "Event log not found.",
+    "EventLog.NoBase": "No base selected.",
     "EventLog.NotFoundForBase": "The infobase event log was not found: {0}\nPlease choose the log folder manually.",
     "EventLog.ServerBaseHint": "The event log of a client-server infobase is stored on the 1C server in srvinfo\\reg_<port>\\<infobase id>\\1Cv8Log. Please choose this folder (a network path or a copied folder will do).",
     "EventLog.ReadError": "Error reading the log: {0}",

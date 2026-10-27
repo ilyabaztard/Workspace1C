@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Workspace1C.Collections;
 using Workspace1C.Localization;
@@ -18,9 +20,11 @@ public sealed class EventLogViewModel : ViewModelBase
     /// <summary>Варианты лимита записей (индекс <see cref="LimitIndex"/>).</summary>
     public static readonly int[] Limits = { 1000, 5000, 20000, 100000 };
 
+    private readonly IReadOnlyList<Infobase> _infobases;
     private JournalLocation _location;
     private CancellationTokenSource? _cts;
     private IReadOnlyList<EventLogEntry> _entries = Array.Empty<EventLogEntry>();
+    private int _selectedIndex = -1;
 
     private int _periodIndex = 1;
     private int _limitIndex = 1;
@@ -40,6 +44,8 @@ public sealed class EventLogViewModel : ViewModelBase
     /// <param name="location">Расположение журнала.</param>
     public EventLogViewModel(string title, JournalLocation location)
     {
+        _infobases = Array.Empty<Infobase>();
+        InfobaseNames = Array.Empty<string>();
         Title = title ?? string.Empty;
         _location = location ?? new JournalLocation();
         PeriodOptions = new[]
@@ -55,7 +61,57 @@ public sealed class EventLogViewModel : ViewModelBase
         StatusText = LocalizationManager.T("EventLog.Ready");
     }
 
-    public string Title { get; }
+    /// <summary>
+    /// Конструктор для открытия из Утилиты (issue #74): список баз для селектора
+    /// вверху формы и база, выбранная в Утилите (подставляется автоматически).
+    /// </summary>
+    /// <param name="infobases">Все базы (для селектора вверху формы).</param>
+    /// <param name="selected">База, выбранная в Утилите; null — первая из списка.</param>
+    public EventLogViewModel(IEnumerable<Infobase> infobases, Infobase? selected)
+    {
+        _infobases = (infobases ?? Array.Empty<Infobase>())
+            .Where(ib => ib is not null)
+            .OrderBy(ib => ib.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        InfobaseNames = _infobases.Select(ib => ib.Name).ToList();
+        PeriodOptions = new[]
+        {
+            LocalizationManager.T("EventLog.Period.Hour"),
+            LocalizationManager.T("EventLog.Period.Today"),
+            LocalizationManager.T("EventLog.Period.Yesterday"),
+            LocalizationManager.T("EventLog.Period.Week"),
+            LocalizationManager.T("EventLog.Period.Month"),
+            LocalizationManager.T("EventLog.Period.All"),
+        };
+        LimitOptions = Limits.Select(l => l.ToString("N0", CultureInfo.CurrentCulture)).ToArray();
+        StatusText = LocalizationManager.T("EventLog.Ready");
+        Title = string.Empty;
+        _location = new JournalLocation();
+
+        var index = selected is null ? -1 : _infobases.ToList().FindIndex(ib => ib.Id == selected.Id);
+        _selectedIndex = index >= 0 ? index : (_infobases.Count > 0 ? 0 : -1);
+        ApplySelectedBase();
+    }
+
+    public string Title { get; private set; }
+
+    /// <summary>Имена баз для селектора вверху формы (issue #74).</summary>
+    public IReadOnlyList<string> InfobaseNames { get; }
+
+    /// <summary>База, выбранная вверху формы.</summary>
+    public Infobase? SelectedInfobase =>
+        _selectedIndex >= 0 && _selectedIndex < _infobases.Count ? _infobases[_selectedIndex] : null;
+
+    /// <summary>Индекс выбранной базы в <see cref="InfobaseNames"/>.</summary>
+    public int SelectedIndex
+    {
+        get => _selectedIndex;
+        set
+        {
+            if (SetProperty(ref _selectedIndex, value))
+                ApplySelectedBase();
+        }
+    }
 
     /// <summary>Описание журнала: формат и каталог.</summary>
     public string LocationText => string.Format(
@@ -131,6 +187,23 @@ public sealed class EventLogViewModel : ViewModelBase
 
     /// <summary>Записи последней выборки (для экспорта).</summary>
     public IReadOnlyList<EventLogEntry> Entries => _entries;
+
+    /// <summary>Подставляет журнал выбранной базы (issue #74).</summary>
+    private void ApplySelectedBase()
+    {
+        var ib = SelectedInfobase;
+        if (ib is null)
+        {
+            Title = string.Empty;
+            ChangeLocation(new JournalLocation { ErrorMessage = LocalizationManager.T("EventLog.NoBase") });
+        }
+        else
+        {
+            Title = ib.Name;
+            ChangeLocation(LgdJournalLocator.Resolve(ib));
+        }
+        OnPropertyChanged(nameof(Title));
+    }
 
     /// <summary>Меняет журнал (например, выбран другой каталог) и очищает таблицу.</summary>
     public void ChangeLocation(JournalLocation location)

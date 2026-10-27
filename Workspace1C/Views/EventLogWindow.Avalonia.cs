@@ -52,6 +52,8 @@ namespace Workspace1C
 
             var header = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
             header.Children.Add(AvaloniaUi.Text(title, 15, bold: true));
+            header.Children.Add(AvaloniaUi.Wrap(AvaloniaUi.Label("EventLog.Base"),
+                AvaloniaUi.BoundCombo(_vm.InfobaseNames, nameof(EventLogViewModel.SelectedIndex), 420)));
             header.Children.Add(AvaloniaUi.BoundText(nameof(EventLogViewModel.LocationText)));
             AvaloniaUi.Place(root, header, 0);
 
