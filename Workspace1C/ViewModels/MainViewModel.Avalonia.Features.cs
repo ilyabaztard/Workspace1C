@@ -62,6 +62,21 @@ public partial class MainViewModel
         window.ShowDialogSync(OwnerWindow());
     }
 
+    // ======================= Регламентные задания ИБ (1.0.0.85) =======================
+
+    private System.Windows.Input.ICommand? _scheduledJobsCommand;
+
+    /// <summary>Команда «Регламентные задания ИБ…» (на Linux операции недоступны — нет COM).</summary>
+    public System.Windows.Input.ICommand ScheduledJobsCommand =>
+        _scheduledJobsCommand ??= new RelayCommand(_ => ExecuteScheduledJobs());
+
+    private void ExecuteScheduledJobs()
+    {
+        var vm = new ScheduledJobsViewModel(_allInfobases.ToList(), SelectedInfobase);
+        var window = new Workspace1C.ScheduledJobsWindow(vm);
+        window.ShowDialogSync(OwnerWindow());
+    }
+
     // ======================= Версионирование конфигурации в Git (1.0.0.69) =======================
 
     private System.Windows.Input.ICommand? _gitVersioningCommand;

@@ -72,6 +72,47 @@ public partial class MainViewModel
         window.ShowDialog();
     }
 
+    // ======================= Регламентные задания ИБ (1.0.0.85) =======================
+
+    private ICommand? _scheduledJobsCommand;
+
+    /// <summary>Команда «Регламентные задания ИБ…».</summary>
+    public ICommand ScheduledJobsCommand =>
+        _scheduledJobsCommand ??= new RelayCommand(_ => ExecuteScheduledJobs());
+
+    private void ExecuteScheduledJobs()
+    {
+        var vm = new ScheduledJobsViewModel(Infobases.ToList(), SelectedInfobase);
+        var window = new ScheduledJobsWindow(vm)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    /// <summary>
+    /// После дублирования базы предлагает выключить в копии все регламентные задания
+    /// (1.0.0.85): копия не должна выполнять обмены, рассылки и загрузку данных.
+    /// </summary>
+    private async Task OfferDisableScheduledJobsAsync(Infobase clone)
+    {
+        if (clone is null || !_dialogs.Confirm(string.Format(LocalizationManager.T("Jobs.CloneAsk"), clone.Name),
+                LocalizationManager.T("Jobs.Title")))
+            return;
+        var result = await ScheduledJobsService.SetAllAsync(clone, false);
+        if (result.Success)
+        {
+            _logger.Info($"[clone] в копии «{clone.Name}» выключено регламентных заданий: {result.Changed}");
+            _dialogs.ShowInfo(string.Format(LocalizationManager.T("Jobs.CloneDone"), clone.Name, result.Changed),
+                LocalizationManager.T("Jobs.Title"));
+        }
+        else
+        {
+            _dialogs.ShowWarning(string.Format(LocalizationManager.T("Jobs.CloneFailed"), clone.Name, result.Error),
+                LocalizationManager.T("Jobs.Title"));
+        }
+    }
+
     // ======================= Версионирование конфигурации в Git (1.0.0.69) =======================
 
     private ICommand? _gitVersioningCommand;

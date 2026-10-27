@@ -327,6 +327,8 @@ public partial class MainWindow
                 item.Command = _viewModel.ExtensionsCommand; break;
             case UtilitiesMenuCommandKind.InfobaseUsers:
                 item.Command = _viewModel.InfobaseUsersCommand; break;
+            case UtilitiesMenuCommandKind.InfobaseScheduledJobs:
+                item.Command = _viewModel.ScheduledJobsCommand; break;
         }
     }
 

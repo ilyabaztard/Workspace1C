@@ -1965,6 +1965,8 @@ namespace Workspace1C
                     item.Command = _vm!.ExtensionsCommand; break;
                 case UtilitiesMenuCommandKind.InfobaseUsers:
                     item.Command = _vm!.InfobaseUsersCommand; break;
+                case UtilitiesMenuCommandKind.InfobaseScheduledJobs:
+                    item.Command = _vm!.ScheduledJobsCommand; break;
                 case UtilitiesMenuCommandKind.RepositoryBatchUpdate:
                     item.Command = _vm!.RepositoryBatchUpdateCommand; break;
                 case UtilitiesMenuCommandKind.RepositoryBrowser:

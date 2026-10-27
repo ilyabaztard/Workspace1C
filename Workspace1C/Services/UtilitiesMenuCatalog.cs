@@ -146,7 +146,10 @@ public enum UtilitiesMenuCommandKind
     SharedLists,
 
     /// <summary>Пользователи информационных баз (1.0.0.83).</summary>
-    InfobaseUsers
+    InfobaseUsers,
+
+    /// <summary>Регламентные задания информационных баз (1.0.0.85).</summary>
+    InfobaseScheduledJobs
 }
 
 /// <summary>
@@ -479,6 +482,10 @@ public static class UtilitiesMenuCatalog
             new("InfobaseUsers", "IbUsers.MenuItem", GroupOperations,
                 "IconUsers", "IconUsers", "#6366F1", UtilitiesMenuCommandKind.InfobaseUsers,
                 isNew: true),
+            // «Регламентные задания ИБ» (1.0.0.85): список, включение/выключение через COM.
+            new("InfobaseScheduledJobs", "Jobs.MenuItem", GroupOperations,
+                "CalendarClock", "IconScheduler", "#F59E0B", UtilitiesMenuCommandKind.InfobaseScheduledJobs,
+                isNew: true),
             // «Версионирование конфигурации в Git (1.0.0.69)».
             new("GitVersioning", "Git.MenuItem", GroupOperations,
                 "IconMerge", "IconMerge", "#F97316", UtilitiesMenuCommandKind.GitVersioning,
@@ -607,6 +614,7 @@ public static class UtilitiesMenuLayouts
                 Item("EventLog"),
                 Item("ConfigExtensions"),
                 Item("InfobaseUsers"),
+                Item("InfobaseScheduledJobs"),
                 Item("GitVersioning"),
                 Item("TechLog"),
                 Item("ServerAlerts"),

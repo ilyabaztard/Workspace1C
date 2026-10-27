@@ -1817,6 +1817,7 @@ public string HotkeyEnterprise
         RefreshRunningFlags();
         _logger.Info($"[clone] «{source.Name}» → «{newName}» ({targetDir})");
         _dialogs.ShowInfo(string.Format(LocalizationManager.T("Clone.Done"), newName, targetDir), LocalizationManager.T("Clone.Title"));
+        await OfferDisableScheduledJobsAsync(clone);
     }
 
     /// <summary>
@@ -1887,6 +1888,7 @@ public string HotkeyEnterprise
                 LocalizationManager.T("CloneServer.DoneFormat"),
                 request.CloneName, request.Server, request.DatabaseName),
             LocalizationManager.T("CloneServer.Title"));
+        await OfferDisableScheduledJobsAsync(clone);
     }
 
     /// <summary>
