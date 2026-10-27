@@ -66,9 +66,10 @@ namespace Workspace1C
 
             var enable = AvaloniaUi.Button("TechLog.Enable", (_, _) => Report(_vm.Enable(), "TechLog.Enabled"), 150, accent: true);
             var disable = AvaloniaUi.Button("TechLog.Disable", (_, _) => Report(_vm.Disable(), "TechLog.Disabled"), 150);
+            var analyze = AvaloniaUi.Button("TechLog.Analyze", (_, _) => OpenAnalysis(), 160);
             var close = AvaloniaUi.Button("Common.Close", (_, _) => Close(), 110);
             close.IsCancel = true;
-            var buttons = AvaloniaUi.ButtonRow(enable, disable, close);
+            var buttons = AvaloniaUi.ButtonRow(enable, disable, analyze, close);
             buttons.HorizontalAlignment = HorizontalAlignment.Right;
             buttons.Margin = new Thickness(0, 12, 0, 0);
             AvaloniaUi.Place(root, buttons, 4);
@@ -93,6 +94,29 @@ namespace Workspace1C
                 dialogs.ShowInfo(LocalizationManager.T(okKey), Title ?? string.Empty);
             else
                 dialogs.ShowError(error, Title ?? string.Empty);
+        }
+
+        /// <summary>
+        /// Открывает окно анализа уже собранных логов из каталога журнала
+        /// (порог длительности переносится из текущей формы, выпуск 1.0.0.86).
+        /// </summary>
+        private void OpenAnalysis()
+        {
+            var dialogs = AppServices.GetRequiredService<IDialogService>();
+            if (string.IsNullOrWhiteSpace(_vm.LogDirectory))
+            {
+                dialogs.ShowWarning(LocalizationManager.T("TechLog.LogDirRequired"), Title ?? string.Empty);
+                return;
+            }
+            if (!System.IO.Directory.Exists(_vm.LogDirectory))
+            {
+                dialogs.ShowWarning(LocalizationManager.T("TechLog.Analysis.DirNotFound"), Title ?? string.Empty);
+                return;
+            }
+
+            var viewModel = new TechLogAnalysisViewModel(_vm.LogDirectory, _vm.ThresholdMs);
+            var window = new TechLogAnalysisWindow(viewModel);
+            _ = window.ShowDialog(this);
         }
     }
 }

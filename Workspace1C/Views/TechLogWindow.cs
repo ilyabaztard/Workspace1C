@@ -59,10 +59,11 @@ namespace Workspace1C
 
             var enable = WpfUi.Button("TechLog.Enable", (_, _) => Report(_vm.Enable(), "TechLog.Enabled"), 150, accent: true);
             var disable = WpfUi.Button("TechLog.Disable", (_, _) => Report(_vm.Disable(), "TechLog.Disabled"), 150);
+            var analyze = WpfUi.Button("TechLog.Analyze", (_, _) => OpenAnalysis(), 160);
             var openLogs = WpfUi.Button("TechLog.OpenLogs", (_, _) => OpenFolder(_vm.LogDirectory), 160);
             var close = WpfUi.Button("Common.Close", (_, _) => Close(), 110);
             close.IsCancel = true;
-            var buttons = WpfUi.ButtonRow(enable, disable, openLogs, close);
+            var buttons = WpfUi.ButtonRow(enable, disable, analyze, openLogs, close);
             buttons.HorizontalAlignment = HorizontalAlignment.Right;
             buttons.Margin = new Thickness(0, 12, 0, 0);
             WpfUi.Place(root, buttons, 4);
@@ -101,6 +102,29 @@ namespace Workspace1C
             {
                 AppServices.GetRequiredService<IDialogService>().ShowError(ex.Message, Title);
             }
+        }
+
+        /// <summary>
+        /// Открывает окно анализа уже собранных логов из каталога журнала
+        /// (порог длительности переносится из текущей формы, выпуск 1.0.0.86).
+        /// </summary>
+        private void OpenAnalysis()
+        {
+            var dialogs = AppServices.GetRequiredService<IDialogService>();
+            if (string.IsNullOrWhiteSpace(_vm.LogDirectory))
+            {
+                dialogs.ShowWarning(LocalizationManager.T("TechLog.LogDirRequired"), Title);
+                return;
+            }
+            if (!System.IO.Directory.Exists(_vm.LogDirectory))
+            {
+                dialogs.ShowWarning(LocalizationManager.T("TechLog.Analysis.DirNotFound"), Title);
+                return;
+            }
+
+            var viewModel = new TechLogAnalysisViewModel(_vm.LogDirectory, _vm.ThresholdMs);
+            var window = new TechLogAnalysisWindow(viewModel) { Owner = this };
+            window.ShowDialog();
         }
     }
 }
