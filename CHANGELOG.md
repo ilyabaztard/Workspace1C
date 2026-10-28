@@ -11,6 +11,48 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.95] — 2026-10-28
+
+### Исправлено
+
+- **Переключение сервера 1С в окне «Серверы 1С» всегда заканчивалось ошибкой
+  (issue #77)** — при переходе на другой сервер (кнопка «Подключиться» при
+  выбранной строке справочника или двойной клик) данные загружались не сразу,
+  а только после нажатия «Обновить» или повторного двойного клика. Причина:
+  [`ConnectAsync()`](Workspace1C/ViewModels/ServerMonitorViewModel.cs) при
+  повторном подключении НЕ сбрасывала выбор кластера
+  (`SelectedClusterId` оставался от ПРЕДЫДУЩЕГО сервера), а применение нового
+  списка кластеров в WPF/Avalonia идёт в UI-поток отложенно
+  (Dispatcher.BeginInvoke / UIThread.Post) — после выхода из флага занятости
+  первичная загрузка стартовала со СТАРЫМ идентификатором кластера на новом
+  сервере, и rac возвращал ошибку.
+
+  Теперь при старте подключения состояние кластера сбрасывается синхронно
+  (выбор кластера, список кластеров, данные вкладок, фильтр по базе), а
+  автовыбор первого кластера берётся из только что полученного списка
+  `cluster list`, а не из устаревших `SelectedClusterId`/`ClusterRows`.
+  Переключение на другой сервер загружает кластеры/базы/сеансы/соединения
+  сразу, без промежуточного «Обновить». Исправление общее для обеих
+  платформ: WPF ([`ServerMonitorWindow.xaml.cs`](Workspace1C/Views/ServerMonitorWindow.xaml.cs))
+  и Avalonia ([`ServerMonitorWindow.Avalonia.cs`](Workspace1C/Views/ServerMonitorWindow.Avalonia.cs)) —
+  логика в общем ViewModel
+  ([`ServerMonitorViewModel.cs`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)).
+
+### Тесты
+
+- [`ServerMonitorViewModelTests.cs`](Workspace1C.Tests/ServerMonitorViewModelTests.cs):
+  `ReconnectToAnotherServer_LoadsClusterOfNewServer_FirstTry_Issue77` — переключение
+  со «старого» сервера на «новый» с чужими кластерами загружает данные нового
+  сервера с первого раза (без обращения к устаревшему id); `SwitchServer_WithDeferredApply_LoadsClusterOfNewServer_FirstTry_Issue77`
+  — тот же сценарий с ОТЛОЖЕННЫМ применением результатов в UI-поток, как на
+  реальной платформе (WPF Dispatcher / Avalonia UIThread).
+
+### Общее
+
+- Общее число юнит-тестов выросло до 4856 (все проходят на Windows; Linux-сборка — без ошибок).
+
+---
+
 ## [1.0.0.94] — 2026-10-28
 
 ### Исправлено

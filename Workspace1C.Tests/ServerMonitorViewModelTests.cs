@@ -844,6 +844,110 @@ public sealed class ServerMonitorViewModelTests
         Assert.False(vm.HasConnectedServer);
     }
 
+    // ===================== Переключение сервера с первого раза (issue #77) =====================
+
+    [Fact]
+    public async Task ReconnectToAnotherServer_LoadsClusterOfNewServer_FirstTry_Issue77()
+    {
+        // issue #77: переключение на другой сервер 1С («Подключиться» / двойной клик)
+        // ВСЕГДА заканчивалось ошибкой — выбор кластера не сбрасывался при повторном
+        // подключении, и первичная загрузка шла со старым id кластера ПРЕЖНЕГО сервера.
+        // Синхронный путь (dispatch==null, как в юнит-тестах) воспроизводит багу на
+        // сервере B с НЕСКОЛЬКИМИ кластерами: ApplyClusters при 2+ кластерах не трогает
+        // SelectedClusterId, поэтому старый id оставался и уходил в rac.
+        var client = new FakeRacClient();
+        var firstLoads = 0;
+        client.ClustersByAddress = new Dictionary<string, IReadOnlyList<RacCluster>>
+        {
+            // У сервера B СВОИ кластеры — id НЕ пересекаются с кластерами сервера A.
+            ["srv-b"] = new[]
+            {
+                new RacCluster { Id = Guid.Parse("33333333-3333-3333-3333-333333333331"), Name = "Кластер B1", Port = 1541 },
+                new RacCluster { Id = Guid.Parse("33333333-3333-3333-3333-333333333332"), Name = "Кластер B2", Port = 1542 }
+            }
+        };
+
+        var vm = new ServerMonitorViewModel(client, new RecordingDialogs());
+        var serverA = new ManagementServer { Id = "a", Description = "A", Address = "srv-a", Port = 1540 };
+        var serverB = new ManagementServer { Id = "b", Description = "B", Address = "srv-b", Port = 1540 };
+
+        // Подключение к серверу A: выбран первый кластер (FirstClusterId) и данные загружены.
+        await vm.ConnectToServerAsync(serverA);
+        await Task.Delay(50);
+        Assert.Equal(FakeRacClient.FirstClusterId, vm.SelectedClusterId);
+        firstLoads = client.LoadedClusterIds.Count;
+        Assert.True(firstLoads >= 1);
+
+        // Переключение на сервер B С ПЕРВОГО РАЗА: выбор переходит на кластер B,
+        // загрузка идёт с id первого кластера НОВОГО сервера (а не со старым id A).
+        await vm.ConnectToServerAsync(serverB);
+        await Task.Delay(50);
+
+        Assert.Equal(Guid.Parse("33333333-3333-3333-3333-333333333331"), vm.SelectedClusterId);
+        Assert.Same(serverB, vm.ConnectedServer);
+        Assert.Equal(1, client.LoadedClusterIds.Count - firstLoads);
+        Assert.All(client.LoadedClusterIds.Skip(firstLoads), id => Assert.Equal(Guid.Parse("33333333-3333-3333-3333-333333333331"), id));
+        Assert.Empty(vm.ErrorMessage);
+        // Синхронный путь: данные первого кластера B уже применены, вкладки заполнены.
+        Assert.Single(vm.Sessions);
+        Assert.Single(vm.Infobases);
+        vm.Dispose();
+    }
+
+    [Fact]
+    public async Task SwitchServer_WithDeferredApply_LoadsClusterOfNewServer_FirstTry_Issue77()
+    {
+        // issue #77 на WPF/Avalonia: ApplyClusters применяется В UI-потоке ОТЛОЖЕННО
+        // (Dispatcher.BeginInvoke / UIThread.Post), а ConnectAsync после ConfigureAwait(false)
+        // продолжается в фоне. До фикса после ExitBusy проверялся УСТАРЕВШИЙ
+        // SelectedClusterId прежнего сервера — загрузка уходила в rac со старым id на
+        // новом сервере; «Обновить» потом работал, потому что отложенный Apply к тому
+        // моменту уже применился.
+        var client = new FakeRacClient();
+        var clusterB = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        client.ClustersByAddress = new Dictionary<string, IReadOnlyList<RacCluster>>
+        {
+            ["srv-b"] = new[] { new RacCluster { Id = clusterB, Name = "Кластер B", Port = 1541 } }
+        };
+
+        // Отложенная доставка «в UI-поток»: действия копятся и применяются вручную,
+        // как очередь диспетчера в реальном окне (WPF Dispatcher / Avalonia UIThread).
+        var pending = new List<Action>();
+        void dispatch(Action action) => pending.Add(action);
+        var vm = new ServerMonitorViewModel(client, new RecordingDialogs(), dispatch);
+        var serverA = new ManagementServer { Id = "a", Description = "A", Address = "srv-a", Port = 1540 };
+        var serverB = new ManagementServer { Id = "b", Description = "B", Address = "srv-b", Port = 1540 };
+
+        // Первое подключение к A: применяем отложенную очередь (индексный цикл —
+        // применение Apply может добавить в очередь новые действия).
+        await vm.ConnectToServerAsync(serverA);
+        for (var i = 0; i < pending.Count; i++)
+            pending[i]();
+        pending.Clear();
+        Assert.Equal(FakeRacClient.FirstClusterId, vm.SelectedClusterId);
+        Assert.Single(vm.Sessions);
+
+        // Переключение на B: очередь снова отложена — ConnectAsync работает в фоне.
+        await vm.ConnectToServerAsync(serverB);
+        await Task.Delay(50);
+
+        // Загрузка уже ушла с id кластера НОВОГО сервера, а не со старым id кластера A.
+        Assert.Equal(clusterB, vm.SelectedClusterId);
+        Assert.Same(serverB, vm.ConnectedServer);
+        Assert.All(client.LoadedClusterIds.Skip(1), id => Assert.Equal(clusterB, id));
+
+        // Применяем очередь «UI-потока»: данные кластера B приходят без ошибок.
+        for (var i = 0; i < pending.Count; i++)
+            pending[i]();
+        pending.Clear();
+
+        Assert.Empty(vm.ErrorMessage);
+        Assert.Single(vm.Sessions);
+        Assert.Single(vm.Processes);
+        Assert.Single(vm.Infobases);
+        vm.Dispose();
+    }
+
     [Fact]
     public async Task Reconnect_ResetsPreviousHighlight_WhenNewTargetNotInCatalog()
     {
@@ -2323,6 +2427,20 @@ public sealed class ServerMonitorViewModelTests
         /// <summary>Сколько раз запрошены рабочие процессы (для проверки флага занятости).</summary>
         public int ProcessCalls { get; private set; }
 
+        /// <summary>
+        /// clusterId всех вызовов «process list» (issue #77): какой кластер реально
+        /// загружается после переключения на другой сервер — до фикса это был id
+        /// кластера ПРЕЖНЕГО сервера.
+        /// </summary>
+        public List<System.Guid> LoadedClusterIds { get; } = new();
+
+        /// <summary>
+        /// Кластеры по адресу сервера (issue #77): имитация РАЗНЫХ серверов 1С с
+        /// РАЗНЫМИ кластерами — при совпадении <see cref="RacConnectionParams.Address"/>
+        /// возвращается собственный список (например, с чужими для другого сервера id).
+        /// </summary>
+        public Dictionary<string, IReadOnlyList<RacCluster>>? ClustersByAddress { get; set; }
+
         /// <summary>Сколько раз запрошены регламентные задания.</summary>
         public int JobCalls { get; private set; }
 
@@ -2364,6 +2482,12 @@ public sealed class ServerMonitorViewModelTests
             LastParams = parameters;
             if (_throwOnClusters)
                 throw new RacClientException("rac not found");
+            // issue #77: фикстура «другой сервер» — собственный список кластеров по адресу.
+            if (ClustersByAddress is { } byAddress &&
+                byAddress.TryGetValue(parameters.Address, out var custom))
+            {
+                return Task.FromResult(custom);
+            }
             if (_singleCluster)
             {
                 return Task.FromResult<IReadOnlyList<RacCluster>>(new[]
@@ -2399,6 +2523,7 @@ public sealed class ServerMonitorViewModelTests
             RacConnectionParams parameters, Guid clusterId, CancellationToken cancellationToken = default)
         {
             ProcessCalls++;
+            LoadedClusterIds.Add(clusterId);
             if (_throwOnParse)
                 throw new RacOutputParseException("тест: вывод rac не распознан");
             if (_throwOnLoad)

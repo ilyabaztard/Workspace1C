@@ -1623,6 +1623,16 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
             // соединение уже не установлено.
             ConnectedServer = null;
 
+            // issue #77: при переключении на другой сервер выбор кластера, список
+            // кластеров и данные вкладок прежнего сервера сбрасываются СИНХРОННО —
+            // до первого await (в потоке вызова: UI-поток WPF/Avalonia, тесты).
+            // ApplyClusters применяется В UI-потоки позднее (Dispatcher.BeginInvoke /
+            // UIThread.Post), а ConnectAsync после ConfigureAwait(false) продолжается
+            // в фоне — без сброса здесь после ExitBusy запускалась
+            // LoadClusterDataAsync со СТАРЫМ идентификатором кластера прежнего
+            // сервера, и переключение всегда заканчивалось ошибкой rac.
+            ResetClusterState();
+
             var clusters = await _rac.GetClustersAsync(BuildParams()).ConfigureAwait(false);
 
             ApplyClusters(clusters);
@@ -1647,8 +1657,11 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
             // ConnectAsync молча пропускало LoadClusterDataAsync через TryEnterBusy,
             // и данные приходили только через таймер ~5 с спустя (issue #324:
             // «подключение локально занимает почти 5 секунд»).
-            if (SelectedClusterId is null && ClusterRows.Count > 0)
-                initialClusterId = ClusterRows[0].Id;
+            // issue #77: id берём из ТОЛЬКО ЧТО полученного списка (clusters), а не
+            // из ClusterRows/SelectedClusterId — в WPF/Avalonia ApplyClusters применяется
+            // в UI-потоке позже, и эти свойства на момент проверки ещё устаревшие.
+            if (clusters.Count > 0)
+                initialClusterId = clusters[0].Id;
         }
         catch (Exception ex)
         {
@@ -1672,13 +1685,28 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         }
 
         // busy освобождён — запускам первичную загрузку данных выбранного кластера.
-        // Важно: ApplyClusters при единственном кластере выбирает его ДО HasConnected=true,
-        // и сеттер тогда не запускает загрузку; без этого блока данные приходили бы
-        // только от таймера ~5 с спустя (issue #324).
-        if (SelectedClusterId is { } clusterId && HasConnected && _busy == 0)
+        // issue #77: за основу берём ТОЛЬКО что полученный список кластеров, а не
+        // SelectedClusterId — в WPF/Avalonia ApplyClusters мог ещё не примениться
+        // в UI-потоке, и это свойство содержит кластер ПРЕЖНЕГО сервера (переключение
+        // на другой сервер ранее всегда заканчивалось ошибкой). Когда единственный/
+        // первый кластер уже выбран синхронно (тесты: dispatch==null — ApplyClusters
+        // применился внутри busy и сеттер молча пропустил загрузку через TryEnterBusy),
+        // запускаем загрузку напрямую — без этого блока данные приходили бы только
+        // от таймера ~5 с спустя (issue #324).
+        if (initialClusterId is { } initialId)
+        {
+            if (SelectedClusterId == initialId)
+                _ = LoadClusterDataAsync(initialId);
+            else
+                SelectedClusterId = initialId;
+        }
+        else if (SelectedClusterId is { } clusterId && HasConnected)
+        {
+            // initialClusterId пуст только при пустом списке кластеров; ветка сохранена
+            // для симметрии синхронного пути (Dispatch==null), когда выбор мог остаться
+            // от ApplyClusters, но загрузка была пропущена из-за занятости.
             _ = LoadClusterDataAsync(clusterId);
-        else if (initialClusterId is { } initialId)
-            SelectedClusterId = initialId;
+        }
     }
 
     /// <summary>
@@ -2168,6 +2196,64 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
             User = UserName?.Trim() ?? string.Empty,
             Password = Password ?? string.Empty
         };
+    }
+
+    /// <summary>
+    /// Сбрасывает выбор кластера, список кластеров и данные вкладок при старте нового
+    /// подключения (issue #77). Выполняется СИНХРОННО до первого await в
+    /// <see cref="ConnectAsync"/> (поток вызова: UI-поток WPF/Avalonia, тесты) — иначе
+    /// ApplyClusters, отложенный в UI-поток (Dispatcher.BeginInvoke / UIThread.Post),
+    /// в связке с проверкой устаревшего <see cref="SelectedClusterId"/> запускал
+    /// LoadClusterDataAsync со старым идентификатором кластера прежнего сервера, и
+    /// переключение на другой сервер всегда заканчивалось ошибкой rac. Коллекции и
+    /// списки очищаются напрямую (без dispatch): метода вызывается из UI-потока.
+    /// </summary>
+    private void ResetClusterState()
+    {
+        // Выбор кластера: сеттер при null загрузку не запускает, при этом сбрасывает
+        // фильтр по базе (идентификаторы баз другого кластера бессмысленны).
+        SelectedClusterId = null;
+
+        // Список кластеров очищается сразу, а не отложенным dispatch: фоновая
+        // проверка «ClusterRows.Count > 0» в ConnectAsync не должна видеть кластеры
+        // прежнего сервера.
+        Clusters = Array.Empty<RacCluster>();
+        ClusterRows = Array.Empty<RacClusterRow>();
+        OnPropertyChanged(nameof(Clusters));
+        OnPropertyChanged(nameof(ClusterRows));
+
+        // Кэш имён информационных баз и клиентский фильтр по базе.
+        _infobaseNames.Clear();
+        _selectedInfobase = null;
+        _selectedInfobaseId = null;
+        OnPropertyChanged(nameof(SelectedInfobase));
+        OnPropertyChanged(nameof(SelectedInfobaseId));
+
+        // Данные вкладок прежнего сервера больше не актуальны.
+        Processes.Clear();
+        Sessions.Clear();
+        Connections.Clear();
+        Locks.Clear();
+        Infobases.Clear();
+        LicensedSessions.Clear();
+        InstalledLicenses.Clear();
+        ClusterProperties.Clear();
+        FilteredSessions.Clear();
+        FilteredConnections.Clear();
+        FilteredLocks.Clear();
+        SelectedSessions = Array.Empty<RacSessionRow>();
+        SelectedConnections = Array.Empty<RacConnectionRow>();
+        SelectedSession = null;
+        SelectedConnection = null;
+        ClusterInfo = null;
+        ClusterInfoText = string.Empty;
+        LicenseSummaryText = string.Empty;
+        LicenseStatusText = string.Empty;
+        OnPropertyChanged(nameof(HasInfobases));
+        OnPropertyChanged(nameof(HasInfobaseFilter));
+        OnPropertyChanged(nameof(InfobaseFilterText));
+        OnPropertyChanged(nameof(CanDropInfobase));
+        RaiseTabHeaderChanges();
     }
 
     private void ApplyClusters(IReadOnlyList<RacCluster> clusters)
