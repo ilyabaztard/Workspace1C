@@ -70,6 +70,35 @@ public sealed class Issue71SettingsWindowLayoutTests
     }
 
     // ------------------------------------------------------------------
+    // Стартовые размеры окон (issue #71, комментарий RizvanShikhammatov):
+    // окно открывается с комфортными размерами, а не сразу в минимуме —
+    // «такого сужения тоже не хочется». Минимум остаётся страховкой от
+    // обрезания контента при ручном сужении.
+    // ------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("SettingsWindow.xaml", "1100", "760")]
+    [InlineData("ConnectionSettingsWindow.xaml", "900", "800")]
+    public void WpfSettingsWindows_HaveComfortableStartSizes(string fileName, string width, string height)
+    {
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Views", fileName));
+
+        Assert.Contains($"Width=\"{width}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains($"Height=\"{height}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("SettingsWindow.Avalonia.cs", "1100", "760")]
+    [InlineData("ConnectionSettingsWindow.Avalonia.cs", "900", "800")]
+    public void AvaloniaSettingsWindows_HaveComfortableStartSizes(string fileName, string width, string height)
+    {
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", fileName));
+
+        Assert.Contains($"Width = {width};", code, StringComparison.Ordinal);
+        Assert.Contains($"Height = {height};", code, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------
     // Горизонтальная прокрутка вкладок настроек отключена (issue #71):
     // контентные ScrollViewer вкладок имеют Disabled, вертикальная полоса
     // остаётся. Auto допустима только у вложенных списков/просмотрщиков.

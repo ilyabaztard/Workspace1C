@@ -1,6 +1,6 @@
 # Workspace 1C
 
-![Версия](https://img.shields.io/badge/Версия-1.0.0.100-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
+![Версия](https://img.shields.io/badge/Версия-1.0.0.101-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
 
 > **Кроссплатформенное десктопное приложение на .NET для управления информационными базами 1С:Предприятие 8.3**, заменяющее стандартный список баз 1С современным интерфейсом. Одна кодовая база собирается под обе ОС: **WPF** на Windows и **Avalonia 11** на Linux.
 
@@ -8,8 +8,8 @@
 
 **Workspace 1C** — новое название программы «Управление конфигурациями 1С». Возможности
 сохранены полностью, нумерация версий начата заново с **1.0.0.0** (последняя версия под
-прежним названием — 0.3.12.70); актуальная версия — **1.0.0.100**
-(поддерживается **4 884 юнит-тестами**).
+прежним названием — 0.3.12.70); актуальная версия — **1.0.0.101**
+(поддерживается **4 895 юнит-тестами**).
 
 ## 📣 Telegram-канал
 
@@ -240,6 +240,13 @@
   (`infobase update --scheduled-jobs-deny=on`), затем завершаются сеансы, затем
   повторяется удаление; если завершение сеансов не удалось — диалог показывается
   снова, «Отмена» прерывает.
+- **Окна «Настройки» и «Настройка информационной базы»: комфортные стартовые размеры
+  (1.0.0.101, issue #71, Windows и Linux)** — после фикса 1.0.0.82 «размах» вкладок
+  исчез, но окна открывались сразу в минимальном размере и выглядели «суженными».
+  Выставлены корректные стартовые размеры при сохранении минимальных: «Настройки» —
+  1100×760 (минимум 960×720), «Настройка информационной базы» — 900×800 (минимум
+  760×780); сузить окно мышкой ниже минимума нельзя, горизонтальная прокрутка
+  вкладок остаётся отключённой (покрыто `Issue71SettingsWindowLayoutTests`).
 - **Цвета фона строк таблиц в тёмной теме (1.0.0.100, issue #76, Windows и Linux)** —
   в окне «Миграция между кластерами 1С» строка таблицы баз больше не остаётся
   светло-серой в тёмной теме: локальные `DataGrid.CellStyle` окон теперь наследуют

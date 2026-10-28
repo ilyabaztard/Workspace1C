@@ -72,8 +72,8 @@ namespace Workspace1C
             _initialTab = initialTab;
             // Размеры и базовый кегль по разметке (ConnectionSettingsWindow.xaml:13).
             Title = LocalizationManager.T("ConnectionSettings.Title");
-            Width = 760;
-            Height = 780;
+            Width = 900;
+            Height = 800;
             MinWidth = 760;
             MinHeight = 780;
             FontSize = 13;
