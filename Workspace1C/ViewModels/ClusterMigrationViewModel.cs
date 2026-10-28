@@ -502,11 +502,22 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
 
     // ===================== Прогресс и результат =====================
 
-    /// <summary>Текущая обрабатываемая база («какая база обрабатывается», issue #41).</summary>
+    /// <summary>
+    /// Текущая обрабатываемая база («какая база обрабатывается», issue #41). Смена имени
+    /// ПЕРЕСОБИРАЕТ <see cref="ProgressText"/> («N из M: <текущая база>»): окна WPF и Avalonia
+    /// подписаны на событие ProgressText (обработчик OnVmPropertyChanged → UpdateCommandStates
+    /// читает vm.ProgressText), поэтому без этого оповещения при обработке следующей базы
+    /// стояла бы надпись с именем ПРЕДЫДУЩЕЙ (комментарий 7OH от 2026-10-27 «Во время
+    /// обработки 2-й — показывает данные первой базы»).
+    /// </summary>
     public string CurrentBaseName
     {
         get => _currentBaseName;
-        private set => SetProperty(ref _currentBaseName, value);
+        private set
+        {
+            if (SetProperty(ref _currentBaseName, value))
+                OnPropertyChanged(nameof(ProgressText));
+        }
     }
 
     /// <summary>Порядковый номер обрабатываемой базы в текущем прогоне (счётчик «1 из K», 1-based).</summary>
@@ -539,7 +550,11 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
     public int ProcessedCount
     {
         get => _processedCount;
-        private set => SetProperty(ref _processedCount, value);
+        private set
+        {
+            if (SetProperty(ref _processedCount, value))
+                OnPropertyChanged(nameof(ProgressText));
+        }
     }
 
     /// <summary>Строка прогресса «N из M: база» (issue #41, фоном в диалоге).</summary>

@@ -404,6 +404,54 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
+    public async Task Migrate_Progress_ShowsEachBaseNameInTurn_IncludingFailedSecond()
+    {
+        // Issue #41, последний комментарий 7OH от 2026-10-27: «Во время обработки 2-й,
+        // которой нет в сервере СУБД — показывает данные первой базы. … Во время начала
+        // обработки 3-й — была надпись 2-й, и в конце появилась 3-я». Причина «сдвига на
+        // предыдущую базу»: CurrentBaseName/ProcessedCount НЕ оповещали о смене
+        // ProgressText — окно (WPF и Avalonia подписаны на ProgressText → UpdateCommandStates
+        // читает vm.ProgressText) пересобирало строку «N из M: <база>» при смене СЧЁТЧИКА
+        // (ProgressIndex поднимает ProgressText), когда CurrentBaseName ещё содержал имя
+        // ПРЕДЫДУЩЕЙ базы; смена имени события ProgressText не поднимала, и корректное имя
+        // появлялось только на следующем оповещении (следующая итерация / сброс занятости).
+        // Регресс: каждое изменение имени/счётчика/итога обязано поднимать ProgressText —
+        // в последовательности оповещений присутствуют пары (счётчик, имя) для КАЖДОЙ
+        // обрабатываемой базы, включая вторую с ошибкой создания.
+        var client = new FakeRacClient(sourceBaseCount: 3, failCreateOnIndex: 2);
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        var snapshots = new List<(int Index, int Total, string Name)>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (string.Equals(e.PropertyName, nameof(ClusterMigrationViewModel.ProgressText), StringComparison.Ordinal))
+                snapshots.Add((vm.ProgressIndex, vm.ProgressTotal, vm.CurrentBaseName));
+        };
+
+        await vm.MigrateAsync();
+
+        Assert.Equal(3, vm.ProgressTotal);
+        // Для каждой итерации есть оповещение ProgressText с УЖЕ НОВЫМ именем базы:
+        // без фикса окно получало «N из M» со старым именем («2 из 3: База1», «3 из 3:
+        // База2») и имени текущей базы не видело до конца прогона.
+        Assert.Contains(snapshots, s => s.Index == 1 && s.Name == "База1");
+        Assert.Contains(snapshots, s => s.Index == 2 && s.Name == "База2");
+        Assert.Contains(snapshots, s => s.Index == 3 && s.Name == "База3");
+        // Вторая база обработана с ошибкой (пример из комментария — «которой нет в
+        // сервере СУБД»), но её имя в строке прогресса появилось в свой ход.
+        Assert.NotEmpty(vm.SourceRows.First(r => r.Name == "База2").MigrationStatus);
+        Assert.True(vm.MigrationCompleted);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
     public async Task Migrate_FirstBaseNameShown_WhileFirstOperationInProgress()
     {
         // Issue #41, комментарий 7OH от 2026-10-26 «Первая без имени — просто "1 из 3"»:
