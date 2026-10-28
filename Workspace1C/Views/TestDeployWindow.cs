@@ -215,8 +215,8 @@ public class TestDeployWindow : Window
         {
             ItemsSource = new[]
             {
-                new ScheduleOptionValue("Designer", LocalizationManager.T("TestDeploy.EngineDesigner")),
-                new ScheduleOptionValue("Ibcmd", LocalizationManager.T("TestDeploy.EngineIbcmd"))
+                new TestDeployEngineOption("Designer", LocalizationManager.T("TestDeploy.EngineDesigner")),
+                new TestDeployEngineOption("Ibcmd", LocalizationManager.T("TestDeploy.EngineIbcmd"))
             },
             DisplayMemberPath = "Text",
             SelectedIndex = _vm.EngineIndex,
@@ -529,17 +529,5 @@ public class TestDeployWindow : Window
         Margin = new Thickness(0, 0, 0, 6)
     };
 
-    /// <summary>Простая пара «ключ/текст» для выпадающих списков окна.</summary>
-    private sealed class ScheduleOptionValue
-    {
-        public ScheduleOptionValue(string value, string text)
-        {
-            Value = value;
-            Text = text;
-        }
-
-        public string Value { get; }
-        public string Text { get; }
-    }
 }
 #endif

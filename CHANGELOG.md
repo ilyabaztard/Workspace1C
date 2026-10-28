@@ -11,8 +11,35 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
-## [1.0.0.93] — 2026-10-28
+## [1.0.0.94] — 2026-10-28
 
+### Исправлено
+
+- **«Движок выгрузки» в мастере «Развернуть тестовую копию» показывал CLR-имя
+  типа вместо текста (issue #79)** — в выпадающем списке отображалось
+  «Workspace1C.TestDeployWindow+ScheduleOptionValue» вместо «Конфигуратор»,
+  «ibcmd (без окна)». Причина: пара «ключ/текст» для элементов списка не
+  переопределяла `ToString()`. Теперь список движков построен на общем классе
+  [`TestDeployEngineOption`](Workspace1C/Models/TestDeployEngineOption.cs)
+  (ключ + локализованный текст + `ToString() => Text`) и используется в обеих
+  платформах: WPF ([`TestDeployWindow.cs`](Workspace1C/Views/TestDeployWindow.cs))
+  и Avalonia ([`TestDeployWindow.Avalonia.cs`](Workspace1C/Views/TestDeployWindow.Avalonia.cs)).
+  Выбор движка по-прежнему сохраняется в сценарий (`DumpEngine`).
+
+### Тесты
+
+- [`TestDeployTests.cs`](Workspace1C.Tests/TestDeployTests.cs): регрессия
+  `EngineOption_ToString_ReturnsTextNotTypeName` — элемент списка движков
+  отображает локализованный текст, а не CLR-имя типа; `ViewModel_EngineIndex_MapsToDumpEngine`
+  — индекс выбранного движка корректно попадает в сценарий.
+
+### Общее
+
+- Общее число юнит-тестов выросло до 4854 (все проходят на Windows; Linux-сборка — без ошибок).
+
+---
+
+## [1.0.0.93] — 2026-10-28
 ### Исправлено
 
 - **Заметки к базе не сохранялись на Windows (issue #78)** — при сохранении заметки

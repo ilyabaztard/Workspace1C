@@ -378,4 +378,45 @@ public sealed class TestDeployTests
         var errors = vm.Validate();
         Assert.NotEmpty(errors);
     }
+
+    // ---------- Движок выгрузки (issue #79) ----------
+
+    [Theory]
+    [InlineData("Designer", "Конфигуратор")]
+    [InlineData("Ibcmd", "ibcmd (без окна)")]
+    public void EngineOption_ToString_ReturnsTextNotTypeName(string value, string text)
+    {
+        // issue #79: раньше ComboBox «Движок выгрузки» показывал CLR-имя типа
+        // (например, «Workspace1C.TestDeployWindow+ScheduleOptionValue»), потому что
+        // пара «ключ/текст» не переопределяла ToString(). Теперь общий класс
+        // TestDeployEngineOption отображает человекочитаемый текст.
+        var option = new TestDeployEngineOption(value, text);
+
+        Assert.Equal(value, option.Value);
+        Assert.Equal(text, option.Text);
+        Assert.Equal(text, option.ToString());
+        Assert.DoesNotContain("TestDeploy", option.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0, BackupEngine.Designer)]
+    [InlineData(1, BackupEngine.Ibcmd)]
+    public void ViewModel_EngineIndex_MapsToDumpEngine(int index, BackupEngine expected)
+    {
+        // Выбор движка в списке мастера сохраняется в сценарий (используется при выгрузке .dt).
+        var source = Base("УТ");
+        source.PlatformVersion = "8.3.27";
+        var vm = new TestDeployViewModel(
+            source,
+            Array.Empty<Infobase>(),
+            Array.Empty<Group>(),
+            "Тест: УТ",
+            "srv:1541",
+            "УТ_t",
+            string.Empty);
+        vm.EngineIndex = index;
+
+        var scenario = vm.BuildScenario();
+        Assert.Equal(expected, scenario.DumpEngine);
+    }
 }

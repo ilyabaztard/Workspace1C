@@ -175,8 +175,8 @@ public class TestDeployWindow : ModalWindowBase
         // --- Движок выгрузки ---
         _engineCombo.ItemsSource = new[]
         {
-            new EngineOption("Designer", T("TestDeploy.EngineDesigner")),
-            new EngineOption("Ibcmd", T("TestDeploy.EngineIbcmd"))
+            new TestDeployEngineOption("Designer", T("TestDeploy.EngineDesigner")),
+            new TestDeployEngineOption("Ibcmd", T("TestDeploy.EngineIbcmd"))
         };
         _engineCombo.SelectedIndex = _vm.EngineIndex;
         _engineCombo.SelectionChanged += (_, _) => _vm.EngineIndex = Math.Max(0, _engineCombo.SelectedIndex);
@@ -447,19 +447,5 @@ public class TestDeployWindow : ModalWindowBase
 
     private static string T(string key) => LocalizationManager.T(key);
 
-    /// <summary>Простая пара «ключ/текст» для списка движков.</summary>
-    private sealed class EngineOption
-    {
-        public EngineOption(string value, string text)
-        {
-            Value = value;
-            Text = text;
-        }
-
-        public string Value { get; }
-        public string Text { get; }
-
-        public override string ToString() => Text;
-    }
 }
 #endif
