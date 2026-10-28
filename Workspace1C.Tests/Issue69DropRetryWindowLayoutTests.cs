@@ -382,4 +382,63 @@ public sealed class Issue69DropRetryWindowLayoutTests
         Assert.DoesNotContain("_blockScheduledJobsCheckBox.IsVisible", source, StringComparison.Ordinal);
         Assert.Contains("form.Children.Add(_blockScheduledJobsCheckBox)", source, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ServerMonitorViewModel_ReleasePassesInfobaseCredentials_ToDisconnectAndTerminate()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27 (лог 23:56): «connection disconnect»
+        // и «session terminate» защищённой базы должны получать --infobase-user/
+        // --infobase-pwd — иначе rac возвращает «Недостаточно прав пользователя на
+        // информационную базу», и «сеансы не снимаются».
+        var source = ReadProjectFile("Workspace1C", "ViewModels", "ServerMonitorViewModel.cs");
+
+        Assert.Contains("connection.Id, connection.ProcessId," + Environment.NewLine + "                            infobaseUser, infobasePassword",
+            source, StringComparison.Ordinal);
+        Assert.Contains("session.Id, processId," + Environment.NewLine + "                            infobaseUser, infobasePassword",
+            source, StringComparison.Ordinal);
+        // Креды из диалога повтора доходят до разрыва при каждом release.
+        Assert.Contains("row.InfobaseId, clusterId, infobaseUser, infobasePassword", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ServerMonitorViewModel_BlockScheduledJobs_UsesInfobaseCredentials_ForInfoAndUpdate()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27: «Не удаётся теперь установить
+        // блокировку» — догрузка параметров СУБД через «infobase info» и сам rac
+        // «infobase update --scheduled-jobs-deny=on» выполняются с кредами ИБ.
+        var source = ReadProjectFile("Workspace1C", "ViewModels", "ServerMonitorViewModel.cs");
+
+        Assert.Contains("row, clusterId, infobaseUser, infobasePassword", source, StringComparison.Ordinal);
+        Assert.Contains("InfobaseUser = infobaseUser ?? string.Empty", source, StringComparison.Ordinal);
+        Assert.Contains("InfobasePassword = infobasePassword ?? string.Empty", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ServerMonitorViewModel_ServiceConnectionFailure_IsSkippedNotFatal()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27: «Служебное соединение не может быть
+        // удалено» — штатный отказ rac, который НЕ должен прерывать разрыв остальных
+        // соединений/сеансов и «infobase drop». Проверяем, что guard существует и
+        // применяется и к разрыву соединений, и к завершению сеансов.
+        var source = ReadProjectFile("Workspace1C", "ViewModels", "ServerMonitorViewModel.cs");
+
+        Assert.Contains("internal static bool IsServiceConnectionError", source, StringComparison.Ordinal);
+        Assert.Contains("if (IsServiceConnectionError(error))" + Environment.NewLine + "                        continue;",
+            source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ServerMonitorWindow_DropOperation_PausesAutoRefresh_AndRestores()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27: «отключать автообновление данных на
+        // время, если оно было включено» — таймер останавливается на время удаления
+        // базы (иначе перезапрашиваемые сеансы/соединения мешают разрыву) и
+        // восстанавливается в исходное состояние после.
+        var source = ReadProjectFile("Workspace1C", "ViewModels", "ServerMonitorViewModel.cs");
+
+        Assert.Contains("var autoRefreshWasEnabled = IsAutoRefreshEnabled;", source, StringComparison.Ordinal);
+        Assert.Contains("SetAutoRefreshEnabled(false);", source, StringComparison.Ordinal);
+        Assert.Contains("if (autoRefreshWasEnabled)", source, StringComparison.Ordinal);
+        Assert.Contains("SetAutoRefreshEnabled(true);", source, StringComparison.Ordinal);
+    }
 }

@@ -142,22 +142,34 @@ public interface IRacClient
     /// Завершение сеанса пользователя (команда «session terminate --cluster=... [--process=...]
     /// --session=...»). Рабочий процесс <paramref name="processId"/> обязателен для rac 8.5.4
     /// (issue #69: «повторить — ошибка», «Ошибка разбора параметра: process»), в классических
-    /// 8.3.x — опционален. Возвращает true при ExitCode 0; при неудаче — false и текст
-    /// ошибки (включая stderr rac) в <see cref="LastActionError"/>.
+    /// 8.3.x — опционален. Учётные данные администратора ИБ (<paramref name="infobaseUser"/>/
+    /// <paramref name="infobasePassword"/>, issue #69, комментарий 7OH от 2026-10-27) нужны
+    /// для защищённых баз: rac отклоняет «session terminate» с «Недостаточно прав пользователя
+    /// на информационную базу», если креды не переданы аргументами <c>--infobase-user</c>/
+    /// <c>--infobase-pwd</c>; пароль маскируется при журналировании. Возвращает true при
+    /// ExitCode 0; при неудаче — false и текст ошибки (включая stderr rac) в
+    /// <see cref="LastActionError"/>.
     /// </summary>
     Task<bool> TerminateSessionAsync(
         RacConnectionParams parameters, Guid clusterId, Guid sessionId, Guid? processId = null,
+        string? infobaseUser = null, string? infobasePassword = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Разрыв соединения клиента (команда «connection disconnect --cluster=... [--process=...]
     /// --connection=...»). Рабочий процесс <paramref name="processId"/> обязателен для rac 8.5.4
     /// (issue #69: «повторить — ошибка», «Ошибка разбора параметра: process»), в классических
-    /// 8.3.x — опционален. Возвращает true при ExitCode 0; при неудаче — false и текст
-    /// ошибки (включая stderr rac) в <see cref="LastActionError"/>.
+    /// 8.3.x — опционален. Учётные данные администратора ИБ (<paramref name="infobaseUser"/>/
+    /// <paramref name="infobasePassword"/>, issue #69, комментарий 7OH от 2026-10-27) нужны
+    /// для защищённых баз: rac отклоняет «connection disconnect» с «Недостаточно прав
+    /// пользователя на информационную базу», если креды не переданы аргументами
+    /// <c>--infobase-user</c>/<c>--infobase-pwd</c>; пароль маскируется при журналировании.
+    /// Возвращает true при ExitCode 0; при неудаче — false и текст ошибки (включая stderr rac)
+    /// в <see cref="LastActionError"/>.
     /// </summary>
     Task<bool> DisconnectConnectionAsync(
         RacConnectionParams parameters, Guid clusterId, Guid connectionId, Guid? processId = null,
+        string? infobaseUser = null, string? infobasePassword = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

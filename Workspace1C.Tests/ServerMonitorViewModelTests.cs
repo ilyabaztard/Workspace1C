@@ -1873,6 +1873,190 @@ public sealed class ServerMonitorViewModelTests
         Assert.Empty(dialogs.Warnings);
     }
 
+    [Fact]
+    public async Task DropSelectedInfobase_Retry_DisconnectAndTerminate_GetInfobaseCredentials()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27: «удалять сеансы не хочет» — в его
+        // логе «connection disconnect»/«session terminate» падали с «Недостаточно прав
+        // пользователя на информационную базу», потому что креды администратора ИБ из
+        // диалога никуда не передавались (кроме самого «infobase drop»). Теперь они
+        // передаются в разрыв соединений и завершение сеансов.
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 2,
+            DropInfobaseFailureError = "rac: информационная база используется активными сеансами",
+            // Гонка «соединение не исчезло»: повторные release-циклы снова находят
+            // соединение/сеанс — как в логах 7OH, где база занята, а креды нужны
+            // каждому «connection disconnect»/«session terminate».
+            KeepConnectionsAfterDisconnect = true,
+            KeepSessionsAfterTerminate = true
+        };
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (_, _, _) =>
+                new DropRetryResult(true, "ИБ-админ", "секрет", TerminateSessions: true));
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Первая попытка — кредов ещё нет (диалог не отвечен); повторные разрывы — с
+        // кредами администратора ИБ из диалога.
+        Assert.Null(client.DisconnectCallsWithCredentials[0].infobaseUser);
+        var withCreds = client.DisconnectCallsWithCredentials
+            .Where(c => c.infobaseUser is not null).ToList();
+        Assert.NotEmpty(withCreds);
+        Assert.All(withCreds, c =>
+        {
+            Assert.Equal("ИБ-админ", c.infobaseUser);
+            Assert.Equal("секрет", c.infobasePassword);
+        });
+        var terminatedWithCreds = client.TerminateCallsWithCredentials
+            .Where(c => c.infobaseUser is not null).ToList();
+        Assert.NotEmpty(terminatedWithCreds);
+        Assert.All(terminatedWithCreds, c =>
+        {
+            Assert.Equal("ИБ-админ", c.infobaseUser);
+            Assert.Equal("секрет", c.infobasePassword);
+        });
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_ServiceConnectionDisconnectFailure_IsSkipped_DropSucceeds()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27 (лог 23:56): «connection disconnect»
+        // служебного соединения возвращает «Служебное соединение не может быть удалено» —
+        // раньше это ПРЕРЫВАЛО весь цикл разрыва, дальше (завершение сеансов, «infobase
+        // drop») дело не доходило. Служебное соединение нельзя разорвать, но drop оно
+        // НЕ блокирует — оно пропускается, остальной разрыв и удаление продолжаются.
+        var client = new FakeRacClient
+        {
+            DisconnectFailuresLeft = 1,
+            DisconnectFailureError = "rac: Служебное соединение не может быть удалено"
+        };
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (_, _, _) => DropRetryResult.Cancel);
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // Первый disconnect «служебный» — пропущен, второй успешен; сеансы завершены;
+        // база удалена БЕЗ показа диалога повтора.
+        Assert.Equal(2, client.DisconnectCalls.Count);
+        Assert.Single(client.TerminateCalls);
+        Assert.Single(client.DropInfobaseCalls);
+        Assert.Empty(dialogs.Warnings);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_AutoRefresh_DisabledDuringOperation_RestoredAfter()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27: «отключать автообновление данных на
+        // время, если оно было включено» — тик таймера перезапрашивает сеансы/соединения
+        // и может пересоздавать соединения во время удаления. Автообновление выключается
+        // на время всей операции удаления (включая диалог повтора) и включается обратно.
+        var client = new FakeRacClient { DropInfobaseFailuresLeft = 1 };
+        var dialogs = new RecordingDialogs();
+        var autoRefreshDuringDialog = true;
+        ServerMonitorViewModel vm = null!;
+        vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (_, _, _) =>
+            {
+                // Пока открыт диалог повтора — таймер автообновления остановлен
+                // (к моменту вызова колбэка vm уже создана).
+                autoRefreshDuringDialog = vm.AutoRefreshActive;
+                return new DropRetryResult(true, "ИБ-админ", "секрет");
+            });
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        // До операции автообновление активно (подключение запускает таймер).
+        Assert.True(vm.AutoRefreshActive);
+        Assert.True(vm.IsAutoRefreshEnabled);
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        Assert.False(autoRefreshDuringDialog, "автообновление должно быть остановлено на время операции");
+        // После операции автообновление восстановлено.
+        Assert.True(vm.IsAutoRefreshEnabled);
+        Assert.True(vm.AutoRefreshActive);
+        // Первая попытка удаления не удалась (диалог показан) → повтор с кредами успешен.
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+    }
+
+    [Fact]
+    public async Task DropSelectedInfobase_BlockScheduledJobs_PassesCredentials_ToInfobaseInfoAndUpdate()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27: «Не удаётся теперь установить
+        // блокировку» — на защищённой базе rac «infobase info» (догрузка параметров СУБД)
+        // и «infobase update --scheduled-jobs-deny=on» без --infobase-user/--infobase-pwd
+        // возвращают «Недостаточно прав». Креды из диалога передаются в оба вызова.
+        var client = new FakeRacClient
+        {
+            DropInfobaseFailuresLeft = 1,
+            DropInfobaseFailureError = "rac: информационная база используется активными сеансами",
+            // Сводка не содержит параметров СУБД — догружаем через «infobase info».
+            InfobaseSummaryOverride = new RacInfobaseSummary
+            {
+                InfobaseId = FakeRacClient.FirstInfobaseId,
+                Name = "Бухгалтерия"
+            },
+            InfobaseInfoResult = new RacInfobaseInfo
+            {
+                Dbms = "MSSQLServer",
+                DbServer = "sql-01",
+                DbName = "buho"
+            }
+        };
+        var dialogs = new RecordingDialogs();
+        var vm = new ServerMonitorViewModel(client, dialogs,
+            dropRetryDialog: (_, _, _) =>
+                new DropRetryResult(true, "ИБ-админ", "секрет", BlockScheduledJobs: true, TerminateSessions: true));
+        await vm.ConnectAsync();
+        await vm.LoadClusterDataAsync(FakeRacClient.FirstClusterId);
+        vm.SelectedInfobase = vm.Infobases.Single();
+
+        await vm.DropSelectedInfobaseAsync(dropDatabase: false);
+
+        // «infobase info» (догрузка параметров СУБД) вызван с кредами администратора ИБ.
+        Assert.True(client.InfobaseInfoCalls >= 1, "догрузка параметров СУБД должна была вызвать «infobase info»");
+        Assert.Equal("ИБ-админ", client.LastInfobaseInfoUser);
+        Assert.Equal("секрет", client.LastInfobaseInfoPassword);
+        // «infobase update --scheduled-jobs-deny=on» получил креды и параметры СУБД.
+        // Блокировка ставится на каждом повторе (галочка в ответе диалога) — проверяем
+        // последний вызов (после успешного повтора кредами из того же диалога).
+        var update = Assert.Single(client.UpdateInfobaseCalls);
+        Assert.True(update.request.ScheduledJobsDeny);
+        Assert.Equal("ИБ-админ", update.request.InfobaseUser);
+        Assert.Equal("секрет", update.request.InfobasePassword);
+        Assert.Equal("MSSQLServer", update.request.Dbms);
+        Assert.Equal("sql-01", update.request.DbServer);
+        Assert.Equal("buho", update.request.DbName);
+        // Первая попытка drop без кредов → диалог → повтор с кредами успешен.
+        Assert.Equal(2, client.DropInfobaseCalls.Count);
+        Assert.Equal("ИБ-админ", client.DropInfobaseCallsWithCredentials[1].infobaseUser);
+    }
+
+    [Theory]
+    [InlineData("rac: Служебное соединение не может быть удалено", true)]
+    [InlineData("СЛУЖЕБНОЕ СОЕДИНЕНИЕ НЕ МОЖЕТ БЫТЬ УДАЛЕНО", true)]
+    [InlineData("rac: Service connection cannot be terminated", true)]
+    [InlineData("rac: Информационная база имеет непустой список соединений", false)]
+    [InlineData("rac: Недостаточно прав пользователя на информационную базу", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsServiceConnectionError_DetectsServiceConnectionRejections(string? detail, bool expected)
+    {
+        // issue #69, комментарий 7OH от 2026-10-27: «Служебное соединение не может быть
+        // удалено» — штатный отказ rac, прерывать из-за него разрыв и удаление нельзя.
+        Assert.Equal(expected, ServerMonitorViewModel.IsServiceConnectionError(detail));
+    }
+
     [Theory]
     [InlineData("rac: требуется аутентификация администратора информационной базы", ServerMonitorViewModel.RacDropErrorKind.Authentication)]
     [InlineData("Access denied to infobase", ServerMonitorViewModel.RacDropErrorKind.Authentication)]
@@ -2421,6 +2605,17 @@ public sealed class ServerMonitorViewModelTests
         public List<(System.Guid clusterId, System.Guid connectionId, System.Guid? processId)>
             DisconnectCalls { get; } = new();
 
+        /// <summary>Вызовы «session terminate» с учётными данными администратора ИБ
+        /// (issue #69, комментарий 7OH от 2026-10-27: для защищённой базы rac без
+        /// --infobase-user/--infobase-pwd возвращает «Недостаточно прав» — сеансы
+        /// не снимаются).</summary>
+        public List<(System.Guid clusterId, System.Guid sessionId, System.Guid? processId, string? infobaseUser, string? infobasePassword)>
+            TerminateCallsWithCredentials { get; } = new();
+
+        /// <summary>Вызовы «connection disconnect» с учётными данными администратора ИБ.</summary>
+        public List<(System.Guid clusterId, System.Guid connectionId, System.Guid? processId, string? infobaseUser, string? infobasePassword)>
+            DisconnectCallsWithCredentials { get; } = new();
+
         /// <summary>Параметры последнего вызова «cluster list» (проверка нормализации host:port).</summary>
         public RacConnectionParams? LastParams { get; private set; }
 
@@ -2743,9 +2938,11 @@ public sealed class ServerMonitorViewModelTests
 
         public Task<bool> TerminateSessionAsync(
             RacConnectionParams parameters, Guid clusterId, Guid sessionId,
-            Guid? processId = null, CancellationToken cancellationToken = default)
+            Guid? processId = null, string? infobaseUser = null,
+            string? infobasePassword = null, CancellationToken cancellationToken = default)
         {
             TerminateCalls.Add((clusterId, sessionId, processId));
+            TerminateCallsWithCredentials.Add((clusterId, sessionId, processId, infobaseUser, infobasePassword));
             if (_throwOnAction)
                 throw new RacClientException("нет прав администратора");
             if (TerminateFailuresLeft > 0)
@@ -2765,15 +2962,17 @@ public sealed class ServerMonitorViewModelTests
 
         public Task<bool> DisconnectConnectionAsync(
             RacConnectionParams parameters, Guid clusterId, Guid connectionId,
-            Guid? processId = null, CancellationToken cancellationToken = default)
+            Guid? processId = null, string? infobaseUser = null,
+            string? infobasePassword = null, CancellationToken cancellationToken = default)
         {
             DisconnectCalls.Add((clusterId, connectionId, processId));
+            DisconnectCallsWithCredentials.Add((clusterId, connectionId, processId, infobaseUser, infobasePassword));
             if (_throwOnAction)
                 throw new RacClientException("нет прав администратора");
             if (DisconnectFailuresLeft > 0)
             {
                 DisconnectFailuresLeft--;
-                LastActionError = "rac: соединение не успело закрыться";
+                LastActionError = DisconnectFailureError ?? "rac: соединение не успело закрыться";
                 return Task.FromResult(false);
             }
             if (_actionFails)
@@ -2868,8 +3067,18 @@ public sealed class ServerMonitorViewModelTests
             string? infobaseUser, string? infobasePassword, CancellationToken cancellationToken = default)
         {
             InfobaseInfoCalls++;
+            // issue #69, комментарий 7OH от 2026-10-27: догрузка «infobase info» для
+            // блокировки РЗ должна выполняться с кредами администратора ИБ — иначе
+            // защищённая база возвращает «Недостаточно прав», блокировка не ставится.
+            LastInfobaseInfoUser = infobaseUser;
+            LastInfobaseInfoPassword = infobasePassword;
             return Task.FromResult(InfobaseInfoResult);
         }
+
+        /// <summary>Креды администратора ИБ последнего вызова «infobase info»
+        /// (для проверки, что догрузка параметров СУБД идёт с кредами).</summary>
+        public string? LastInfobaseInfoUser { get; private set; }
+        public string? LastInfobaseInfoPassword { get; private set; }
 
         /// <summary>Сколько ближайших вызовов «infobase drop» завершаются неудачей (issue #69,
         /// сценарий «удаление защищённой базы → повтор с логином/паролем»).</summary>
@@ -2878,6 +3087,12 @@ public sealed class ServerMonitorViewModelTests
         /// <summary>Текст ошибки rac для неудач «infobase drop» (issue #69): по умолчанию —
         /// аутентификация администратора ИБ; тест занятой базы задаёт «активные сеансы».</summary>
         public string? DropInfobaseFailureError { get; set; }
+
+        /// <summary>Текст ошибки rac для неудач «connection disconnect» (issue #69,
+        /// комментарий 7OH от 2026-10-27: тест «Служебное соединение не может быть
+        /// удалено» — служебное соединение пропускается, разрыв остальных продолжается,
+        /// удаление не застревает).</summary>
+        public string? DisconnectFailureError { get; set; }
 
         /// <summary>Сколько ближайших вызовов «connection disconnect» завершаются неудачей
         /// (issue #69, комментарий 7OH от 2026-10-26: «не выходить после первой попытки» —

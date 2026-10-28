@@ -344,8 +344,10 @@ internal static class McpToolHandlers
             throw new McpToolException($"На сервере «{server.Description}» не найдены кластеры 1С.");
 
         var processId = ParseGuid(McpJsonRpc.GetString(parameters, "processId"));
+        // issue #69, комментарий 7OH от 2026-10-27: после добавления кредов
+        // администратора ИБ параметр CancellationToken именуем явно.
         var terminated = await rac.TerminateSessionAsync(
-            connection, cluster.Id, sessionId.Value, processId, ct).ConfigureAwait(false);
+            connection, cluster.Id, sessionId.Value, processId, cancellationToken: ct).ConfigureAwait(false);
 
         if (!terminated)
         {

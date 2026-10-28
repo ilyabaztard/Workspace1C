@@ -864,42 +864,68 @@ public sealed class RacClient : IRacClient
     /// <inheritdoc />
     public Task<bool> TerminateSessionAsync(
         RacConnectionParams parameters, Guid clusterId, Guid sessionId,
-        Guid? processId = null, CancellationToken cancellationToken = default) =>
+        Guid? processId = null, string? infobaseUser = null,
+        string? infobasePassword = null, CancellationToken cancellationToken = default) =>
         RunActionAsync(parameters, cancellationToken,
-            SessionTerminateArgs(clusterId, sessionId, processId));
+            SessionTerminateArgs(clusterId, sessionId, processId, infobaseUser, infobasePassword));
 
     /// <inheritdoc />
     public Task<bool> DisconnectConnectionAsync(
         RacConnectionParams parameters, Guid clusterId, Guid connectionId,
-        Guid? processId = null, CancellationToken cancellationToken = default) =>
+        Guid? processId = null, string? infobaseUser = null,
+        string? infobasePassword = null, CancellationToken cancellationToken = default) =>
         RunActionAsync(parameters, cancellationToken,
-            ConnectionDisconnectArgs(clusterId, connectionId, processId));
+            ConnectionDisconnectArgs(clusterId, connectionId, processId, infobaseUser, infobasePassword));
 
     /// <summary>
     /// Аргументы команды «session terminate»: «--process=<pid>» включается, когда рабочий
     /// процесс сеанса известен (rac 8.5.4 без него: «Ошибка разбора параметра: process»,
-    /// issue #69). Internal — для юнит-тестов без запуска rac.
+    /// issue #69). Учётные данные администратора ИБ (<paramref name="infobaseUser"/>/
+    /// <paramref name="infobasePassword"/>, issue #69, комментарий 7OH от 2026-10-27)
+    /// передаются аргументами «--infobase-user=…»/«--infobase-pwd=…» для защищённых баз —
+    /// без них rac возвращает «Недостаточно прав пользователя на информационную базу».
+    /// Internal — для юнит-тестов без запуска rac.
     /// </summary>
-    internal static string[] SessionTerminateArgs(Guid clusterId, Guid sessionId, Guid? processId = null)
+    internal static string[] SessionTerminateArgs(
+        Guid clusterId, Guid sessionId, Guid? processId = null,
+        string? infobaseUser = null, string? infobasePassword = null)
     {
-        var args = new List<string>(5) { "session", "terminate", $"--cluster={clusterId}" };
+        var args = new List<string>(7) { "session", "terminate", $"--cluster={clusterId}" };
         if (processId is Guid pid && pid != Guid.Empty)
             args.Add($"--process={pid}");
         args.Add($"--session={sessionId}");
+        if (!string.IsNullOrEmpty(infobaseUser))
+        {
+            args.Add($"--infobase-user={infobaseUser}");
+            if (!string.IsNullOrEmpty(infobasePassword))
+                args.Add($"--infobase-pwd={infobasePassword}");
+        }
         return args.ToArray();
     }
 
     /// <summary>
     /// Аргументы команды «connection disconnect»: «--process=<pid>» включается, когда рабочий
     /// процесс соединения известен (rac 8.5.4 без него: «Ошибка разбора параметра: process»,
-    /// issue #69). Internal — для юнит-тестов без запуска rac.
+    /// issue #69). Учётные данные администратора ИБ (<paramref name="infobaseUser"/>/
+    /// <paramref name="infobasePassword"/>, issue #69, комментарий 7OH от 2026-10-27)
+    /// передаются аргументами «--infobase-user=…»/«--infobase-pwd=…» для защищённых баз —
+    /// без них rac возвращает «Недостаточно прав пользователя на информационную базу».
+    /// Internal — для юнит-тестов без запуска rac.
     /// </summary>
-    internal static string[] ConnectionDisconnectArgs(Guid clusterId, Guid connectionId, Guid? processId = null)
+    internal static string[] ConnectionDisconnectArgs(
+        Guid clusterId, Guid connectionId, Guid? processId = null,
+        string? infobaseUser = null, string? infobasePassword = null)
     {
-        var args = new List<string>(5) { "connection", "disconnect", $"--cluster={clusterId}" };
+        var args = new List<string>(7) { "connection", "disconnect", $"--cluster={clusterId}" };
         if (processId is Guid pid && pid != Guid.Empty)
             args.Add($"--process={pid}");
         args.Add($"--connection={connectionId}");
+        if (!string.IsNullOrEmpty(infobaseUser))
+        {
+            args.Add($"--infobase-user={infobaseUser}");
+            if (!string.IsNullOrEmpty(infobasePassword))
+                args.Add($"--infobase-pwd={infobasePassword}");
+        }
         return args.ToArray();
     }
 

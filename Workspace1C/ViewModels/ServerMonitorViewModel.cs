@@ -903,6 +903,14 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         if (row is null || !HasConnected || SelectedClusterId is not Guid clusterId)
             return;
 
+        // issue #69, комментарий 7OH от 2026-10-27: «отключать автообновление данных
+        // на время, если оно было включено» — тик таймера перезапрашивает сеансы/
+        // соединения и может пересоздавать соединения во время удаления базы.
+        // В finally состояние переключателя восстанавливается.
+        var autoRefreshWasEnabled = IsAutoRefreshEnabled;
+        if (autoRefreshWasEnabled)
+            SetAutoRefreshEnabled(false);
+
         // Учётные данные администратора ИБ для повторных попыток (issue #69):
         // первый вызов — без кредов; дальше — из ответа диалога повтора.
         string? infobaseUser = null;
@@ -950,7 +958,14 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                 // «Установить блокировку регламентных заданий» в диалоге повтора).
                 if (answer.BlockScheduledJobs)
                 {
-                    var (blockOk, blockDetail) = await SetScheduledJobsBlockAsync(row, clusterId)
+                    // Учётные данные администратора ИБ из диалога применяются к rac
+                    // «infobase info» (догрузка параметров СУБД) и к «infobase update
+                    // --scheduled-jobs-deny=on» (issue #69, комментарий 7OH от 2026-10-27:
+                    // «Не удаётся теперь установить блокировку» — на защищённой базе rac
+                    // без --infobase-user/--infobase-pwd возвращает «Недостаточно прав
+                    // пользователя на информационную базу»).
+                    var (blockOk, blockDetail) = await SetScheduledJobsBlockAsync(
+                        row, clusterId, infobaseUser, infobasePassword)
                         .ConfigureAwait(false);
                     StatusText = blockDetail;
                     if (!blockOk)
@@ -977,8 +992,13 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                     // (комментарий 7OH от 2026-10-26: «кто-то забыл удалить текущие
                     // соединения») — здесь это делается заранее, с готовой пометкой
                     // в диалоге при неудаче.
+                    // Учётные данные администратора ИБ передаются в «connection
+                    // disconnect»/«session terminate» (issue #69, комментарий 7OH от
+                    // 2026-10-27: «удалять сеансы не хочет» — rac на защищённой базе
+                    // без кредов возвращает «Недостаточно прав пользователя»).
                     var (termOk, termDetail, _, _) = await ReleaseInfobaseActivityAsync(
-                        row.InfobaseId, clusterId).ConfigureAwait(false);
+                        row.InfobaseId, clusterId, infobaseUser, infobasePassword)
+                        .ConfigureAwait(false);
                     StatusText = termDetail;
                     if (!termOk)
                     {
@@ -999,6 +1019,10 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         finally
         {
             Refresh();
+            // issue #69, комментарий 7OH от 2026-10-27: автообновление возвращается
+            // в исходное состояние после операции удаления базы.
+            if (autoRefreshWasEnabled)
+                SetAutoRefreshEnabled(true);
         }
     }
 
@@ -1021,7 +1045,7 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
             // (race-free) — новые соединения, появившиеся между «connection list»
             // и «connection disconnect», добиваются следующей итерацией.
             var (releaseOk, releaseDetail, disconnected, terminated) = await ReleaseInfobaseActivityAsync(
-                row.InfobaseId, clusterId).ConfigureAwait(false);
+                row.InfobaseId, clusterId, infobaseUser, infobasePassword).ConfigureAwait(false);
             if (!releaseOk)
                 return (false, releaseDetail);
             if (disconnected > 0 || terminated > 0)
@@ -1117,12 +1141,27 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// race-free): между «connection list» и «connection disconnect» могут появиться
     /// новые соединения — повторные проходы их добивают. Учётные данные администратора
     /// кластера берутся из <see cref="BuildParams"/> (как у всех действий уровня
-    /// кластера); креды администратора ИБ применяются к самому удалению. Возвращает
-    /// текст статуса об успехе либо текст ошибки, а также суммарное число разорванных
-    /// соединений и завершённых сеансов (для сводки в статус-строке).
+    /// кластера). Учётные данные администратора ИБ
+    /// (<paramref name="infobaseUser"/>/<paramref name="infobasePassword"/>) передаются
+    /// в «connection disconnect»/«session terminate»: без них защищённая база возвращает
+    /// «Недостаточно прав пользователя на информационную базу», и сеансы не снимаются
+    /// (комментарий 7OH от 2026-10-27: «удалять сеансы не хочет»).
+    /// <para>
+    /// «СЛУЖЕБНОЕ соединение» («Служебное соединение не может быть удалено»,
+    /// <see cref="IsServiceConnectionError"/>) не является ошибкой удаления: его нельзя
+    /// разорвать, но и «infobase drop» оно не блокирует — оно ПРОПУСКАЕТСЯ, разрыв
+    /// остальных соединений и сеансов продолжается (в логе 7OH от 2026-10-27 disconnect
+    /// служебного соединения обрывал весь цикл, до остальных соединений, сеансов и
+    /// самого «infobase drop» дело не доходило). Остальные ошибки разрыва, как и раньше,
+    /// прерывают цикл (пользователь видит диалог повтора — «Не выходить после первой
+    /// неудачной попытки» реализовано на уровне диалога).
+    /// </para>
+    /// Возвращает текст статуса об успехе либо текст ошибки, а также суммарное число
+    /// разорванных соединений и завершённых сеансов (для сводки в статус-строке).
     /// </summary>
     private async Task<(bool Ok, string Detail, int Disconnected, int Terminated)> ReleaseInfobaseActivityAsync(
-        Guid infobaseId, Guid clusterId)
+        Guid infobaseId, Guid clusterId,
+        string? infobaseUser = null, string? infobasePassword = null)
     {
         try
         {
@@ -1138,27 +1177,40 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                 if (connections.Count == 0 && sessions.Count == 0)
                     break;
 
+                // Рабочий процесс сеанса — из соединения, которое его обслуживает
+                // (в выводе «session list» номера процесса нет). После разрыва соединений
+                // такие сеансы уже не активны; сеансы без найденного процесса не терминируем.
+                var processByConnectionId = new Dictionary<Guid, Guid>(connections.Count);
+
                 foreach (var connection in connections)
                 {
                     // issue #69, комментарий 7OH от 2026-10-26 («повторить — ошибка»):
                     // rac 8.5.4 отклоняет «connection disconnect» без параметра
                     // --process=<pid> («Ошибка разбора параметра: process»); pid — рабочий
-                    // процесс из «connection list».
-                    if (!await _rac.DisconnectConnectionAsync(
-                            parameters, clusterId, connection.Id, connection.ProcessId)
-                            .ConfigureAwait(false))
-                        return (false, BuildActionError(_rac.LastActionError), disconnected, terminated);
-                    disconnected++;
-                }
-
-                // Рабочий процесс сеанса — из соединения, которое его обслуживает
-                // (в выводе «session list» номера процесса нет). После разрыва соединений
-                // такие сеансы уже не активны; сеансы без найденного процесса не терминируем.
-                var processByConnectionId = new Dictionary<Guid, Guid>(connections.Count);
-                foreach (var connection in connections)
-                {
+                    // процесс из «connection list». Креды администратора ИБ — для
+                    // защищённых баз (комментарий 7OH от 2026-10-27).
                     if (connection.ProcessId != Guid.Empty)
                         processByConnectionId[connection.Id] = connection.ProcessId;
+
+                    var ok = await _rac.DisconnectConnectionAsync(
+                            parameters, clusterId, connection.Id, connection.ProcessId,
+                            infobaseUser, infobasePassword)
+                        .ConfigureAwait(false);
+                    if (ok)
+                    {
+                        disconnected++;
+                        continue;
+                    }
+
+                    // «Служебное соединение не может быть удалено» — штатный отказ rac:
+                    // такое соединение нельзя разорвать, но «infobase drop» оно НЕ
+                    // блокирует — пропускаем, разрыв остальных продолжается
+                    // (комментарий 7OH от 2026-10-27: в его логе disconnect служебного
+                    // соединения обрывал весь цикл, до «infobase drop» дело не доходило).
+                    var error = BuildActionError(_rac.LastActionError);
+                    if (IsServiceConnectionError(error))
+                        continue;
+                    return (false, error, disconnected, terminated);
                 }
 
                 foreach (var session in sessions)
@@ -1166,10 +1218,23 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                     var processId = processByConnectionId.TryGetValue(session.ConnectionId, out var pid)
                         ? pid
                         : (Guid?)null;
-                    if (!await _rac.TerminateSessionAsync(parameters, clusterId, session.Id, processId)
-                            .ConfigureAwait(false))
-                        return (false, BuildActionError(_rac.LastActionError), disconnected, terminated);
-                    terminated++;
+                    var ok = await _rac.TerminateSessionAsync(
+                            parameters, clusterId, session.Id, processId,
+                            infobaseUser, infobasePassword)
+                        .ConfigureAwait(false);
+                    if (ok)
+                    {
+                        terminated++;
+                        continue;
+                    }
+
+                    // Служебный сеанс, как и служебное соединение, пропускаем; штатная
+                    // ошибка завершения прерывает цикл — диалог повтора даёт пользователю
+                    // решить, пробовать ли ещё раз (комментарий 7OH от 2026-10-26).
+                    var error = BuildActionError(_rac.LastActionError);
+                    if (IsServiceConnectionError(error))
+                        continue;
+                    return (false, error, disconnected, terminated);
                 }
             }
 
@@ -1181,6 +1246,24 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         {
             return (false, BuildErrorMessage(ex), 0, 0);
         }
+    }
+
+    /// <summary>
+    /// Признак того, что rac отказал в разрыве СЛУЖЕБНОГО соединения/завершении
+    /// служебного сеанса («Служебное соединение не может быть удалено»): такие
+    /// соединения нельзя разорвать командой «connection disconnect», но и «infobase
+    /// drop» они не блокируют — ошибка НЕ считается фатальной (issue #69, комментарий
+    /// 7OH от 2026-10-27; в его логе disconnect служебного соединения обрывал весь
+    /// цикл разрыва сеансов перед удалением, до drop дело не доходило).
+    /// Internal — для юнит-тестов.
+    /// </summary>
+    internal static bool IsServiceConnectionError(string? detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return false;
+        var text = detail.ToLowerInvariant();
+        return text.Contains("служебн", StringComparison.Ordinal) ||
+               text.Contains("service connection", StringComparison.Ordinal);
     }
 
     /// <summary>Максимальное число проходов разрыва соединений/сеансов базы перед
@@ -1197,18 +1280,24 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// из <see cref="BuildParams"/> (как у всех действий уровня кластера); параметры
     /// СУБД — из строки summary базы, а при пустых — догружаются через rac «infobase
     /// info» (<see cref="EnsureDbParametersAsync"/>, комментарий 7OH от 2026-10-26:
-    /// «Тип СУБД в удаляемой базе явно же прописан?»). Возвращает текст статуса об
-    /// успехе либо текст ошибки.
+    /// «Тип СУБД в удаляемой базе явно же прописан?»). Учётные данные администратора ИБ
+    /// (<paramref name="infobaseUser"/>/<paramref name="infobasePassword"/>, issue #69,
+    /// комментарий 7OH от 2026-10-27) передаются и в «infobase info», и в «infobase
+    /// update»: на защищённой базе rac возвращает «Недостаточно прав пользователя на
+    /// информационную базу», если креды не переданы — «установить блокировку не
+    /// удаётся». Возвращает текст статуса об успехе либо текст ошибки.
     /// </summary>
     private async Task<(bool Ok, string Detail)> SetScheduledJobsBlockAsync(
-        RacInfobaseRow row, Guid clusterId)
+        RacInfobaseRow row, Guid clusterId,
+        string? infobaseUser = null, string? infobasePassword = null)
     {
         try
         {
             // issue #69, комментарий 7OH от 2026-10-26: «infobase update --scheduled-jobs-deny=on»
             // требует параметры СУБД; сводка summary их может не содержать — догружаем через
             // rac «infobase info» (метод уже есть; у интерфейса default-реализация для тестов).
-            var (dbms, dbServer, dbName) = await EnsureDbParametersAsync(row, clusterId)
+            var (dbms, dbServer, dbName) = await EnsureDbParametersAsync(
+                row, clusterId, infobaseUser, infobasePassword)
                 .ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(dbms) || string.IsNullOrWhiteSpace(dbServer) ||
                 string.IsNullOrWhiteSpace(dbName))
@@ -1224,6 +1313,10 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                 Dbms = dbms,
                 DbServer = dbServer,
                 DbName = dbName,
+                // Креды администратора ИБ для защищённой базы (комментарий 7OH от
+                // 2026-10-27: «Не удаётся теперь установить блокировку»).
+                InfobaseUser = infobaseUser ?? string.Empty,
+                InfobasePassword = infobasePassword ?? string.Empty,
                 ScheduledJobsDeny = true
             };
             var ok = await _rac.UpdateInfobaseAsync(
@@ -1242,14 +1335,18 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// Гарантированное получение параметров СУБД информационной базы для rac «infobase
     /// update» (issue #69): значения из строки summary используются как есть, а при
     /// пустом хотя бы одном из них (типично для summary) догружаются полные свойства
-    /// через rac «infobase info» (<see cref="IRacClient.GetInfobaseInfoAsync"/>; команда
-    /// требует учётные данные администратора ИБ для защищённых баз — здесь достаточно
-    /// администратора кластера, как у остальных действий уровня кластера). Метод не
-    /// бросает исключений: при неудаче догрузки возвращаются уже известные значения
-    /// (возможно, пустые) — вызывающий код обрабатывает их понятным текстом.
+    /// через rac «infobase info» (<see cref="IRacClient.GetInfobaseInfoAsync"/>). На
+    /// защищённой базе догрузка выполняется с учётными данными администратора ИБ
+    /// (<paramref name="infobaseUser"/>/<paramref name="infobasePassword"/>, issue #69,
+    /// комментарий 7OH от 2026-10-27: rac без кредов возвращает «Недостаточно прав
+    /// пользователя на информационную базу» — раньше из-за этого блокировка РЗ не
+    /// ставилась). Метод не бросает исключений: при неудаче догрузки возвращаются уже
+    /// известные значения (возможно, пустые) — вызывающий код обрабатывает их понятным
+    /// текстом.
     /// </summary>
     private async Task<(string Dbms, string DbServer, string DbName)> EnsureDbParametersAsync(
-        RacInfobaseRow row, Guid clusterId)
+        RacInfobaseRow row, Guid clusterId,
+        string? infobaseUser = null, string? infobasePassword = null)
     {
         var dbms = row.Dbms?.Trim() ?? string.Empty;
         var dbServer = row.DbServer?.Trim() ?? string.Empty;
@@ -1261,7 +1358,8 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         try
         {
             info = await _rac.GetInfobaseInfoAsync(
-                BuildParams(), clusterId, row.InfobaseId, null, null).ConfigureAwait(false);
+                BuildParams(), clusterId, row.InfobaseId,
+                infobaseUser, infobasePassword).ConfigureAwait(false);
         }
         catch (Exception)
         {

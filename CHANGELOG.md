@@ -11,6 +11,72 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.97] — 2026-10-28
+
+### Исправлено
+
+- **При удалении базы из кластера «Удаление из кластера» (issue #69, комментарии 7OH
+  от 27.10)** — удаление защищённой базы застревало: блокировка регламентных заданий
+  не ставилась, сеансы/соединения не снимались, а rac не доходил до самого
+  «infobase drop». По логам rac 7OH (комментарий 20:59) разобраны четыре причины:
+
+  1. **Креды администратора ИБ не передавались в разрыв соединений и завершение
+     сеансов** — раньше они применялись только к самому «infobase drop». Для
+     защищённой базы rac «connection disconnect»/«session terminate» возвращали
+     «Недостаточно прав пользователя на информационную базу», и «удалять сеансы
+     не хотело» (даже если блокировка РЗ уже стояла в свойствах базы). Теперь
+     `--infobase-user`/`--infobase-pwd` передаются и в
+     [`TerminateSessionAsync`](Workspace1C/Services/RacClient.cs), и в
+     [`DisconnectConnectionAsync`](Workspace1C/Services/RacClient.cs)
+     (`SessionTerminateArgs`/`ConnectionDisconnectArgs`), а
+     [`ReleaseInfobaseActivityAsync`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)
+     пробрасывает креды из диалога повтора в каждый разрыв.
+
+  2. **«Служебное соединение не может быть удалено» прерывало весь цикл разрыва** —
+     в логе 7OH первый «connection disconnect» вернул эту ошибку, разрыв моментально
+     прекращался, и до остальных соединений, сеансов и самого «infobase drop» дело
+     не доходило. Служебное соединение нельзя разорвать, но «infobase drop» оно НЕ
+     блокирует — теперь такой отказ распознаётся
+     ([`IsServiceConnectionError`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)),
+     соединение пропускается, разрыв остальных продолжается, удаление не застревает.
+
+  3. **Блокировка регламентных заданий не ставилась на защищённой базе** — rac
+     «infobase info» (догрузка параметров СУБД для «infobase update
+     --scheduled-jobs-deny=on») и сам «infobase update» выполнялись БЕЗ кредов
+     администратора ИБ → «Недостаточно прав», «Не удаётся теперь установить
+     блокировку» (комментарий 19:44). Теперь [`SetScheduledJobsBlockAsync`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)
+     и [`EnsureDbParametersAsync`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)
+     используют креды из диалога для обоих rac-вызовов.
+
+  4. **Автообновление монитора не отключалось на время удаления** (комментарий
+     20:49) — тик таймера перезапрашивал сеансы/соединения и мог пересоздавать
+     соединения прямо во время разрыва. Теперь на время всей операции удаления
+     (включая диалоги повтора) автообновление останавливается и восстанавливается
+     в исходное состояние после ([`DropSelectedInfobaseAsync`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)).
+
+### Тесты
+
+- [`ServerMonitorViewModelTests.cs`](Workspace1C.Tests/ServerMonitorViewModelTests.cs):
+  `DropSelectedInfobase_Retry_DisconnectAndTerminate_GetInfobaseCredentials`,
+  `DropSelectedInfobase_ServiceConnectionDisconnectFailure_IsSkipped_DropSucceeds`,
+  `DropSelectedInfobase_AutoRefresh_DisabledDuringOperation_RestoredAfter`,
+  `DropSelectedInfobase_BlockScheduledJobs_PassesCredentials_ToInfobaseInfoAndUpdate`,
+  `IsServiceConnectionError_DetectsServiceConnectionRejections` — повторный разрыв
+  сеансов с кредами ИБ, пропуск служебных соединений, пауза автообновления,
+  креды в блокировке РЗ.
+- [`RacClientTests.cs`](Workspace1C.Tests/RacClientTests.cs): `SessionTerminateArgs_*`/
+  `ConnectionDisconnectArgs_*` — с кредами ИБ добавляются `--infobase-user`/`--infobase-pwd`,
+  без кредов флагов нет.
+- [`Issue69DropRetryWindowLayoutTests.cs`](Workspace1C.Tests/Issue69DropRetryWindowLayoutTests.cs):
+  стражи источника — разрыв соединений/сеансов с кредами, креды в блокировке РЗ,
+  обработка служебных соединений, пауза автообновления.
+
+### Общее
+
+- Общее число юнит-тестов выросло до 4881 (все проходят на Windows; Linux-сборка — без ошибок).
+
+---
+
 ## [1.0.0.96] — 2026-10-28
 
 ### Исправлено

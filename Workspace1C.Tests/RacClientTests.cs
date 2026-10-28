@@ -186,6 +186,73 @@ public sealed class RacClientTests
     }
 
     [Fact]
+    public void SessionTerminateArgs_WithCredentials_AddsInfobaseUserAndPassword()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27: rac отклоняет «session terminate»
+        // защищённой базы с «Недостаточно прав пользователя на информационную базу»,
+        // если не переданы --infobase-user/--infobase-pwd — сеансы не снимаются.
+        var clusterId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var args = RacClient.SessionTerminateArgs(clusterId, sessionId, processId: null,
+            "ИБ-админ", "секрет");
+
+        Assert.Equal(new[]
+        {
+            "session", "terminate",
+            $"--cluster={clusterId}",
+            $"--session={sessionId}",
+            "--infobase-user=ИБ-админ",
+            "--infobase-pwd=секрет"
+        }, args);
+        Assert.DoesNotContain(args, a => a.StartsWith("--process="));
+    }
+
+    [Fact]
+    public void SessionTerminateArgs_WithoutCredentials_NoInfobaseUserOrPasswordOptions()
+    {
+        // Обычная вкладка «Сеансы»: креды администратора ИБ неизвестны — флагов нет.
+        var clusterId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var args = RacClient.SessionTerminateArgs(clusterId, sessionId);
+
+        Assert.DoesNotContain(args, a => a.StartsWith("--infobase-user="));
+        Assert.DoesNotContain(args, a => a.StartsWith("--infobase-pwd="));
+    }
+
+    [Fact]
+    public void ConnectionDisconnectArgs_WithCredentials_AddsInfobaseUserAndPassword()
+    {
+        // issue #69, комментарий 7OH от 2026-10-27: то же, что и «session terminate», —
+        // «connection disconnect» защищённой базы без кредов падает «Недостаточно прав».
+        var clusterId = Guid.NewGuid();
+        var connectionId = Guid.NewGuid();
+        var processId = Guid.NewGuid();
+        var args = RacClient.ConnectionDisconnectArgs(clusterId, connectionId, processId,
+            "ИБ-админ", "секрет");
+
+        Assert.Equal(new[]
+        {
+            "connection", "disconnect",
+            $"--cluster={clusterId}",
+            $"--process={processId}",
+            $"--connection={connectionId}",
+            "--infobase-user=ИБ-админ",
+            "--infobase-pwd=секрет"
+        }, args);
+    }
+
+    [Fact]
+    public void ConnectionDisconnectArgs_WithoutCredentials_NoInfobaseUserOrPasswordOptions()
+    {
+        var clusterId = Guid.NewGuid();
+        var connectionId = Guid.NewGuid();
+        var args = RacClient.ConnectionDisconnectArgs(clusterId, connectionId);
+
+        Assert.DoesNotContain(args, a => a.StartsWith("--infobase-user="));
+        Assert.DoesNotContain(args, a => a.StartsWith("--infobase-pwd="));
+    }
+
+    [Fact]
     public void BuildArguments_ClusterInfo_IncludesHostPortToken_AndClusterOption()
     {
         // Команда «cluster info» (данные кластера на вкладке «Информация о кластере»,
