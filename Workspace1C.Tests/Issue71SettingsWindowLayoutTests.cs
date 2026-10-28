@@ -150,4 +150,28 @@ public sealed class Issue71SettingsWindowLayoutTests
         Assert.Contains("HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled", code, StringComparison.Ordinal);
         Assert.DoesNotContain("HorizontalScrollBarVisibility = ScrollBarVisibility.Auto", code, StringComparison.Ordinal);
     }
+
+    // ------------------------------------------------------------------
+    // Восстановление сохранённых размеров главного окна (issue #71, последние
+    // комментарии RizvanShikhammatov «нет» + 455×822; 7OH «Я даже меньше скажу»):
+    // профиль мог сохранить размер из старой версии или с маленького монитора — окно
+    // открывалось «сжатым» (сужение ниже минимума прямо на скриншотах). Теперь
+    // ApplySavedWindowLayout зажимает восстановленные размеры к MinWidth/MinHeight.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void MainWindow_Wpf_RestoreClampsToMinSizes()
+    {
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "MainWindow.Events.cs"));
+        Assert.Contains("Math.Max(width, MinWidth)", code, StringComparison.Ordinal);
+        Assert.Contains("Math.Max(height, MinHeight)", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_Avalonia_RestoreClampsToMinSizes()
+    {
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "MainWindow.Avalonia.cs"));
+        Assert.Contains("Math.Max(settings.WindowWidth, MinWidth)", code, StringComparison.Ordinal);
+        Assert.Contains("Math.Max(settings.WindowHeight, MinHeight)", code, StringComparison.Ordinal);
+    }
 }

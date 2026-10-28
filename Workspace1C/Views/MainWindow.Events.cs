@@ -77,6 +77,16 @@ namespace Workspace1C
 
             if (width > 0 && height > 0)
             {
+                // issue #71 (RizvanShikhammatov: скриншот 455×822; 7OH: «Я даже меньше
+                // скажу»): восстановленные из профиля размеры НЕ должны сужать окно ниже
+                // минимально допустимых — профиль мог сохранить размер из старой версии
+                // или с маленького монитора, и окно открывалось «сжатым». Зажимаем
+                // восстановленный размер к MinWidth/MinHeight.
+                if (double.IsFinite(MinWidth) && MinWidth > 0)
+                    width = Math.Max(width, MinWidth);
+                if (double.IsFinite(MinHeight) && MinHeight > 0)
+                    height = Math.Max(height, MinHeight);
+
                 var left = _viewModel.SavedWindowLeft;
                 var top = _viewModel.SavedWindowTop;
                 if (left == 0 && top == 0)
