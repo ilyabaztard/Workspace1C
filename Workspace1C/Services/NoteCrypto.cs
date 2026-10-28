@@ -75,8 +75,20 @@ public sealed class NoteCrypto
         _keyProvider = keyProvider;
     }
 
-    /// <summary>Экземпляр с платформенным источником ключа по умолчанию.</summary>
-    public static NoteCrypto CreateDefault() => new(DefaultKeyProvider());
+    /// <summary>
+    /// Экземпляр с платформенным источником ключа по умолчанию. На Windows провайдер
+    /// не передаётся (null): DPAPI не требует отдельного ключа, а не-null провайдер
+    /// уводит <see cref="Encrypt"/> в AES-ветку, где <see cref="DpapiKeyProvider.GetKey"/>
+    /// возвращает null → «ключ недоступен» (issue #78: заметки с секретами не сохранялись).
+    /// </summary>
+    public static NoteCrypto CreateDefault()
+    {
+#if WINDOWS
+        return new NoteCrypto();
+#else
+        return new NoteCrypto(DefaultKeyProvider());
+#endif
+    }
 
     /// <summary>Платформенный источник ключа по умолчанию (см. <see cref="INoteCryptoKeyProvider"/>).</summary>
     public static INoteCryptoKeyProvider DefaultKeyProvider()

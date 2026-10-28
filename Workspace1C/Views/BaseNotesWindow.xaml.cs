@@ -260,7 +260,7 @@ public partial class BaseNotesWindow : Window
                 _dialogs.ShowWarning(
                     string.Format(LocalizationManager.T("Notes.SecretEncryptError"),
                         name, LocalizationManager.T(NoteCrypto.StatusTextKey(encrypted.Status))),
-                    LocalizationManager.T("Notes.Title"));
+                    string.Format(LocalizationManager.T("Notes.Title"), _infobase.Name));
                 return;
             }
             secrets[name] = encrypted.Value ?? string.Empty;

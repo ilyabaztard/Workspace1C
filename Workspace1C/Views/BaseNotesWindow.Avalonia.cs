@@ -26,6 +26,7 @@ public sealed class BaseNotesWindow : ModalWindowBase
 {
     private readonly IDialogService _dialogs = AppServices.GetRequiredService<IDialogService>();
     private readonly string _infobaseKey;
+    private readonly string _infobaseName;
     private readonly NoteStore _store;
     private readonly NoteCrypto _crypto;
     private readonly List<SecretRow> _secretRows = new();
@@ -83,10 +84,11 @@ public sealed class BaseNotesWindow : ModalWindowBase
     {
         ArgumentNullException.ThrowIfNull(infobase);
         _infobaseKey = InfobaseNote.KeyFor(infobase);
+        _infobaseName = infobase.Name ?? string.Empty;
         _store = NoteStoreAccess.GetOrCreate();
         _crypto = NoteCrypto.CreateDefault();
 
-        Title = string.Format(LocalizationManager.T("Notes.Title"), infobase.Name);
+        Title = string.Format(LocalizationManager.T("Notes.Title"), _infobaseName);
         Width = 780;
         Height = 600;
         MinWidth = 640;
@@ -324,7 +326,7 @@ public sealed class BaseNotesWindow : ModalWindowBase
             {
                 _dialogs.ShowWarning(
                     string.Format(T("Notes.SecretEncryptError"), name, T(NoteCrypto.StatusTextKey(encrypted.Status))),
-                    T("Notes.Title"));
+                    string.Format(T("Notes.Title"), _infobaseName));
                 return;
             }
             secrets[name] = encrypted.Value ?? string.Empty;

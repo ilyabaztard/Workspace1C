@@ -141,6 +141,35 @@ public class InfobaseNoteTests : IDisposable
         Assert.Equal(string.Empty, NoteCrypto.StatusTextKey(NoteCryptoStatus.Ok));
     }
 
+    [Fact]
+    public void NoteCrypto_CreateDefault_EncryptsAndDecrypts_Secret()
+    {
+        // Регрессия issue #78: на Windows CreateDefault() передавал DpapiKeyProvider
+        // как не-null провайдер, Encrypt уходил в AES-ветку с null-ключом и возвращал
+        // «ключ недоступен» — заметка с секретом не сохранялась. Платформенный
+        // экземпляр должен шифровать и расшифровывать значение без ошибок.
+        var previous = FeatureDataStore.DirectoryOverride;
+        try
+        {
+            // Linux: ключовой файл профиля пишется во временный каталог теста.
+            FeatureDataStore.DirectoryOverride = _tempDir;
+            var crypto = NoteCrypto.CreateDefault();
+
+            var encrypted = crypto.Encrypt("пароль123");
+            Assert.Equal(NoteCryptoStatus.Ok, encrypted.Status);
+            Assert.False(string.IsNullOrEmpty(encrypted.Value));
+            Assert.DoesNotContain("пароль123", encrypted.Value);
+
+            var decrypted = crypto.Decrypt(encrypted.Value);
+            Assert.Equal(NoteCryptoStatus.Ok, decrypted.Status);
+            Assert.Equal("пароль123", decrypted.Value);
+        }
+        finally
+        {
+            FeatureDataStore.DirectoryOverride = previous;
+        }
+    }
+
     // ---------- NoteStore: get/save/delete/search/purge/import ----------
 
     private InfobaseNote MakeNote(string id, string markdown, params string[] secretNames)
