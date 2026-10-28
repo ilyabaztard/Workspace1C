@@ -11,6 +11,64 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.0.96] — 2026-10-28
+
+### Исправлено
+
+- **При открытии окна «Серверы 1С» на Windows выбрасывался `InvalidCastException`
+  (issue #75, комментарии 7OH от 27.10)** — при первом показе окна падал
+  [`AttachHeaderWidthTracking()`](Workspace1C/Views/ServerMonitorWindow.xaml.cs):
+  коллекция `presenter.Items` презентера заголовков в момент применения
+  (DispatcherPriority.ApplicationIdle) содержит НЕ только `DataGridColumnHeader`,
+  но и сырые колонки (`DataGridColumn`) — `Cast<DataGridColumnHeader>()` на такой
+  коллекции бросал `InvalidCastException` («Specified cast is not valid»). После
+  ошибки вкладка «Соединения» могла не показывать список.
+
+  Исправление: сбор заголовков идёт безопасным `OfType<DataGridColumnHeader>()`
+  (лишние элементы пропускаются), плюс «досъём» контейнеров по
+  `ItemContainerGenerator.StatusChanged` — заголовки, материализующиеся позже
+  (переключение вкладок), также подхватываются.
+
+- **Перетаскивание колонок вкладок монитора теперь как в 1С (issue #75, обе
+  платформы)** — раньше при перетаскивании границы «двигалась одна-две колонки,
+  упиралась в третью и всё» (звёздные колонки перераспределяли ширину на себя).
+  Теперь:
+  - обычное перетаскивание границы двигает ВСЕ колонки справа как блок — их
+    ширины не меняются, меняются только позиции; при переполнении области
+    появляется горизонтальная прокрутка, границу можно двигать дальше;
+  - перетаскивание с зажатым Ctrl меняет ширину ТОЛЬКО двух смежных колонок
+    (левая растёт/ужимается, правая — зеркально), остальные не двигаются;
+  - обеим платформам запрещено сжимать колонку ниже минимума (заголовок +
+    стрелка сортировки);
+  - математика вынесена в чистые функции
+    [`ServerMonitorColumnWidthsStore.MovedLeftColumnWidth()`](Workspace1C/Services/ServerMonitorColumnWidthsStore.cs)
+    и
+    [`ResizedTwoAdjacentWidths()`](Workspace1C/Services/ServerMonitorColumnWidthsStore.cs);
+    WPF-версия перехватывает штатную «ручку» `PART_RightHeaderGripper` заголовка
+    DataGrid, Avalonia — собственную ручку в шапке таблицы. Сохранение фактических
+    ширин на вкладку (переживают закрытие программы) работает как раньше.
+
+### Тесты
+
+- [`ServerMonitorColumnWidthsTests.cs`](Workspace1C.Tests/ServerMonitorColumnWidthsTests.cs):
+  `MovedLeftColumnWidth_FollowsDelta_AndNeverBelowMin`,
+  `ResizedTwoAdjacentWidths_KeepsPairTotal_AndMins`,
+  `ResizedTwoAdjacentWidths_StopsAtMins_OfBothColumns`,
+  `ResizedTwoAdjacentWidths_MinimalPair_NeverBelowMins` — математика перетаскивания
+  границы как в 1С (обычный режим и Ctrl).
+- [`Issue75ServerMonitorColumnsTests.cs`](Workspace1C.Tests/Issue75ServerMonitorColumnsTests.cs):
+  `Wpf_HeaderTracking_UsesSafeTyping_NoInvalidCastException` — сбор заголовков
+  через `OfType<>`, отсутствие опасного `Cast<>` по `presenter.Items`, перехват
+  `PART_RightHeaderGripper`; `BothPlatforms_UseOneCStyleColumnDragSemantics` — обе
+  платформы используют общую математику `MovedLeftColumnWidth`/`ResizedTwoAdjacentWidths`
+  и перехват Ctrl.
+
+### Общее
+
+- Общее число юнит-тестов выросло до 4862 (все проходят на Windows; Linux-сборка — без ошибок).
+
+---
+
 ## [1.0.0.95] — 2026-10-28
 
 ### Исправлено

@@ -2360,7 +2360,7 @@
     "ServerMonitor.Infobase.Props.SafeModeSecurityProfile": "Safe mode security profile",
     "ServerMonitor.Infobase.SortAsc": "Sort alphabetically (A→Z)",
     "ServerMonitor.Infobase.SortDesc": "Sort in reverse order (Z→A)",
-    "ServerMonitor.ColumnResizeHint": "Drag to resize the column",
+    "ServerMonitor.ColumnResizeHint": "Drag to move the boundary and the columns to the right; hold Ctrl to resize the two adjacent columns",
     "ServerMonitor.Infobase.FilterFormat": "Infobase filter: {0}",
     "ServerMonitor.Infobase.NoFilter": "No filter",
     "ServerMonitor.Infobase.FilterReset": "Reset",

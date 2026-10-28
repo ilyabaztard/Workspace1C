@@ -254,8 +254,54 @@ public sealed class Issue75ServerMonitorColumnsTests
             "Avalonia: MinWidth должен задаваться колонкам шапки.");
         Assert.True(source.Contains("rowGrid.ColumnDefinitions[i].MinWidth = columns[i].MinWidth", StringComparison.Ordinal),
             "Avalonia: MinWidth должен задаваться колонкам строк.");
-        Assert.True(source.Contains("Math.Max(minWidth, startWidth + e.GetPosition(headerGrid).X - startX)", StringComparison.Ordinal),
+        Assert.True(source.Contains("Math.Max(30, columns[index].MinWidth)", StringComparison.Ordinal),
             "Avalonia: перетаскивание не должно сжимать колонку ниже минимума.");
+    }
+
+    [Fact]
+    public void Wpf_HeaderTracking_UsesSafeTyping_NoInvalidCastException()
+    {
+        // issue #75 (комментарии 7OH 27.10): при открытии окна «Серверы 1С» выбрасывался
+        // InvalidCastException в AttachHeaderWidthTracking — presenter.Items в момент
+        // ApplicationIdle содержит не только DataGridColumnHeader, а Cast<> падает.
+        var source = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.xaml.cs"));
+
+        // Сборка заголовков идёт через OfType<> (безопасно для не-заголовков)…
+        Assert.True(source.Contains("presenter.Items.OfType<System.Windows.Controls.Primitives.DataGridColumnHeader>()", StringComparison.Ordinal),
+            "WPF: сбор заголовков должен использовать OfType<> (не Cast<>) — иначе InvalidCastException (issue #75).");
+        // …и опасный Cast<> по заголовкам отсутствует.
+        Assert.False(source.Contains("presenter.Items.Cast<", StringComparison.Ordinal),
+            "WPF: Cast<> по коллекции presenter.Items должен быть удалён (issue #75).");
+        // Перехват штатной «ручки» изменения размера заголовка для поведения как в 1С.
+        Assert.True(source.Contains("PART_RightHeaderGripper", StringComparison.Ordinal),
+            "WPF: перехват PART_RightHeaderGripper должен присутствовать (issue #75).");
+        Assert.True(source.Contains("ItemContainerGenerator.StatusChanged", StringComparison.Ordinal),
+            "WPF: должна быть дозагрузка заголовков по генератору контейнеров (issue #75).");
+    }
+
+    [Fact]
+    public void BothPlatforms_UseOneCStyleColumnDragSemantics()
+    {
+        // issue #75 (1.0.0.96): общая семантика перетаскивания как в 1С — обычное
+        // перетаскивание сдвигает ВСЕ колонки справа (ширины не меняются, появляется
+        // прокрутка), с Ctrl меняется ширина только двух смежных колонок. Обе платформы
+        // используют общую математику ServerMonitorColumnWidthsStore.
+        var wpf = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.xaml.cs"));
+        var avalonia = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.Avalonia.cs"));
+
+        Assert.True(wpf.Contains("ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(", StringComparison.Ordinal),
+            "WPF: обычный режим перетаскивания должен использовать MovedLeftColumnWidth (issue #75).");
+        Assert.True(wpf.Contains("ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(", StringComparison.Ordinal),
+            "WPF: Ctrl-режим должен использовать ResizedTwoAdjacentWidths (issue #75).");
+        Assert.True(wpf.Contains("Keyboard.Modifiers.HasFlag(ModifierKeys.Control)", StringComparison.Ordinal),
+            "WPF: должен быть перехват Ctrl при перетаскивании (issue #75).");
+
+        Assert.True(avalonia.Contains("ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(startWidths[index], dx, minLeft)", StringComparison.Ordinal),
+            "Avalonia: обычный режим перетаскивания должен использовать MovedLeftColumnWidth (issue #75).");
+        Assert.True(avalonia.Contains("ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(", StringComparison.Ordinal),
+            "Avalonia: Ctrl-режим должен использовать ResizedTwoAdjacentWidths (issue #75).");
+        Assert.True(avalonia.Contains("Avalonia.Input.KeyModifiers.Control", StringComparison.Ordinal),
+            "Avalonia: должен быть перехват Ctrl при перетаскивании (issue #75).");
     }
 
     [Fact]

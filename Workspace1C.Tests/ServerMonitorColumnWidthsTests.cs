@@ -172,4 +172,62 @@ public sealed class ServerMonitorColumnWidthsTests
         Assert.Contains(ServerMonitorColumnWidthsStore.LocksKey, ServerMonitorColumnWidthsStore.TabKeys);
         Assert.Contains(ServerMonitorColumnWidthsStore.ProcessesKey, ServerMonitorColumnWidthsStore.TabKeys);
     }
+
+    // ===================== Перетаскивание границы как в 1С (issue #75, 1.0.0.96) =====================
+
+    [Fact]
+    public void MovedLeftColumnWidth_FollowsDelta_AndNeverBelowMin()
+    {
+        // Обычное перетаскивание: граница двигается — колонки справа едут как блок,
+        // левой колонке достаётся изменение Δ ширины (минимум соблюдён).
+        Assert.Equal(220.0, ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(200.0, 20.0, 100.0));
+        Assert.Equal(180.0, ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(200.0, -20.0, 100.0));
+        // Упор в минимум при сжатии: дальше граница не двигается.
+        Assert.Equal(100.0, ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(200.0, -250.0, 100.0));
+        Assert.Equal(100.0, ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(100.0, 0.0, 100.0));
+    }
+
+    [Fact]
+    public void ResizedTwoAdjacentWidths_KeepsPairTotal_AndMins()
+    {
+        // Ctrl: меняется только граница двух смежных колонок, сумма пары постоянна.
+        var (left, right) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(200.0, 300.0, 50.0, 100.0, 100.0);
+        Assert.Equal(250.0, left);
+        Assert.Equal(250.0, right);
+        Assert.Equal(500.0, left + right);
+
+        // Влево: левая ужимается, правая растёт.
+        var (left2, right2) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(200.0, 300.0, -80.0, 100.0, 100.0);
+        Assert.Equal(120.0, left2);
+        Assert.Equal(380.0, right2);
+        Assert.Equal(500.0, left2 + right2);
+    }
+
+    [Fact]
+    public void ResizedTwoAdjacentWidths_StopsAtMins_OfBothColumns()
+    {
+        // Левая упёрлась в минимум: правая больше не растёт (сумма пары постоянна).
+        var (left, right) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(150.0, 200.0, -1000.0, 120.0, 90.0);
+        Assert.Equal(120.0, left);
+        Assert.Equal(230.0, right);
+        Assert.Equal(350.0, left + right);
+
+        // Правая упёрлась в минимум: левая больше не растёт.
+        var (left2, right2) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(150.0, 200.0, 1000.0, 120.0, 90.0);
+        Assert.Equal(260.0, left2);
+        Assert.Equal(90.0, right2);
+        Assert.Equal(350.0, left2 + right2);
+    }
+
+    [Fact]
+    public void ResizedTwoAdjacentWidths_MinimalPair_NeverBelowMins()
+    {
+        // Обе колонки уже на минимуме: граница не двигается ни в одну сторону.
+        var (left, right) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(100.0, 90.0, 25.0, 100.0, 90.0);
+        Assert.Equal(100.0, left);
+        Assert.Equal(90.0, right);
+        var (left2, right2) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(100.0, 90.0, -25.0, 100.0, 90.0);
+        Assert.Equal(100.0, left2);
+        Assert.Equal(90.0, right2);
+    }
 }

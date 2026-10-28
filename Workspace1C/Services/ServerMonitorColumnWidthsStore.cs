@@ -110,6 +110,46 @@ public static class ServerMonitorColumnWidthsStore
         => !double.IsNaN(value) && !double.IsInfinity(value) && value > 0.5;
 
     /// <summary>
+    /// Новая ширина ЛЕВОЙ колонки границы при ОБЫЧНОМ перетаскивании (issue #75,
+    /// поведение как в 1С, 1.0.0.96): граница двигается за курсором, при этом ВСЕ
+    /// колонки справа сдвигаются как блок — их ширины не меняются, меняются только
+    /// позиции; изменение Δ при переполнении области компенсируется появлением
+    /// горизонтальной прокрутки. Левой колонке «достаётся» всё изменение Δ, минимум
+    /// колонки соблюдён (дальше граница не сдвигается).
+    /// </summary>
+    /// <param name="startWidth">Ширина левой колонки в начале перетаскивания, px.</param>
+    /// <param name="delta">Накопленное смещение границы, px (вправо — положительное).</param>
+    /// <param name="minWidth">Минимальная ширина левой колонки (заголовок + стрелка), px.</param>
+    public static double MovedLeftColumnWidth(double startWidth, double delta, double minWidth)
+        => Math.Max(minWidth, startWidth + delta);
+
+    /// <summary>
+    /// Ширины ДВУХ смежных колонок границы при перетаскивании с зажатым Ctrl
+    /// (issue #75, 1.0.0.96): меняется только граница между ними — левая растёт/ужимается
+    /// на Δ, правая — на обратную величину (суммарная ширина пары не меняется), остальные
+    /// колонки НЕ двигаются. Обе колонки не сжимаются ниже своих минимумов — при упоре
+    /// в минимум граница останавливается.
+    /// </summary>
+    /// <param name="startLeft">Ширина левой колонки в начале перетаскивания, px.</param>
+    /// <param name="startRight">Ширина правой колонки в начале перетаскивания, px.</param>
+    /// <param name="delta">Накопленное смещение границы, px (вправо — положительное).</param>
+    /// <param name="minLeft">Минимальная ширина левой колонки, px.</param>
+    /// <param name="minRight">Минимальная ширина правой колонки, px.</param>
+    /// <returns>Новые ширины пары (левая, правая); сумма равна <paramref name="startLeft"/> + <paramref name="startRight"/>.</returns>
+    public static (double Left, double Right) ResizedTwoAdjacentWidths(
+        double startLeft, double startRight, double delta, double minLeft, double minRight)
+    {
+        // Вправо левая может вырасти не больше, чем на свободный ход правой до минимума;
+        // влево — ужаться не больше, чем на свободный ход самой себя до минимума.
+        var maxGrow = Math.Max(0, startRight - minRight);
+        var maxShrink = Math.Max(0, startLeft - minLeft);
+        var applied = Math.Clamp(delta, -maxShrink, maxGrow);
+        var left = startLeft + applied;
+        var right = startLeft + startRight - left;
+        return (left, right);
+    }
+
+    /// <summary>
     /// Сохраняет ширины колонок вкладки в настройки приложения (issue #75):
     /// запись по ключу вкладки заменяется целиком, остальные вкладки не затрагиваются.
     /// Некорректные значения (0 для гибких колонок, NaN) записываются как 0 — значит

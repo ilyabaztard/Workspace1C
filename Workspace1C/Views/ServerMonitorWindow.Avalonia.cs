@@ -983,12 +983,29 @@ namespace Workspace1C
                 ToolTip.SetTip(grip, LocalizationManager.T("ServerMonitor.ColumnResizeHint"));
                 var dragging = false;
                 var startX = 0d;
-                var startWidth = 0d;
+                var startWidths = Array.Empty<double>();
+                var ctrlMode = false;
                 grip.PointerPressed += (_, e) =>
                 {
                     dragging = true;
                     startX = e.GetPosition(headerGrid).X;
-                    startWidth = headerGrid.ColumnDefinitions[index].ActualWidth;
+                    startWidths = headerGrid.ColumnDefinitions.Select(d => d.ActualWidth).ToArray();
+                    ctrlMode = e.KeyModifiers.HasFlag(Avalonia.Input.KeyModifiers.Control);
+                    // issue #75 (1.0.0.96): обычное перетаскивание — как в 1С: граница
+                    // двигается, ВСЕ колонки справа едут как блок (ширины не меняются).
+                    // «Заморозка» гибких (звёздных) колонок фактической шириной: иначе
+                    // звёздные колонки перераспределяли бы ширину на себя («двигает одну-две,
+                    // упираются в третью»), а ширину контента надо РАСТИТЬ — тогда появится
+                    // горизонтальная прокрутка и границу можно двигать дальше.
+                    if (!ctrlMode)
+                    {
+                        for (var j = 0; j < widths.Length; j++)
+                        {
+                            if (widths[j].IsStar)
+                                widths[j] = new GridLength(headerGrid.ColumnDefinitions[j].ActualWidth, GridUnitType.Pixel);
+                        }
+                        ApplyWidths();
+                    }
                     e.Pointer.Capture(grip);
                     e.Handled = true;
                 };
@@ -996,10 +1013,29 @@ namespace Workspace1C
                 {
                     if (!dragging)
                         return;
-                    // issue #75: колонка не сжимается ниже минимума (заголовок + стрелка).
-                    var minWidth = Math.Max(30, columns[index].MinWidth);
-                    var newWidth = Math.Max(minWidth, startWidth + e.GetPosition(headerGrid).X - startX);
-                    widths[index] = new GridLength(newWidth, GridUnitType.Pixel);
+                    var dx = e.GetPosition(headerGrid).X - startX;
+                    var minLeft = Math.Max(30, columns[index].MinWidth);
+                    if (ctrlMode && index + 1 < columns.Count)
+                    {
+                        // Ctrl: меняется только граница между ДВУМЯ смежными колонками —
+                        // левая растёт/ужимается, правая зеркально; остальные не двигаются,
+                        // суммарная ширина пары постоянна.
+                        var minRight = Math.Max(30, columns[index + 1].MinWidth);
+                        var (newLeft, newRight) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(
+                            startWidths[index], startWidths[index + 1], dx, minLeft, minRight);
+                        widths[index] = new GridLength(newLeft, GridUnitType.Pixel);
+                        widths[index + 1] = new GridLength(newRight, GridUnitType.Pixel);
+                    }
+                    else
+                    {
+                        // Обычный режим (как в 1С, issue #75 1.0.0.96): граница двигается —
+                        // колонки справа сдвигаются как блок без изменения ширины, левой
+                        // колонке достаётся изменение; при переполнении области появляется
+                        // горизонтальная прокрутка.
+                        widths[index] = new GridLength(
+                            ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(startWidths[index], dx, minLeft),
+                            GridUnitType.Pixel);
+                    }
                     ApplyWidths();
                     e.Handled = true;
                 };

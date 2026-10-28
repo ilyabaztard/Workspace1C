@@ -2360,7 +2360,7 @@
     "ServerMonitor.Infobase.Props.SafeModeSecurityProfile": "Профиль безопасности безопасного режима",
     "ServerMonitor.Infobase.SortAsc": "Сортировать по алфавиту (А→Я)",
     "ServerMonitor.Infobase.SortDesc": "Сортировать в обратном порядке (Я→А)",
-    "ServerMonitor.ColumnResizeHint": "Перетащите, чтобы изменить ширину колонки",
+    "ServerMonitor.ColumnResizeHint": "Перетащите, чтобы передвинуть границу и колонки справа; удерживайте Ctrl — изменить ширину двух соседних колонок",
     "ServerMonitor.Infobase.FilterFormat": "Фильтр по базе: {0}",
     "ServerMonitor.Infobase.NoFilter": "Без фильтра",
     "ServerMonitor.Infobase.FilterReset": "Сбросить",

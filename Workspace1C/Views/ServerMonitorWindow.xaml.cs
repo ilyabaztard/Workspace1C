@@ -52,6 +52,20 @@ namespace Workspace1C
         /// </summary>
         private readonly Dictionary<string, double[]> _columnWidths = new();
 
+        /// <summary>
+        /// Заголовки, к которым уже привязано отслеживание ширины и «ручки» изменения
+        /// размера (issue #75): заголовки пересоздаются при переключении вкладок, повторные
+        /// подписки на один экземпляр не нужны.
+        /// </summary>
+        private readonly HashSet<System.Windows.Controls.Primitives.DataGridColumnHeader> _trackedColumnHeaders = new();
+
+        /// <summary>Состояние перетаскивания границы колонки (issue #75, 1.0.0.96).</summary>
+        private DataGrid? _resizingGrid;
+        private int _resizingColumnIndex = -1;
+        private bool _resizingWithCtrl;
+        private double[] _resizeStartWidths = Array.Empty<double>();
+        private double _resizeTotalDelta;
+
         /// <summary>Фоновое обновление кэша статусов служб (5 с; issue #3, часть 2).</summary>
         private System.Threading.Timer? _servicesStatusTimer;
 
@@ -322,8 +336,119 @@ namespace Workspace1C
             var presenter = FindVisualChild<System.Windows.Controls.Primitives.DataGridColumnHeadersPresenter>(grid);
             if (presenter is null)
                 return;
-            foreach (var header in presenter.Items.Cast<System.Windows.Controls.Primitives.DataGridColumnHeader>())
-                header.SizeChanged += (_, _) => CaptureColumnWidths(grid, tabKey);
+            // issue #75 (1.0.0.96; в 1.0.0.95 — InvalidCastException при открытии окна):
+            // коллекция Items презентера заголовков на момент применения (ApplicationIdle)
+            // может содержать НЕ только DataGridColumnHeader, но и сырые колонки
+            // (DataGridColumn) — Cast<> падал с InvalidCastException. OfType<> безопасно
+            // пропускает лишние элементы, и ошибка больше не возникает.
+            foreach (var header in presenter.Items.OfType<System.Windows.Controls.Primitives.DataGridColumnHeader>())
+                AttachHeaderTracking(grid, tabKey, header);
+            // Контейнеры заголовков могут достраиваться/пересоздаваться позже (переключение
+            // вкладок, повторная генерация) — «доснимаем» их по статусу генератора.
+            presenter.ItemContainerGenerator.StatusChanged += (_, _) =>
+            {
+                for (var i = 0; i < presenter.Items.Count; i++)
+                {
+                    if (presenter.ItemContainerGenerator.ContainerFromIndex(i)
+                        is System.Windows.Controls.Primitives.DataGridColumnHeader header)
+                        AttachHeaderTracking(grid, tabKey, header);
+                }
+            };
+        }
+
+        /// <summary>
+        /// Привязывает к заголовку отслеживание ширины и переопределённое перетаскивание
+        /// границы (issue #75, 1.0.0.96): обычное перетаскивание двигает ВСЕ колонки справа
+        /// без изменения их ширины (при переполнении области появляется горизонтальная
+        /// прокрутка), с зажатым Ctrl меняется ширина только двух смежных колонок.
+        /// Перехватывается штатная «ручка» PART_RightHeaderGripper — наш обработчик
+        /// подписывается ПОСЛЕ внутреннего обработчика DataGridColumnHeader и, отработав
+        /// последним, задаёт ширины по правилам 1С.
+        /// </summary>
+        private void AttachHeaderTracking(DataGrid grid, string tabKey, System.Windows.Controls.Primitives.DataGridColumnHeader header)
+        {
+            if (!_trackedColumnHeaders.Add(header))
+                return;
+            header.SizeChanged += (_, _) => CaptureColumnWidths(grid, tabKey);
+            if (header.Template?.FindName("PART_RightHeaderGripper", header) is System.Windows.Controls.Primitives.Thumb grip)
+            {
+                grip.DragStarted += (_, e) => OnColumnGripDragStarted(grid, header, e);
+                grip.DragDelta += (_, e) => OnColumnGripDragDelta(grid, header, e);
+                grip.DragCompleted += (_, e) => OnColumnGripDragCompleted(grid, tabKey, e);
+            }
+        }
+
+        private void OnColumnGripDragStarted(
+            DataGrid grid, System.Windows.Controls.Primitives.DataGridColumnHeader header,
+            System.Windows.Controls.Primitives.DragStartedEventArgs e)
+        {
+            var columnIndex = header.Column is null ? -1 : grid.Columns.IndexOf(header.Column);
+            if (columnIndex < 0 || columnIndex >= grid.Columns.Count)
+                return;
+            // Стартовые фактические ширины всех колонок (для Ctrl-режима нужна вся пара)
+            // и «заморозка» гибких (звёздных) колонок в пиксели: иначе при обычном
+            // перетаскивании звёздные колонки справа перераспределяли бы ширину на себя
+            // («двигает одну-две, упираются в третью» — и граница дальше не идёт).
+            _resizeStartWidths = grid.Columns.Select(c => c.ActualWidth).ToArray();
+            for (var j = 0; j < grid.Columns.Count; j++)
+            {
+                if (grid.Columns[j].Width.IsStar)
+                    grid.Columns[j].Width = new DataGridLength(grid.Columns[j].ActualWidth);
+            }
+            _resizingGrid = grid;
+            _resizingColumnIndex = columnIndex;
+            _resizingWithCtrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+            _resizeTotalDelta = 0;
+            e.Handled = true;
+        }
+
+        private void OnColumnGripDragDelta(
+            DataGrid grid, System.Windows.Controls.Primitives.DataGridColumnHeader header,
+            System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+        {
+            if (_resizingGrid != grid || _resizingColumnIndex < 0)
+                return;
+            _resizeTotalDelta += e.HorizontalChange;
+            var i = _resizingColumnIndex;
+            var columns = grid.Columns;
+            if (i >= columns.Count)
+                return;
+            var leftColumn = columns[i];
+            var minLeft = leftColumn.MinWidth > 0 ? leftColumn.MinWidth : 0;
+            if (_resizingWithCtrl && i + 1 < columns.Count)
+            {
+                // Ctrl: меняется только граница между ДВУМЯ смежными колонками — левая
+                // растёт/ужимается, правая — зеркально; остальные колонки не двигаются.
+                var rightColumn = columns[i + 1];
+                var minRight = rightColumn.MinWidth > 0 ? rightColumn.MinWidth : 0;
+                var (newLeft, newRight) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(
+                    _resizeStartWidths[i], _resizeStartWidths[i + 1], _resizeTotalDelta, minLeft, minRight);
+                leftColumn.Width = new DataGridLength(newLeft);
+                rightColumn.Width = new DataGridLength(newRight);
+            }
+            else
+            {
+                // Обычный режим (как в 1С): граница двигается — ВСЕ колонки справа
+                // сдвигаются как блок (их ширины не меняются), левой колонке достаётся
+                // изменение; при переполнении области появляется горизонтальная прокрутка.
+                leftColumn.Width = new DataGridLength(ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(
+                    _resizeStartWidths[i], _resizeTotalDelta, minLeft));
+            }
+            e.Handled = true;
+        }
+
+        private void OnColumnGripDragCompleted(DataGrid grid, string tabKey, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        {
+            if (_resizingGrid == grid)
+            {
+                // Фиксируем фактические ширины вкладки — при закрытии окна они сохранятся
+                // в настройки (переживают закрытие программы).
+                CaptureColumnWidths(grid, tabKey);
+                _resizingGrid = null;
+                _resizingColumnIndex = -1;
+                _resizeStartWidths = Array.Empty<double>();
+            }
+            e.Handled = true;
         }
 
         /// <summary>
