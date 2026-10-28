@@ -495,10 +495,15 @@ namespace Workspace1C
             try
             {
                 var elapsed = _startupWatch.ElapsedMilliseconds;
-                var message = $"[startup {elapsed} мс] {stage}";
-                if (logger is not null)
+                var message = $"[CM_MAIN_WINDOW][startup {elapsed} мс] {stage}";
+                // issue #80 «Настройка логирования»: этапы запуска — направление
+                // CM_MAIN_WINDOW; INFO-записи пишутся в журнал только при включённых
+                // категории и общем выключателе CM_ON (по умолчанию всё выключено).
+                // В консоль (CLI-режим, ранний старт до логгера) пишем всегда.
+                if (logger is not null &&
+                    Workspace1C.Services.TraceFlags.IsLogCategoryEnabled(Workspace1C.Services.LogCategory.MainWindow))
                     logger.Info(message);
-                else
+                else if (logger is null)
                     Console.WriteLine(message);
             }
             catch { /* диагностика не должна блокировать запуск */ }

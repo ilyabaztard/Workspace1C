@@ -243,6 +243,115 @@ public static class TraceFlags
         }
     }
 
+    /// <summary>
+    /// Общий выключатель логирования по направлениям (issue #80 «Настройка логирования»):
+    /// флаг <c>CM_ON</c> в <c>trace.json</c>. Выключен по умолчанию. Значение НЕ зависит
+    /// от отдельных категорий направлений, но уважает общую семантику гейта
+    /// <see cref="IsEnabled"/> (явный false в конфиге не перекрывается env).
+    /// </summary>
+    public static bool IsLoggingMasterOn()
+        => IsEnabled(LogCategory.MasterOn);
+
+    /// <summary>
+    /// Включено ли направление логирования (issue #80 «Настройка логирования»).
+    /// INFO-записи направления пишутся в общий журнал приложения только если
+    /// включены И категория, И общий выключатель <see cref="LogCategory.MasterOn"/>
+    /// («CM_ON»). WARN/ERROR не фильтруются: они относятся к категории, но пишутся
+    /// всегда (важные сбои остаются видимыми по умолчанию). Сам CM_ON «себя не
+    /// включает». Регистр безразличен, конфиг перечитывается при изменении файла.
+    /// </summary>
+    /// <param name="category">Имя категории — например <see cref="LogCategory.Rac"/>
+    /// («CM_RAC»), <see cref="LogCategory.Backup"/> («CM_BACKUP»).</param>
+    public static bool IsLogCategoryEnabled(string category)
+    {
+        if (string.IsNullOrWhiteSpace(category))
+            return false;
+        var name = category.Trim().ToUpperInvariant();
+        if (name == LogCategory.MasterOn)
+            return false;
+        return IsEnabled(LogCategory.MasterOn) && IsEnabled(name);
+    }
+
+    /// <summary>
+    /// Явно ли задана категория в конфиге <c>trace.json</c> (issue #80): возвращает
+    /// <c>true</c> только при явном значении (true или false). Неявные значения
+    /// (файл создан приложением и пользователь его не правил, env-включение)
+    /// используются вкладкой «Логирование» как «нет выбора» — галочка отражает
+    /// фактическое состояние <see cref="IsEnabled"/>.
+    /// </summary>
+    public static bool IsCategoryConfigured(string category)
+    {
+        if (string.IsNullOrWhiteSpace(category))
+            return false;
+        var name = category.Trim().ToUpperInvariant();
+        lock (Lock)
+        {
+            EnsureExistsCore();
+            ReloadIfChangedCore();
+            return _flags.ContainsKey(name);
+        }
+    }
+
+    /// <summary>
+    /// Сохраняет значения категорий логирования в <c>trace.json</c> (issue #80).
+    /// Полный набор <paramref name="values"/>: «имя категории → включена». Категории,
+    /// отсутствующие в <see cref="TraceFlagsFormat.KnownFlags"/>, игнорируются; флаги,
+    /// не упомянутые в <paramref name="values"/> (например рукописные), сохраняют
+    /// текущие значения. Именем выступает любой известный флаг — не только направления
+    /// issue #80, поэтому вкладка «Логирование» единым сохранением пишет и направления,
+    /// и диагностические флаги. Файл перезаписывается pretty-print JSON со стабильным
+    /// порядком ключей; кэш сбрасывается — следующие чтения применят новые значения
+    /// БЕЗ перезапуска приложения. Ошибки записи не бросаются: возвращается false,
+    /// а в журнал приложения пишется WARN (доступна вкладка → конфиг читается).
+    /// Вызывается только с UI-потока (окно настроек), потокобезопасна.
+    /// </summary>
+    public static bool SaveCategorySettings(IReadOnlyDictionary<string, bool> values)
+    {
+        if (values is null || values.Count == 0)
+            return false;
+        lock (Lock)
+        {
+            EnsureExistsCore();
+            ReloadIfChangedCore();
+
+            var merged = new Dictionary<string, bool>(_flags, StringComparer.Ordinal);
+            foreach (var pair in values)
+            {
+                var name = pair.Key?.Trim().ToUpperInvariant();
+                if (string.IsNullOrEmpty(name))
+                    continue;
+                if (Array.IndexOf(TraceFlagsFormat.KnownFlags, name) >= 0)
+                    merged[name] = pair.Value;
+            }
+
+            var path = ConfigFilePath();
+            if (path is null)
+                return false;
+            try
+            {
+                File.WriteAllText(path, TraceFlagsFormat.Serialize(merged), Encoding.UTF8);
+                // Файл правил пользователь (через вкладку): явный false больше не
+                // перекрывается env, кэш перечитает файл по изменённому mtime.
+                _configCreatedByUs = false;
+                _initialized = false;
+                return true;
+            }
+            catch
+            {
+                try
+                {
+                    AppServices.GetRequiredService<IAppLogger>().Warn(
+                        "[TraceFlags] Не удалось сохранить настройки логирования в trace.json: " + path);
+                }
+                catch
+                {
+                    // Логгер может быть ещё не готов.
+                }
+                return false;
+            }
+        }
+    }
+
     /// <summary>Журнал событий меню включён: CM_MENUCLOSE либо его псевдоним CM_MENUCLICK (issue #347).</summary>
     public static bool IsMenuEnabled()
         => IsEnabled(MenuCloseFlag) || IsEnabled(MenuClickFlag);

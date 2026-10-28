@@ -254,7 +254,10 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Диагностика переключения/применения темы (пишет в лог и во временный файл).</summary>
     private void LogTheme(string message)
     {
-        try { _logger.Info("[theme-debug] " + message); } catch { /* не критично */ }
+        // issue #80 «Настройка логирования»: применение тем — направление CM_THEMES
+        // (INFO пишется при включённых категории и общем выключателе CM_ON,
+        // по умолчанию выключено; WARN/ERROR не фильтруются).
+        try { Workspace1C.Services.Log.Info(Workspace1C.Services.LogCategory.Themes, "[theme-debug] " + message); } catch { /* не критично */ }
 #if DEBUG
         try
         {

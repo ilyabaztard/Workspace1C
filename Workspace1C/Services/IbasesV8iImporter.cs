@@ -1023,14 +1023,9 @@ public static class IbasesV8iImporter
     /// <summary>Пишет информационное сообщение импорта в файловый лог (issue #165).</summary>
     private static void LogInfo(string message)
     {
-        try
-        {
-            AppServices.GetRequiredService<IAppLogger>().Info(message);
-        }
-        catch
-        {
-            // Логирование не должно ломать импорт.
-        }
+        // issue #80 «Настройка логирования»: импорт ibases.v8i — направление CM_IBASES
+        // (INFO пишется при включённых категории и общем выключателе CM_ON).
+        Log.Info(LogCategory.Ibases, message);
     }
 
 }

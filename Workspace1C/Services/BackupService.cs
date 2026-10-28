@@ -84,7 +84,9 @@ public class BackupService : IBackupService
                     result.ErrorMessage = LocalizationManager.T("Ibcmd.EmptyResult");
                     return result;
                 }
-                _logger?.Info($"Выгрузка ibcmd «{infobase.Name}» → {primaryPath}");
+                // issue #80 «Настройка логирования»: выгрузка резервной копии — направление
+                // CM_BACKUP (INFO пишется при включённых категории и общем CM_ON).
+                Log.Info(LogCategory.Backup, $"Выгрузка ibcmd «{infobase.Name}» → {primaryPath}");
             }
             else
             {

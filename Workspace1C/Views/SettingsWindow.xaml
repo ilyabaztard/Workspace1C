@@ -2692,6 +2692,37 @@
                 </Grid>
             </TabItem>
 
+            <!-- ============ Вкладка «Логирование» (issue #80) ============ -->
+            <TabItem Style="{StaticResource SettingsTabItem}">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="FileDocument" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                 Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+                        <TextBlock Text="{loc:Loc Settings.TabLogging}" VerticalAlignment="Center"
+                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="4,12,4,0">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Settings.Logging.Description}" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,10"/>
+                        <CheckBox x:Name="LoggingMasterOnCheck" Margin="0,0,0,6">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{loc:Loc Settings.Logging.MasterOn}" VerticalAlignment="Center"/>
+                                <controls:HelpLink Margin="6,0,0,0" VerticalAlignment="Center"
+                                                   HelpText="{loc:Loc Settings.Logging.MasterOnDesc}"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <GroupBox Header="{loc:Loc Settings.Logging.Directions}" Padding="10,6" Margin="0,6,0,0">
+                            <StackPanel x:Name="LoggingDirectionsPanel"/>
+                        </GroupBox>
+                        <GroupBox Header="{loc:Loc Settings.Logging.Diagnostics}" Padding="10,6" Margin="0,12,0,0">
+                            <StackPanel x:Name="LoggingDiagnosticsPanel"/>
+                        </GroupBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <!-- ============ Вкладка «О программе» ============ -->
             <TabItem Style="{StaticResource SettingsTabItem}">
                 <TabItem.Header>

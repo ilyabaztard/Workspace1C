@@ -89,6 +89,14 @@ internal static class TraceFlagsFormat
     /// игнорируются — устойчивость к будущим версиям (появляется новый флаг — старые
     /// сборки не ломаются, новая сборка добавит его в этот список).
     /// </summary>
+    /// <remarks>
+    /// С 1.0.0.104 (issue #80 «Настройка логирования») добавлены направления
+    /// <c>CM_ON</c> (общий выключатель), <c>CM_MAIN_WINDOW</c>, <c>CM_RAC</c>,
+    /// <c>CM_BASE_RUN</c>, <c>CM_BACKUP</c>, <c>CM_IBASES</c>, <c>CM_JOBS</c>,
+    /// <c>CM_THEMES</c> и флаг <c>CM_UPDATES</c> (существовал в коде, но не
+    /// сериализовался в trace.json). Группы: направления закрепляются после
+    /// диагностических флагов, чтобы старый порядок ключей профилей не «прыгал».
+    /// </remarks>
     public static readonly string[] KnownFlags =
     {
         "CM_COLUMNS",
@@ -98,7 +106,16 @@ internal static class TraceFlagsFormat
         "CM_TREESWITCH",
         "CM_TREESWITCH_FLUSH",
         "CM_REVEAL",
-        "CM_CLUSTERIMPORT"
+        "CM_CLUSTERIMPORT",
+        "CM_UPDATES",
+        "CM_ON",
+        "CM_MAIN_WINDOW",
+        "CM_RAC",
+        "CM_BASE_RUN",
+        "CM_BACKUP",
+        "CM_IBASES",
+        "CM_JOBS",
+        "CM_THEMES"
     };
 
     /// <summary>

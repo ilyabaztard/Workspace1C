@@ -302,7 +302,9 @@ public partial class MainViewModel : ViewModelBase
             return;
 
         var link = dialog.Result;
-        _logger.Info($"Запуск 1С по ссылке: {link}");
+        // issue #80 «Настройка логирования»: запуск базы — направление CM_BASE_RUN
+        // (INFO пишется при включённых категории и общем выключателе CM_ON).
+        Workspace1C.Services.Log.Info(Workspace1C.Services.LogCategory.BaseRun, $"Запуск 1С по ссылке: {link}");
         if (!OneCLauncher.LaunchByLink(link))
         {
             _dialogs.ShowError(string.Format(LocalizationManager.T("Main.ErrOpenLink"), link));

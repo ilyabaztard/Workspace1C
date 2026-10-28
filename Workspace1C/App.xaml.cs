@@ -530,8 +530,10 @@ namespace Workspace1C
 
             try
             {
-                var logger = AppServices.GetRequiredService<IAppLogger>();
-                logger.Info("Приложение завершает работу");
+                // issue #80 «Настройка логирования»: завершение приложения — направление
+                // CM_MAIN_WINDOW; INFO-запись пишется только при включённых категории
+                // и общем выключателе CM_ON (по умолчанию выключено).
+                Services.Log.Info(Services.LogCategory.MainWindow, "Приложение завершает работу");
             }
             catch
             {

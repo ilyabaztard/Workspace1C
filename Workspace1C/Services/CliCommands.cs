@@ -141,7 +141,8 @@ public static class CliCommands
                 ExternalCommandRunner.DefaultPreCommandTimeoutMs).GetAwaiter().GetResult();
             if (preOk)
             {
-                logger.Info($"[cli] Pre-команда «{infobase.Name}» выполнена: {infobase.PreLaunchCommand}");
+                // issue #80 «Настройка логирования»: запуск баз — направление CM_BASE_RUN.
+                Log.Info(LogCategory.BaseRun, $"[cli] Pre-команда «{infobase.Name}» выполнена: {infobase.PreLaunchCommand}");
             }
             else
             {
@@ -159,7 +160,8 @@ public static class CliCommands
             if (!string.IsNullOrWhiteSpace(infobase.PostLaunchCommand))
             {
                 ExternalCommandRunner.RunDetached(infobase.PostLaunchCommand);
-                logger.Info($"[cli] Запущена post-команда «{infobase.Name}»: {infobase.PostLaunchCommand}");
+                // issue #80: запуск баз — направление CM_BASE_RUN.
+                Log.Info(LogCategory.BaseRun, $"[cli] Запущена post-команда «{infobase.Name}»: {infobase.PostLaunchCommand}");
             }
 
             // История запуска: если приложение уже запущено, его сохранение
@@ -179,7 +181,8 @@ public static class CliCommands
                 }), json: true);
             }
 
-            logger.Info($"[cli] Запущена «{infobase.Name}» ({mode})");
+            // issue #80: запуск баз — направление CM_BASE_RUN.
+            Log.Info(LogCategory.BaseRun, $"[cli] Запущена «{infobase.Name}» ({mode})");
             return CliExitCodes.Success;
         }
 

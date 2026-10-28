@@ -85,7 +85,8 @@ public static class ExplorerCommandLine
                 ? OneCLaunchMode.Configurator
                 : OneCLaunchMode.Enterprise;
             var ok = launcher.Launch(infobase, mode);
-            logger.Info($"[explorer] {(ok ? "Запущена" : "Не удалось запустить")} база '{infobase.Name}' ({mode})");
+            // issue #80 «Настройка логирования»: запуск баз — направление CM_BASE_RUN.
+            Log.Info(LogCategory.BaseRun, $"[explorer] {(ok ? "Запущена" : "Не удалось запустить")} база '{infobase.Name}' ({mode})");
             return true;
         }
         catch (Exception ex)

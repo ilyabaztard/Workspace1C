@@ -405,7 +405,9 @@ public partial class MainViewModel : ViewModelBase
             favoritesProvider: () => ApplyCurrentSort(
                 InfobaseListFilter.FilterFavorites(EnumerateSearchTagFilteredInfobases())).ToList(),
             recentProvider: () => InfobaseListFilter.FilterRecent(EnumerateSearchTagFilteredInfobases()).ToList());
-        _logger.Info("MainViewModel инициализирован");
+        // issue #80 «Настройка логирования»: инициализация MainViewModel — направление
+        // CM_MAIN_WINDOW (INFO пишется при включённых категории и CM_ON).
+        Workspace1C.Services.Log.Info(Workspace1C.Services.LogCategory.MainWindow, "MainViewModel инициализирован");
 
         // При изменении реестра учётных записей (создание/переименование/удаление в окне
         // настроек) обновляем видимость кнопки «Смена пользователя» (issue #200).

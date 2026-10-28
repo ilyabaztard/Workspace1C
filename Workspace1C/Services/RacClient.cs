@@ -112,7 +112,9 @@ public sealed class RacClient : IRacClient
         // распознанные подписи кластеров — сразу видно, что вернул парсер.
         if (clusters.Count > 0)
         {
-            _logger.Info("RAC: cluster list — распознано кластеров: " + string.Join("; ",
+            // issue #80 «Настройка логирования»: события RAC — направление CM_RAC
+            // (INFO пишется при включённых категории и общем CM_ON).
+            Log.Info(LogCategory.Rac, "RAC: cluster list — распознано кластеров: " + string.Join("; ",
                 clusters.Select(c =>
                     $"«{(string.IsNullOrWhiteSpace(c.Name) ? (string.IsNullOrWhiteSpace(c.Host) ? "?" : c.Host) : c.Name)}» (порт {c.Port})")));
         }
@@ -136,7 +138,8 @@ public sealed class RacClient : IRacClient
             var block = ExtractClusterBlock(cached.Output, clusterId);
             if (block is not null)
             {
-                _logger.Info("RAC: cluster info — переиспользован кэш cluster list (экономия запуска rac, issue #324).");
+                // issue #80: события RAC — направление CM_RAC (INFO при включённых категории и CM_ON).
+                Log.Info(LogCategory.Rac, "RAC: cluster info — переиспользован кэш cluster list (экономия запуска rac, issue #324).");
                 return RacOutputParser.ToClusterInfo(block);
             }
         }
@@ -521,7 +524,8 @@ public sealed class RacClient : IRacClient
 
         if (usedFallback)
         {
-            logger.Info(
+            // issue #80: события RAC — направление CM_RAC (INFO при включённых категории и CM_ON).
+            Log.Info(LogCategory.Rac,
                 $"RAC: {commandName} — стандартный формат '--cluster=<uuid>' не поддержан rac, " +
                 $"применён формат '{ClusterFormatName(successFormat)}' (успешно).");
         }
@@ -1071,7 +1075,8 @@ public sealed class RacClient : IRacClient
         locatorStopwatch.Stop();
         if (locatorStopwatch.ElapsedMilliseconds > 200)
         {
-            _logger.Info($"RAC: поиск rac занял {locatorStopwatch.ElapsedMilliseconds} мс");
+            // issue #80: события RAC — направление CM_RAC (INFO при включённых категории и CM_ON).
+            Log.Info(LogCategory.Rac, $"RAC: поиск rac занял {locatorStopwatch.ElapsedMilliseconds} мс");
         }
 
         if (rac is null)
@@ -1086,7 +1091,8 @@ public sealed class RacClient : IRacClient
         // Путь к найденному исполняемому файлу и полная командная строка (без секретов)
         // позволяют сравнить команду приложения с рабочей командой из терминала, когда
         // «в терминале rac работает, а монитор данные кластера не видит» (issue #324).
-        _logger.Info(
+        // issue #80: события RAC — направление CM_RAC (INFO при включённых категории и CM_ON).
+        Log.Info(LogCategory.Rac,
             $"RAC: rac={rac}, команда: {SensitiveDataMasker.MaskRacPassword(string.Join(" ", args))}");
 
         try
@@ -1166,7 +1172,10 @@ public sealed class RacClient : IRacClient
             // по ним видно, что rac вернул данные (или пустой список) и где задержка
             // при «монитор не видит кластер» / «подключение стало дольше» (issue #324).
             stopwatch.Stop();
-            _logger.Info(
+            // issue #80: события RAC — направление CM_RAC (INFO при включённых категории и CM_ON).
+            // Код выхода/объём вывода полезны и при выключенной категории, поэтому WARN
+            // и ERROR (выше в методе) остаются без фильтра — CM_RAC отключает только INFO.
+            Log.Info(LogCategory.Rac,
                 $"RAC: {commandLabel} — выполнено, exit={process.ExitCode}, stdout={stdout.Length} симв., " +
                 $"stderr={stderr.Length} симв., за {stopwatch.ElapsedMilliseconds} мс");
             return stdout;

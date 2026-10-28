@@ -3308,6 +3308,19 @@ namespace Workspace1C
                 });
             _utilitiesMenuTab = tabUtilitiesMenu;
 
+            // ===== Логирование (issue #80 «Настройка логирования») =====
+            // Список категорий с галочками и общий выключатель «CM_ON»; значения
+            // читаются из trace.json и сохраняются туда же при «ОК».
+            var tabLogging = MainTab("IconFileDocument", "Settings.TabLogging",
+                new ScrollViewer
+                {
+                    Content = BuildLoggingTab(),
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    // Отступ прокрутки из разметки (SettingsWindow.xaml:1486).
+                    Margin = new Thickness(4, 12, 4, 0)
+                });
+
             // ===== О программе =====
             var about = BuildAboutTab();
             var tabAbout = MainTab("IconInformationOutline", "Settings.TabAbout",
@@ -3322,9 +3335,9 @@ namespace Workspace1C
 
             // Порядок вкладок по разметке (SettingsWindow.xaml:293 и далее):
             // платформы, отображение, оформление, клавиши, настройки, базы,
-            // резервное копирование профиля, о программе. Девятой вкладки
-            // «ibases.v8i» (xaml:1164) здесь нет: её содержимое лежит разделом
-            // внутри «Баз», это расхождение старше правки и не закрыто.
+            // резервное копирование профиля, логирование, о программе. Девятой
+            // вкладки «ibases.v8i» (xaml:1164) здесь нет: её содержимое лежит
+            // разделом внутри «Баз», это расхождение старше правки и не закрыто.
             tabs.Items.Add(tabPlatforms);
             tabs.Items.Add(tabDisplay);
             tabs.Items.Add(tabThemes);
@@ -3334,6 +3347,7 @@ namespace Workspace1C
             tabs.Items.Add(tabBases);
             tabs.Items.Add(tabProfile);
             tabs.Items.Add(tabUtilitiesMenu);
+            tabs.Items.Add(tabLogging);
             tabs.Items.Add(tabAbout);
 
             Grid.SetRow(tabs, 0);
@@ -3640,6 +3654,11 @@ namespace Workspace1C
                 // предпросмотрел тему, но не нажал «Применить», выбор всё равно сохраняется.
                 if (_viewModel.HasThemePreview)
                     _viewModel.CommitFullThemePreview();
+
+                // Сохраняем настройки вкладки «Логирование» в trace.json (issue #80):
+                // общий выключатель «CM_ON» и галочки направлений/диагностики.
+                // Значения применяются сразу — конфиг перечитывается без перезапуска.
+                SaveLoggingSettingsAvalonia();
 
                 DialogResult = true;
                 Close();

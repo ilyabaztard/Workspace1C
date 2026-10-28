@@ -134,7 +134,9 @@ public class SchedulerService : IDisposable
                 if (!ScheduleCatchUpCalculator.IsMissed(task, now))
                     continue;
 
-                _logger?.Info($"Догоняющее выполнение пропущенного задания «{task.Name}» ({task.Kind}).");
+                // issue #80 «Настройка логирования»: задания по расписанию — направление
+                // CM_JOBS (INFO пишется при включённых категории и общем CM_ON).
+                Log.Info(LogCategory.Jobs, $"Догоняющее выполнение пропущенного задания «{task.Name}» ({task.Kind}).");
                 var result = await ExecuteAsync(task).ConfigureAwait(false);
                 MarkRun(task);
                 SaveResult(task, result);
@@ -146,7 +148,8 @@ public class SchedulerService : IDisposable
 
             if (executed > 0)
             {
-                _logger?.Info($"Догоняющее выполнение завершено: выполнено пропущенных заданий — {executed}.");
+                // issue #80: задания по расписанию — направление CM_JOBS.
+                Log.Info(LogCategory.Jobs, $"Догоняющее выполнение завершено: выполнено пропущенных заданий — {executed}.");
                 NotifyCatchUpDone(executed);
             }
 
@@ -224,7 +227,8 @@ public class SchedulerService : IDisposable
             if (next is null || now < next)
                 continue;
 
-            _logger?.Info($"Расписание: наступило время задания «{task.Name}» ({task.Kind}).");
+            // issue #80: задания по расписанию — направление CM_JOBS.
+            Log.Info(LogCategory.Jobs, $"Расписание: наступило время задания «{task.Name}» ({task.Kind}).");
             var result = await ExecuteAsync(task).ConfigureAwait(false);
             MarkRun(task);
             SaveResult(task, result);
@@ -390,7 +394,8 @@ public class SchedulerService : IDisposable
             return Fail(LocalizationManager.T("Git.NotConfigured"));
 
         var result = await GitVersioningService.RunAsync(infobase, settings,
-            message => _logger?.Info($"Git «{infobase.Name}»: {message}")).ConfigureAwait(false);
+            // issue #80: задания по расписанию — направление CM_JOBS.
+            message => Log.Info(LogCategory.Jobs, $"Git «{infobase.Name}»: {message}")).ConfigureAwait(false);
         return result.Success
             ? new BackupRunResult { Success = true, ScenarioName = result.Message, SuppressNotification = !result.Committed }
             : Fail(result.Message);
@@ -406,7 +411,8 @@ public class SchedulerService : IDisposable
         if (profile is null)
             return Fail(LocalizationManager.T("Dbms.NotConfigured"));
         var result = await DbmsBackupService.RunAsync(profile,
-            message => _logger?.Info($"СУБД «{infobase.Name}»: {message}")).ConfigureAwait(false);
+            // issue #80: задания по расписанию — направление CM_JOBS.
+            message => Log.Info(LogCategory.Jobs, $"СУБД «{infobase.Name}»: {message}")).ConfigureAwait(false);
         result.ScenarioName = string.IsNullOrEmpty(result.ScenarioName) ? profile.Database : result.ScenarioName;
         return result;
     }
@@ -774,7 +780,8 @@ public class SchedulerService : IDisposable
 
         var service = _testDeploy ?? new TestDeployService(_logger);
         var result = await service.DeployAsync(scenario, source, infobases, groups,
-                message => _logger?.Info($"Тестовая копия «{scenario.Name}»: {message}"))
+                // issue #80: задания по расписанию — направление CM_JOBS.
+                message => Log.Info(LogCategory.Jobs, $"Тестовая копия «{scenario.Name}»: {message}"))
             .ConfigureAwait(false);
 
         if (result.Success && result.Target is not null)
@@ -786,8 +793,9 @@ public class SchedulerService : IDisposable
                     _repository.Save(infobases);
                 if (groupsChanged)
                     _repository.SaveGroups(groups);
+                // issue #80: задания по расписанию — направление CM_JOBS.
                 if (result.GroupCreated)
-                    _logger?.Info($"Задание тест-копии: создана группа «{result.GroupPath}».");
+                    Log.Info(LogCategory.Jobs, $"Задание тест-копии: создана группа «{result.GroupPath}».");
             }
             catch (Exception ex)
             {
