@@ -205,7 +205,9 @@ public partial class ScheduledTaskEditWindow : Window
     private void ApplyKindVisibility()
     {
         var kind = SelectedKind;
-        var needsScenario = kind is ScheduledTaskKind.Backup or ScheduledTaskKind.BackupThenUpdateConfig;
+        var needsScenario = kind is ScheduledTaskKind.Backup
+            or ScheduledTaskKind.BackupThenUpdateConfig
+            or ScheduledTaskKind.TestDeploy;
         var needsInfobase = kind is ScheduledTaskKind.Backup
             or ScheduledTaskKind.UpdateConfig
             or ScheduledTaskKind.BackupThenUpdateConfig
@@ -219,6 +221,9 @@ public partial class ScheduledTaskEditWindow : Window
         var needsConfigCheck = kind is ScheduledTaskKind.ConfigurationUpdateCheck;
 
         ScenarioPanel.Visibility = needsScenario ? Visibility.Visible : Visibility.Collapsed;
+        // Кнопка «Сценарии…» открывает сценарии резервирования — для типа TestDeploy
+        // сценарии выбираются в списке (они создаются мастером «Развернуть тестовую копию»).
+        ScenariosButton.Visibility = kind == ScheduledTaskKind.TestDeploy ? Visibility.Collapsed : Visibility.Visible;
         InfobasePanel.Visibility = needsInfobase ? Visibility.Visible : Visibility.Collapsed;
         CfgPanel.Visibility = needsCfg ? Visibility.Visible : Visibility.Collapsed;
         PlatformPanel.Visibility = needsPlatformCheck ? Visibility.Visible : Visibility.Collapsed;
@@ -231,6 +236,19 @@ public partial class ScheduledTaskEditWindow : Window
     private void KindCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         ApplyKindVisibility();
+        // Список «Сценарий» зависит от типа: сценарии резервирования или сценарии
+        // «Развернуть тестовую копию» (п.10, 1.0.0.92).
+        var selected = (ScenarioCombo.SelectedItem as ScheduledTaskOption)?.Value;
+        var options = _vm.ScenarioOptions;
+        if (options.Any(o => o.Value == selected))
+        {
+            ScenarioCombo.SelectedItem = ScheduledTaskEditViewModel.FindOption(options, selected);
+        }
+        else
+        {
+            ScenarioCombo.ItemsSource = options;
+            ScenarioCombo.SelectedItem = ScheduledTaskEditViewModel.FindOption(options, _vm.SelectedScenarioId);
+        }
     }
 
     /// <summary>

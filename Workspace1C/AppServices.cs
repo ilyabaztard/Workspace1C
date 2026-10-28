@@ -184,6 +184,10 @@ public static class AppServices
                 sp.GetRequiredService<Workspace1C.Services.Sync.SettingsSyncService>(),
                 sp.GetRequiredService<IScheduledTaskStore>(),
                 sp.GetService<IAppLogger>()));
+        // п.10 «Тестовый контур одной кнопкой» (1.0.0.92): оркестратор развёртывания
+        // тестовой копии (выгрузка .dt → создание/обновление базы → загрузка копии →
+        // регламенты → признаки отличия → группа «Тест»). Чистый сервис.
+        services.AddSingleton<TestDeployService>(sp => new TestDeployService(sp.GetService<IAppLogger>()));
         services.AddSingleton<TelegramBotCommandService>(sp => new TelegramBotCommandService(
             sp.GetRequiredService<INotificationSettingsStore>(), sp.GetRequiredService<IScheduledTaskStore>(),
             sp.GetRequiredService<SchedulerService>(), sp.GetRequiredService<ServerAlertsService>(),

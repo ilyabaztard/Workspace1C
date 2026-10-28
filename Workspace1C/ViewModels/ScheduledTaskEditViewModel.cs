@@ -39,6 +39,7 @@ public class ScheduledTaskEditViewModel : ViewModelBase
     private readonly IReadOnlyList<ScheduledTaskOption> _notifyOptions = BuildNotifyOptions();
     private readonly IReadOnlyList<ScheduledTaskOption> _repeatUnitOptions = BuildRepeatUnitOptions();
     private IReadOnlyList<ScheduledTaskOption> _scenarioOptions;
+    private IReadOnlyList<ScheduledTaskOption> _testDeployOptions;
     private readonly IReadOnlyList<ScheduledTaskOption> _infobaseOptions;
 
     public ScheduledTaskEditViewModel(ScheduledTask? task,
@@ -49,6 +50,11 @@ public class ScheduledTaskEditViewModel : ViewModelBase
         _infobases = infobases ?? Array.Empty<Infobase>();
         _scenarioOptions = _scenarios
             .Select(s => new ScheduledTaskOption(s.Id, s.Name))
+            .ToList();
+        // Сценарии «Развернуть тестовую копию» (п.10, 1.0.0.92): для типа TestDeploy
+        // список «Сценарий» показывает их вместо сценариев резервирования.
+        _testDeployOptions = TestDeployStore.Load()
+            .Select(s => new ScheduledTaskOption(s.Id, ScenarioDisplayName(s)))
             .ToList();
         _infobaseOptions = _infobases
             .Select(b => new ScheduledTaskOption(b.Id, b.Name))
@@ -132,13 +138,30 @@ public class ScheduledTaskEditViewModel : ViewModelBase
     public IReadOnlyList<string> ConfigurationOptions =>
         ConfigurationUpdateCheckLogic.ConfigurationNames(_infobases);
 
-    /// <summary>Доступные сценарии резервирования (кэш — issue #372).</summary>
-    public IReadOnlyList<ScheduledTaskOption> ScenarioOptions => _scenarioOptions;
+    /// <summary>
+    /// Доступные сценарии (кэш — issue #372): сценарии резервирования для Backup/
+    /// BackupThenUpdateConfig, сценарии «Развернуть тестовую копию» для TestDeploy
+    /// (п.10, 1.0.0.92).
+    /// </summary>
+    public IReadOnlyList<ScheduledTaskOption> ScenarioOptions =>
+        Kind == ScheduledTaskKind.TestDeploy ? _testDeployOptions : _scenarioOptions;
+
+    /// <summary>Отображаемое имя сценария тест-копии (Name → TargetName → «Тест: <источник>»).</summary>
+    private static string ScenarioDisplayName(TestDeployScenario s)
+    {
+        if (!string.IsNullOrWhiteSpace(s.Name))
+            return s.Name.Trim();
+        if (!string.IsNullOrWhiteSpace(s.TargetName))
+            return s.TargetName.Trim();
+        if (!string.IsNullOrWhiteSpace(s.SourceInfobaseName))
+            return TestDeployPlanner.ProposeTargetName(s.SourceInfobaseName);
+        return "(—)";
+    }
 
     /// <summary>
     /// Обновляет список доступных сценариев после возврата из окна «Сценарии резервирования»
     /// (issue #292): вновь созданные/изменённые сценарии появляются в выборе без переоткрытия
-    /// окна задания.
+    /// окна задания. Заодно перечитываются сценарии тест-копий (test_deploy.json).
     /// </summary>
     public void UpdateScenarios(IReadOnlyList<BackupScenario> scenarios)
     {
@@ -146,13 +169,21 @@ public class ScheduledTaskEditViewModel : ViewModelBase
         _scenarioOptions = _scenarios
             .Select(s => new ScheduledTaskOption(s.Id, s.Name))
             .ToList();
+        _testDeployOptions = TestDeployStore.Load()
+            .Select(s => new ScheduledTaskOption(s.Id, ScenarioDisplayName(s)))
+            .ToList();
     }
 
     /// <summary>Доступные информационные базы (кэш — issue #372).</summary>
     public IReadOnlyList<ScheduledTaskOption> InfobaseOptions => _infobaseOptions;
 
-    /// <summary>Нужен ли выбор сценария (для типов с резервной копией).</summary>
-    public bool NeedsScenario => Kind is ScheduledTaskKind.Backup or ScheduledTaskKind.BackupThenUpdateConfig;
+    /// <summary>
+    /// Нужен ли выбор сценария: сценарий резервирования для Backup/BackupThenUpdateConfig
+    /// или сценарий «Развернуть тестовую копию» (п.10, 1.0.0.92).
+    /// </summary>
+    public bool NeedsScenario => Kind is ScheduledTaskKind.Backup
+        or ScheduledTaskKind.BackupThenUpdateConfig
+        or ScheduledTaskKind.TestDeploy;
 
     /// <summary>Нужен ли выбор базы (кроме обновления приложения).</summary>
     public bool NeedsInfobase => Kind is ScheduledTaskKind.Backup
@@ -194,7 +225,10 @@ public class ScheduledTaskEditViewModel : ViewModelBase
             new ScheduledTaskOption("GitCommitConfig", LocalizationManager.T("Schedule.Kind.GitCommitConfig")),
             new ScheduledTaskOption("DbmsBackup", LocalizationManager.T("Schedule.Kind.DbmsBackup")),
             // Синхронизация своих настроек между компьютерами (п.9, 1.0.0.91).
-            new ScheduledTaskOption("SettingsSync", LocalizationManager.T("Schedule.Kind.SettingsSync"))
+            new ScheduledTaskOption("SettingsSync", LocalizationManager.T("Schedule.Kind.SettingsSync")),
+            // Развёртывание тестовой копии (п.10, 1.0.0.92): «каждый понедельник
+            // обновлять тест из прода» — сценарий TestDeployScenario + TestDeployService.
+            new ScheduledTaskOption("TestDeploy", LocalizationManager.T("Schedule.Kind.TestDeploy"))
         };
 #if DEBUG
         // Диагностика локализации опций (issue #372): язык и текст первой опции — чтобы
@@ -253,6 +287,7 @@ public class ScheduledTaskEditViewModel : ViewModelBase
         {
             case ScheduledTaskKind.Backup:
             case ScheduledTaskKind.BackupThenUpdateConfig:
+            case ScheduledTaskKind.TestDeploy:
                 if (string.IsNullOrWhiteSpace(SelectedScenarioId))
                     return "Schedule.ScenarioRequired";
                 break;

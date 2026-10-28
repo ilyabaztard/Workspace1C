@@ -1,0 +1,465 @@
+#if LINUX
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Workspace1C.Controls;
+using Workspace1C.Localization;
+using Workspace1C.Models;
+using Workspace1C.Services;
+using Workspace1C.Themes;
+using Workspace1C.ViewModels;
+
+namespace Workspace1C;
+
+/// <summary>
+/// Мастер «Развернуть тестовую копию» (п.10, 1.0.0.92, Avalonia/Linux): параметры тестовой
+/// базы (имя, режим сервер/файл, сервер и СУБД, движок выгрузки, отключение регламентов,
+/// заголовок/цвет, группа «Тест», расписание), предпросмотр плана и журнал прогресса.
+/// Avalonia-версия WPF-окна <see cref="TestDeployWindow"/>. По успеху заполняет
+/// <see cref="Scenario"/>/<see cref="DeployResult"/>/<see cref="CreatedGroup"/> и закрывается —
+/// запись списка и группу применяет вызывающий (команда главного окна).
+/// </summary>
+public class TestDeployWindow : ModalWindowBase
+{
+    private readonly TestDeployViewModel _vm;
+    private readonly IReadOnlyList<Group> _groups;
+    private readonly IDialogService _dialogs = AppServices.GetRequiredService<IDialogService>();
+
+    private readonly TextBox _targetNameBox = new TextBox().Styled(ControlThemes.ModernTextBox);
+    private readonly RadioButton _serverRadio = new();
+    private readonly RadioButton _fileRadio = new();
+    private readonly StackPanel _serverPanel = new() { Spacing = 4 };
+    private readonly StackPanel _filePanel = new() { Spacing = 4 };
+    private readonly TextBox _serverBox = new TextBox().Styled(ControlThemes.ModernTextBox);
+    private readonly TextBox _refBox = new TextBox().Styled(ControlThemes.ModernTextBox);
+    private readonly ComboBox _dbmsBox = new() { IsEditable = true };
+    private readonly TextBox _dbServerBox = new TextBox().Styled(ControlThemes.ModernTextBox);
+    private readonly TextBox _dbNameBox = new TextBox().Styled(ControlThemes.ModernTextBox);
+    private readonly TextBox _dbUserBox = new TextBox().Styled(ControlThemes.ModernTextBox);
+    private readonly PasswordBox _dbPwdBox = new PasswordBox().Styled(ControlThemes.ModernPasswordBox);
+    private readonly CheckBox _createDbCheck = new() { IsChecked = true };
+    private readonly TextBox _filePathBox = new TextBox().Styled(ControlThemes.ModernTextBox);
+    private readonly ComboBox _engineCombo = new();
+    private readonly CheckBox _disableJobsCheck = new() { IsChecked = true };
+    private readonly CheckBox _changeTitleCheck = new() { IsChecked = true };
+    private readonly CheckBox _changeColorCheck = new() { IsChecked = true };
+    private readonly CheckBox _addToGroupCheck = new() { IsChecked = true };
+    private readonly TextBox _groupNameBox = new TextBox().Styled(ControlThemes.ModernTextBox);
+    private readonly CheckBox _updateExistingCheck = new() { IsChecked = true };
+    private readonly CheckBox _useScheduleCheck = new();
+    private readonly TextBox _scheduleTimeBox = new TextBox().Styled(ControlThemes.ModernTextBox);
+    private readonly CheckBox[] _dayChecks = new CheckBox[7];
+    private readonly TextBlock _previewSummary = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly ItemsControl _previewSteps = new();
+    private readonly ListBox _logList = new() { Height = 140 };
+    private readonly Button _runButton = new();
+    private readonly Button _closeButton = new();
+
+    private bool _busy;
+
+    /// <summary>Сценарий (заполняется и сохраняется при успешном развёртывании).</summary>
+    public TestDeployScenario? Scenario { get; private set; }
+
+    /// <summary>Результат развёртывания (заполняется при успехе).</summary>
+    public TestDeployResult? DeployResult { get; private set; }
+
+    /// <summary>Созданная группа «Тест» (null — группа уже была или добавление выключено).</summary>
+    public Group? CreatedGroup { get; private set; }
+
+    public TestDeployWindow(
+        Infobase source,
+        IReadOnlyList<Infobase> allInfobases,
+        IReadOnlyList<Group> groups)
+    {
+        _groups = groups?.ToList() ?? new List<Group>();
+
+        var proposedName = TestDeployPlanner.ProposeTargetName(source.Name);
+        var proposedServer = source.Connection?.GetServerWithPort() ?? string.Empty;
+        var proposedDb = source.Connection?.DatabaseName ?? string.Empty;
+        var proposedDbRef = string.IsNullOrWhiteSpace(proposedDb)
+            ? string.Empty
+            : SuggestRef(proposedDb, allInfobases);
+        var proposedFile = ProposedFileDirectory(source, proposedName);
+
+        _vm = new TestDeployViewModel(
+            source, allInfobases, _groups, proposedName, proposedServer, proposedDbRef, proposedFile);
+
+        Title = LocalizationManager.T("TestDeploy.Title");
+        Width = 720;
+        Height = 700;
+        MinWidth = 640;
+        MinHeight = 620;
+        FontSize = 13;
+        Content = BuildRoot();
+        ApplyModePanels();
+        ApplyScheduleState();
+    }
+
+    private Control BuildRoot()
+    {
+        var grid = new Grid { Margin = new Thickness(16) };
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        grid.RowDefinitions.Add(new RowDefinition(new GridLength(1, GridUnitType.Star)));
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var fields = new StackPanel { Spacing = 8 };
+
+        var sourceBlock = new TextBlock
+        {
+            Text = string.Format(LocalizationManager.T("TestDeploy.SourceFormat"), _vm.SourceDisplay),
+            TextWrapping = TextWrapping.Wrap,
+            FontWeight = FontWeight.SemiBold
+        };
+        fields.Children.Add(sourceBlock);
+
+        fields.Children.Add(Field(T("TestDeploy.TargetName"), _targetNameBox));
+        _targetNameBox.Text = _vm.TargetName;
+        _targetNameBox.TextChanged += (_, _) => { _vm.TargetName = _targetNameBox.Text; RefreshPreview(); };
+
+        // Режим: сервер / файл.
+        _serverRadio.Content = T("TestDeploy.ModeServer");
+        _fileRadio.Content = T("TestDeploy.ModeFile");
+        _serverRadio.IsChecked = _vm.IsServerMode;
+        _serverRadio.IsCheckedChanged += (_, _) => { _vm.IsServerMode = _serverRadio.IsChecked == true; ApplyModePanels(); };
+        _fileRadio.IsCheckedChanged += (_, _) => { _vm.IsFileMode = _fileRadio.IsChecked == true; ApplyModePanels(); };
+        var modeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
+        modeRow.Children.Add(_serverRadio);
+        modeRow.Children.Add(_fileRadio);
+        fields.Children.Add(Field(T("TestDeploy.Mode"), modeRow));
+
+        // --- Серверная секция ---
+        _serverPanel.Children.Add(Field(T("TestDeploy.Server"), _serverBox));
+        _serverBox.Text = _vm.ServerAddress;
+        _serverBox.TextChanged += (_, _) => _vm.ServerAddress = _serverBox.Text;
+
+        _serverPanel.Children.Add(Field(T("TestDeploy.Ref"), _refBox));
+        _refBox.Text = _vm.DatabaseName;
+        _refBox.TextChanged += (_, _) => _vm.DatabaseName = _refBox.Text;
+
+        _dbmsBox.ItemsSource = new[] { "MSSQLServer", "PostgreSQL", "IBMDB2", "OracleDatabase" };
+        _dbmsBox.SelectedItem = _vm.Dbms;
+        _dbmsBox.SelectionChanged += (_, _) => _vm.Dbms = _dbmsBox.SelectedItem?.ToString() ?? _vm.Dbms;
+        _serverPanel.Children.Add(Field(T("TestDeploy.Dbms"), _dbmsBox));
+
+        _serverPanel.Children.Add(Field(T("TestDeploy.DbServer"), _dbServerBox));
+        _dbServerBox.TextChanged += (_, _) => _vm.DbServer = _dbServerBox.Text;
+
+        _serverPanel.Children.Add(Field(T("TestDeploy.DbName"), _dbNameBox));
+        _dbNameBox.TextChanged += (_, _) => _vm.DbName = _dbNameBox.Text;
+
+        _serverPanel.Children.Add(Field(T("TestDeploy.DbUser"), _dbUserBox));
+        _dbUserBox.TextChanged += (_, _) => _vm.DbUser = _dbUserBox.Text;
+
+        _serverPanel.Children.Add(Field(T("TestDeploy.DbPassword"), _dbPwdBox));
+        _dbPwdBox.PasswordChanged += (_, _) => _vm.DbPassword = _dbPwdBox.Password;
+
+        _createDbCheck.Content = T("TestDeploy.CreateDb");
+        _createDbCheck.IsCheckedChanged += (_, _) => _vm.CreateSqlDatabase = _createDbCheck.IsChecked == true;
+        _serverPanel.Children.Add(_createDbCheck);
+        fields.Children.Add(_serverPanel);
+
+        // --- Файловая секция ---
+        _filePanel.Children.Add(Field(T("TestDeploy.FilePath"), _filePathBox));
+        _filePathBox.Text = _vm.FilePath;
+        _filePathBox.TextChanged += (_, _) => _vm.FilePath = _filePathBox.Text;
+        fields.Children.Add(_filePanel);
+
+        // --- Движок выгрузки ---
+        _engineCombo.ItemsSource = new[]
+        {
+            new EngineOption("Designer", T("TestDeploy.EngineDesigner")),
+            new EngineOption("Ibcmd", T("TestDeploy.EngineIbcmd"))
+        };
+        _engineCombo.SelectedIndex = _vm.EngineIndex;
+        _engineCombo.SelectionChanged += (_, _) => _vm.EngineIndex = Math.Max(0, _engineCombo.SelectedIndex);
+        fields.Children.Add(Field(T("TestDeploy.Engine"), _engineCombo));
+
+        // --- Опции ---
+        _disableJobsCheck.Content = T("TestDeploy.DisableJobs");
+        _disableJobsCheck.IsCheckedChanged += (_, _) => _vm.DisableScheduledJobs = _disableJobsCheck.IsChecked == true;
+        fields.Children.Add(Field(string.Empty, Wrap(_disableJobsCheck)));
+
+        _changeTitleCheck.Content = T("TestDeploy.ChangeTitle");
+        _changeTitleCheck.IsCheckedChanged += (_, _) => _vm.ChangeTitle = _changeTitleCheck.IsChecked == true;
+        fields.Children.Add(Field(string.Empty, Wrap(_changeTitleCheck)));
+
+        _changeColorCheck.Content = T("TestDeploy.ChangeColor");
+        _changeColorCheck.IsCheckedChanged += (_, _) => _vm.ChangeColor = _changeColorCheck.IsChecked == true;
+        fields.Children.Add(Field(string.Empty, Wrap(_changeColorCheck)));
+
+        _addToGroupCheck.Content = T("TestDeploy.AddToGroup");
+        _addToGroupCheck.IsCheckedChanged += (_, _) => { _vm.AddToTestGroup = _addToGroupCheck.IsChecked == true; RefreshPreview(); };
+        fields.Children.Add(Field(string.Empty, Wrap(_addToGroupCheck)));
+
+        fields.Children.Add(Field(T("TestDeploy.GroupName"), _groupNameBox));
+        _groupNameBox.Text = _vm.TestGroupName;
+        _groupNameBox.TextChanged += (_, _) => _vm.TestGroupName = _groupNameBox.Text;
+
+        _updateExistingCheck.Content = T("TestDeploy.UpdateExisting");
+        _updateExistingCheck.IsCheckedChanged += (_, _) => _vm.UpdateExisting = _updateExistingCheck.IsChecked == true;
+        fields.Children.Add(Field(string.Empty, Wrap(_updateExistingCheck)));
+
+        // --- Расписание ---
+        _useScheduleCheck.Content = T("TestDeploy.UseSchedule");
+        _useScheduleCheck.IsCheckedChanged += (_, _) => { _vm.UseSchedule = _useScheduleCheck.IsChecked == true; ApplyScheduleState(); };
+        fields.Children.Add(Field(string.Empty, Wrap(_useScheduleCheck)));
+
+        fields.Children.Add(Field(T("TestDeploy.ScheduleTime"), _scheduleTimeBox));
+        _scheduleTimeBox.Text = _vm.ScheduleTime;
+        _scheduleTimeBox.TextChanged += (_, _) => _vm.ScheduleTime = _scheduleTimeBox.Text;
+
+        var daysRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var dayNames = new[] { "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс" };
+        var dayValues = new[] { _vm.Monday, _vm.Tuesday, _vm.Wednesday, _vm.Thursday, _vm.Friday, _vm.Saturday, _vm.Sunday };
+        for (var i = 0; i < 7; i++)
+        {
+            var index = i;
+            var check = new CheckBox { Content = dayNames[i], IsChecked = dayValues[i] };
+            check.IsCheckedChanged += (_, _) => SetScheduleDay(index, check.IsChecked == true);
+            _dayChecks[i] = check;
+            daysRow.Children.Add(check);
+        }
+        fields.Children.Add(Field(T("TestDeploy.ScheduleDays"), daysRow));
+        fields.Children.Add(new TextBlock
+        {
+            Text = T("TestDeploy.ScheduleHint"),
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 11,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+
+        // --- Предпросмотр ---
+        _previewSummary.Text = _vm.PreviewSummary;
+        fields.Children.Add(_previewSummary);
+        fields.Children.Add(_previewSteps);
+        RefreshPreview();
+
+        scroll.Content = fields;
+        Grid.SetRow(scroll, 0);
+        grid.Children.Add(scroll);
+
+        // --- Журнал ---
+        var logLabel = new TextBlock { Text = T("TestDeploy.Log"), Margin = new Thickness(0, 6, 0, 2) };
+        Grid.SetRow(logLabel, 1);
+        grid.Children.Add(logLabel);
+        Grid.SetRow(_logList, 2);
+        grid.Children.Add(_logList);
+
+        // --- Кнопки ---
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 10,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+        _runButton.Content = T("TestDeploy.Run");
+        _runButton.Width = 170;
+        _runButton.Height = 36;
+        _runButton.IsDefault = true;
+        _runButton.Styled(ControlThemes.DialogConfirmButton);
+        _runButton.Click += async (_, _) => await RunAsync();
+        _closeButton.Content = T("Common.Close");
+        _closeButton.Width = 110;
+        _closeButton.Styled(ControlThemes.SecondaryButton);
+        _closeButton.Click += (_, _) => Close();
+        buttons.Children.Add(_runButton);
+        buttons.Children.Add(_closeButton);
+        Grid.SetRow(buttons, 3);
+        grid.Children.Add(buttons);
+
+        return grid;
+    }
+
+    private void RefreshPreview()
+    {
+        _vm.RefreshPreview();
+        _previewSummary.Text = _vm.PreviewSummary;
+        _previewSteps.ItemsSource = _vm.PreviewSteps.ToList();
+    }
+
+    private void ApplyModePanels()
+    {
+        _serverPanel.IsVisible = _vm.IsServerMode;
+        _filePanel.IsVisible = _vm.IsFileMode;
+        RefreshPreview();
+    }
+
+    private void ApplyScheduleState()
+    {
+        _scheduleTimeBox.IsEnabled = _vm.UseSchedule;
+        foreach (var check in _dayChecks)
+            check.IsEnabled = _vm.UseSchedule;
+    }
+
+    private void SetScheduleDay(int index, bool value)
+    {
+        switch (index)
+        {
+            case 0: _vm.Monday = value; break;
+            case 1: _vm.Tuesday = value; break;
+            case 2: _vm.Wednesday = value; break;
+            case 3: _vm.Thursday = value; break;
+            case 4: _vm.Friday = value; break;
+            case 5: _vm.Saturday = value; break;
+            case 6: _vm.Sunday = value; break;
+        }
+    }
+
+    private async Task RunAsync()
+    {
+        if (_busy)
+            return;
+
+        var errors = _vm.Validate();
+        if (errors.Count > 0)
+        {
+            _dialogs.ShowWarning(LocalizationManager.T(errors[0]), LocalizationManager.T("TestDeploy.Title"));
+            return;
+        }
+
+        _busy = true;
+        _runButton.IsEnabled = false;
+        _logList.Items.Clear();
+        _logList.Items.Add(LocalizationManager.T("TestDeploy.Started"));
+        try
+        {
+            var scenario = _vm.BuildScenario();
+            var service = AppServices.TryGetService<TestDeployService>() ?? new TestDeployService();
+            var result = await service.DeployAsync(
+                scenario, _vm.Source, _vm.AllInfobases, _groups, log: null);
+
+            foreach (var line in result.Log)
+                _logList.Items.Add(line);
+
+            if (!result.Success)
+            {
+                _logList.Items.Add(result.ErrorMessage ?? LocalizationManager.T("Schedule.RunFailed"));
+                _dialogs.ShowError(result.ErrorMessage ?? LocalizationManager.T("Schedule.RunFailed"),
+                    LocalizationManager.T("TestDeploy.Title"));
+                return;
+            }
+
+            foreach (var warning in result.Warnings)
+                _logList.Items.Add(warning);
+
+            TestDeployStore.Upsert(scenario);
+            TestDeployScheduleHelper.RegisterTask(scenario);
+
+            Scenario = scenario;
+            DeployResult = result;
+            if (result.GroupCreated)
+            {
+                var groupPlan = TestDeployPlanner.EnsureGroup(_groups, scenario);
+                CreatedGroup = groupPlan.NewGroup;
+            }
+
+            _logList.Items.Add(LocalizationManager.T(
+                result.TargetCreated ? "TestDeploy.DoneCreated" : "TestDeploy.DoneUpdated"));
+            Close();
+        }
+        catch (Exception ex)
+        {
+            _dialogs.ShowError(ex.Message, LocalizationManager.T("TestDeploy.Title"));
+        }
+        finally
+        {
+            _busy = false;
+            _runButton.IsEnabled = true;
+        }
+    }
+
+    private static string SuggestRef(string sourceDb, IEnumerable<Infobase> allInfobases)
+    {
+        var seed = $"{sourceDb}_t";
+        var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var ib in allInfobases)
+        {
+            var name = ib.Connection?.DatabaseName;
+            if (!string.IsNullOrWhiteSpace(name))
+                existing.Add(name);
+        }
+        var candidate = seed;
+        var suffix = 2;
+        while (existing.Contains(candidate))
+        {
+            candidate = $"{seed}{suffix}";
+            suffix++;
+        }
+        return candidate;
+    }
+
+    private static string ProposedFileDirectory(Infobase source, string targetName)
+    {
+        try
+        {
+            var sourceDir = source.Connection?.FilePath;
+            if (string.IsNullOrWhiteSpace(sourceDir))
+                return string.Empty;
+            var parent = System.IO.Path.GetDirectoryName(sourceDir.TrimEnd('\\', '/'));
+            if (string.IsNullOrWhiteSpace(parent))
+                return string.Empty;
+            var folderName = targetName;
+            foreach (var invalid in System.IO.Path.GetInvalidFileNameChars())
+                folderName = folderName.Replace(invalid, '_');
+            return System.IO.Path.Combine(parent, folderName);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static Control Wrap(Control control)
+    {
+        var row = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
+        row.Children.Add(control);
+        return row;
+    }
+
+    private static Grid Field(string label, Control control)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 2) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(170)));
+        grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+
+        if (label.Length > 0)
+        {
+            var labelBlock = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center };
+            ThemeBrushes.Bind(labelBlock, TextBlock.ForegroundProperty, "FormLabelBrush");
+            Grid.SetColumn(labelBlock, 0);
+            grid.Children.Add(labelBlock);
+        }
+
+        control.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(control, 1);
+        grid.Children.Add(control);
+        return grid;
+    }
+
+    private static string T(string key) => LocalizationManager.T(key);
+
+    /// <summary>Простая пара «ключ/текст» для списка движков.</summary>
+    private sealed class EngineOption
+    {
+        public EngineOption(string value, string text)
+        {
+            Value = value;
+            Text = text;
+        }
+
+        public string Value { get; }
+        public string Text { get; }
+
+        public override string ToString() => Text;
+    }
+}
+#endif

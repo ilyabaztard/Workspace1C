@@ -31,6 +31,7 @@ public sealed class ScheduledTaskEditWindow : ModalWindowBase
     private readonly CheckBox[] _dayChecks = new CheckBox[7];
     private readonly StackPanel _scenarioPanel = new() { Spacing = 6 };
     private readonly ComboBox _scenarioCombo = new ComboBox().Styled(ControlThemes.ModernComboBox);
+    private readonly Button _scenariosButton = new Button { Width = 110 }.Styled(ControlThemes.SecondaryButton);
     private readonly StackPanel _infobasePanel = new() { Spacing = 6 };
     private readonly ComboBox _infobaseCombo = new ComboBox().Styled(ControlThemes.ModernComboBox);
     private readonly StackPanel _cfgPanel = new() { Spacing = 6 };
@@ -120,7 +121,7 @@ public sealed class ScheduledTaskEditWindow : ModalWindowBase
         _kindCombo.ItemsSource = _vm.KindOptions;
         ApplyOptionTemplate(_kindCombo);
         _kindCombo.SelectedItem = _vm.KindOptions.FirstOrDefault(o => o.Value == _vm.Kind.ToString());
-        _kindCombo.SelectionChanged += (_, _) => ApplyKindVisibility();
+        _kindCombo.SelectionChanged += (_, _) => OnKindChanged();
         _kindCombo.HorizontalAlignment = HorizontalAlignment.Left;
         _kindCombo.MinWidth = 280;
         panel.Children.Add(_kindCombo);
@@ -139,12 +140,11 @@ public sealed class ScheduledTaskEditWindow : ModalWindowBase
         ApplyOptionTemplate(_scenarioCombo);
         _scenarioCombo.SelectedItem = _vm.ScenarioOptions.FirstOrDefault(o => o.Value == _vm.SelectedScenarioId);
         _scenarioCombo.HorizontalAlignment = HorizontalAlignment.Stretch;
-        var scenariosButton = new Button { Content = T("Schedule.Scenarios"), Width = 110 }
-            .Styled(ControlThemes.SecondaryButton);
-        scenariosButton.Click += (_, _) => OpenScenarios();
+        _scenariosButton.Content = T("Schedule.Scenarios");
+        _scenariosButton.Click += (_, _) => OpenScenarios();
         var scenarioRow = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(scenariosButton, Dock.Right);
-        scenarioRow.Children.Add(scenariosButton);
+        DockPanel.SetDock(_scenariosButton, Dock.Right);
+        scenarioRow.Children.Add(_scenariosButton);
         scenarioRow.Children.Add(_scenarioCombo);
         _scenarioPanel.Children.Add(Label(T("Schedule.Scenario")));
         _scenarioPanel.Children.Add(scenarioRow);
@@ -365,7 +365,9 @@ public sealed class ScheduledTaskEditWindow : ModalWindowBase
     private void ApplyKindVisibility()
     {
         var kind = SelectedKind;
-        _scenarioPanel.IsVisible = kind is ScheduledTaskKind.Backup or ScheduledTaskKind.BackupThenUpdateConfig;
+        _scenarioPanel.IsVisible = kind is ScheduledTaskKind.Backup
+            or ScheduledTaskKind.BackupThenUpdateConfig
+            or ScheduledTaskKind.TestDeploy;
         _infobasePanel.IsVisible = kind is ScheduledTaskKind.Backup
             or ScheduledTaskKind.UpdateConfig
             or ScheduledTaskKind.BackupThenUpdateConfig
@@ -377,9 +379,29 @@ public sealed class ScheduledTaskEditWindow : ModalWindowBase
             or ScheduledTaskKind.InstallExtension;
         _platformPanel.IsVisible = kind is ScheduledTaskKind.PlatformUpdateCheck;
         _configPanel.IsVisible = kind is ScheduledTaskKind.ConfigurationUpdateCheck;
+        // Кнопка «Сценарии…» открывает сценарии резервирования — для типа TestDeploy
+        // сценарии выбираются в списке (их создаёт мастер «Развернуть тестовую копию»).
+        _scenariosButton.IsVisible = kind != ScheduledTaskKind.TestDeploy;
         // Повтор с интервалом (issue #366/#367/#5): для заданий-проверок и «Обновить
         // приложение» (issue #5) — единый источник истины в ViewModel.
         _repeatPanel.IsVisible = _vm.NeedsRepeat;
+    }
+
+    /// <summary>Смена типа задания: обновляет видимость секций и список «Сценарий».</summary>
+    private void OnKindChanged()
+    {
+        ApplyKindVisibility();
+        var selected = (_scenarioCombo.SelectedItem as ScheduledTaskOption)?.Value;
+        var options = _vm.ScenarioOptions;
+        if (options.Any(o => o.Value == selected))
+        {
+            _scenarioCombo.SelectedItem = options.FirstOrDefault(o => o.Value == selected);
+        }
+        else
+        {
+            _scenarioCombo.ItemsSource = options;
+            _scenarioCombo.SelectedItem = options.FirstOrDefault(o => o.Value == _vm.SelectedScenarioId);
+        }
     }
 
     private void BrowseCfgFile()

@@ -204,8 +204,9 @@ public sealed class ContextMenuResolverTests
         Assert.Equal(ContextMenuCatalog.GroupNewItems, group.GroupId);
         Assert.True(group.Visible);
         // «WebPublish» и «Заметки» — неразмещённые новинки (перенесены из «Утилиты»/новые,
-        // #63 / п.8 1.0.0.90) — добавляются в существующую группу «Новинки».
-        Assert.Equal(4, group.Children.Count);
+        // #63 / п.8 1.0.0.90); «Развернуть тестовую копию» — п.10 (1.0.0.92).
+        // Все добавляются в существующую группу «Новинки».
+        Assert.Equal(5, group.Children.Count);
     }
 
     [Fact]

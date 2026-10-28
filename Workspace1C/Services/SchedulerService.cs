@@ -34,6 +34,7 @@ public class SchedulerService : IDisposable
     private readonly ICustomConfigTypesStore _configTypes;
     private readonly IMainWindowNotifier _mainWindowNotifier;
     private readonly Workspace1C.Services.Sync.SettingsSyncRunner? _settingsSync;
+    private readonly TestDeployService? _testDeploy;
     private readonly IAppLogger? _logger;
 
     private Timer? _timer;
@@ -56,6 +57,7 @@ public class SchedulerService : IDisposable
         ICustomConfigTypesStore configTypes,
         IMainWindowNotifier mainWindowNotifier,
         Workspace1C.Services.Sync.SettingsSyncRunner? settingsSync = null,
+        TestDeployService? testDeploy = null,
         IAppLogger? logger = null)
     {
         _tasks = tasks;
@@ -73,6 +75,7 @@ public class SchedulerService : IDisposable
         _configTypes = configTypes;
         _mainWindowNotifier = mainWindowNotifier;
         _settingsSync = settingsSync;
+        _testDeploy = testDeploy;
         _logger = logger;
     }
 
@@ -303,6 +306,7 @@ public class SchedulerService : IDisposable
         ScheduledTaskKind.GitCommitConfig => LocalizationManager.T("Schedule.Kind.GitCommitConfig"),
         ScheduledTaskKind.DbmsBackup => LocalizationManager.T("Schedule.Kind.DbmsBackup"),
         ScheduledTaskKind.SettingsSync => LocalizationManager.T("Schedule.Kind.SettingsSync"),
+        ScheduledTaskKind.TestDeploy => LocalizationManager.T("Schedule.Kind.TestDeploy"),
         _ => LocalizationManager.T("Schedule.Kind.Backup")
     };
 
@@ -323,6 +327,7 @@ public class SchedulerService : IDisposable
                 ScheduledTaskKind.GitCommitConfig => await RunGitCommitAsync(task).ConfigureAwait(false),
                 ScheduledTaskKind.DbmsBackup => await RunDbmsBackupAsync(task).ConfigureAwait(false),
                 ScheduledTaskKind.SettingsSync => await RunSettingsSyncAsync(task).ConfigureAwait(false),
+                ScheduledTaskKind.TestDeploy => await RunTestDeployAsync(task).ConfigureAwait(false),
                 _ => null
             };
         }
@@ -735,6 +740,151 @@ public class SchedulerService : IDisposable
             ErrorMessage = result.Errors.Count == 0 ? null : string.Join("; ", result.Errors),
             ScenarioName = result.Message
         };
+    }
+
+    /// <summary>
+    /// Задание «Развернуть тестовую копию» (п.10, 1.0.0.92): выполняет сценарий
+    /// <see cref="TestDeployScenario"/> (test_deploy.json) через <see cref="TestDeployService"/>
+    /// и применяет результат к списку баз — тестовая база добавляется/обновляется,
+    /// группа «Тест» создаётся при необходимости. Например, «каждый понедельник
+    /// обновлять тест из прода». Ошибки шагов возвращаются в <see cref="BackupRunResult"/>
+    /// с понятным сообщением; секреты не логируются.
+    /// </summary>
+    private async Task<BackupRunResult?> RunTestDeployAsync(ScheduledTask task)
+    {
+        var scenario = TestDeployStore.Get(task.ScenarioId);
+        if (scenario is null)
+            return Fail(LocalizationManager.T("Schedule.ScenarioNotFound"));
+
+        var source = ResolveInfobase(scenario.SourceInfobaseId);
+        if (source is null)
+            return Fail(LocalizationManager.T("TestDeploy.SourceNotFound"));
+
+        List<Infobase> infobases;
+        try
+        {
+            infobases = _repository.Load();
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("Задание тест-копии: не удалось загрузить список баз", ex);
+            infobases = new List<Infobase>();
+        }
+        var groups = LoadSchedulerGroupsSafe();
+
+        var service = _testDeploy ?? new TestDeployService(_logger);
+        var result = await service.DeployAsync(scenario, source, infobases, groups,
+                message => _logger?.Info($"Тестовая копия «{scenario.Name}»: {message}"))
+            .ConfigureAwait(false);
+
+        if (result.Success && result.Target is not null)
+        {
+            try
+            {
+                var (basesChanged, groupsChanged) = ApplyTestDeployToRepository(infobases, groups, scenario, result);
+                if (basesChanged)
+                    _repository.Save(infobases);
+                if (groupsChanged)
+                    _repository.SaveGroups(groups);
+                if (result.GroupCreated)
+                    _logger?.Info($"Задание тест-копии: создана группа «{result.GroupPath}».");
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error("Задание тест-копии: не удалось сохранить список баз/групп", ex);
+            }
+        }
+
+        // Фиксируем результат последнего запуска в сценарии (LastRunMessage без секретов).
+        scenario.LastRunAt = DateTime.Now;
+        scenario.LastRunSuccess = result.Success;
+        scenario.LastRunMessage = result.Success
+            ? string.Format(
+                LocalizationManager.T(result.TargetCreated ? "TestDeploy.DoneCreated" : "TestDeploy.DoneUpdated"),
+                result.Target?.Name ?? string.Empty)
+            : result.ErrorMessage ?? LocalizationManager.T("Schedule.RunFailed");
+        try
+        {
+            TestDeployStore.Upsert(scenario);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("Задание тест-копии: не удалось сохранить сценарий", ex);
+        }
+
+        if (!result.Success)
+            return Fail(result.ErrorMessage ?? LocalizationManager.T("Schedule.RunFailed"));
+
+        return new BackupRunResult
+        {
+            Success = true,
+            ScenarioName = scenario.LastRunMessage
+        };
+    }
+
+    /// <summary>Группы списка баз; при ошибке загрузки — пустой список.</summary>
+    private List<Group> LoadSchedulerGroupsSafe()
+    {
+        try
+        {
+            return _repository.LoadGroups() ?? new List<Group>();
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("Задание тест-копии: не удалось загрузить группы", ex);
+            return new List<Group>();
+        }
+    }
+
+    /// <summary>
+    /// Применяет результат развёртывания к списку баз и групп (задание по расписанию):
+    /// новая тестовая запись добавляется (перед этим убирается запись-тёзка), существующая
+    /// заменяется; новая группа «Тест» добавляется, если сценарий её создал. Возвращает
+    /// признаки изменений для сохранения.
+    /// </summary>
+    private static (bool BasesChanged, bool GroupsChanged) ApplyTestDeployToRepository(
+        List<Infobase> infobases,
+        List<Group> groups,
+        TestDeployScenario scenario,
+        TestDeployResult result)
+    {
+        var basesChanged = false;
+        if (result.Target is not null)
+        {
+            if (result.TargetCreated)
+            {
+                infobases.RemoveAll(b => TestDeployPlanner.MatchesTargetName(
+                    result.Target.Name, b.Name, allowPrefixed: true));
+                infobases.Add(result.Target);
+                basesChanged = true;
+            }
+            else if (result.TargetUpdated)
+            {
+                var index = infobases.FindIndex(b =>
+                    string.Equals(b.Id, result.Target.Id, StringComparison.Ordinal));
+                if (index >= 0)
+                {
+                    infobases[index] = result.Target;
+                }
+                else
+                {
+                    infobases.Add(result.Target);
+                    basesChanged = true;
+                }
+            }
+        }
+
+        var groupsChanged = false;
+        if (result.GroupCreated)
+        {
+            var plan = TestDeployPlanner.EnsureGroup(groups, scenario);
+            if (plan.NewGroup is not null)
+            {
+                groups.Add(plan.NewGroup);
+                groupsChanged = true;
+            }
+        }
+        return (basesChanged, groupsChanged);
     }
 
     private Infobase? ResolveInfobase(string? id)

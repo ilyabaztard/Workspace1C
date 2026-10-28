@@ -1926,6 +1926,97 @@ public string HotkeyEnterprise
         await OfferDisableScheduledJobsAsync(clone);
     }
 
+    // ====================== Тестовая копия (п.10, 1.0.0.92) ======================
+
+    private ICommand? _testDeployCommand;
+
+    /// <summary>
+    /// Команда «Развернуть тестовую копию» (п.10, 1.0.0.92): мастер параметров тестовой базы
+    /// → <see cref="TestDeployService"/> (выгрузка .dt → создание/обновление → загрузка →
+    /// регламенты → признаки отличия → группа «Тест») → новая/обновлённая запись списка.
+    /// </summary>
+    public ICommand TestDeployCommand =>
+        _testDeployCommand ??= new RelayCommand(
+            async _ => await ExecuteShowTestDeployAsync(SelectedInfobase),
+            _ => SelectedInfobase?.Connection?.Type is ConnectionType.File or ConnectionType.ClientServer);
+
+    private async Task ExecuteShowTestDeployAsync(Infobase source)
+    {
+        if (source?.Connection is null)
+            return;
+
+        var window = new TestDeployWindow(source, Infobases.ToList(), Groups.ToList())
+        {
+            Owner = Application.Current.MainWindow
+        };
+        if (window.ShowDialog() != true || window.Scenario is null || window.DeployResult is null)
+            return;
+
+        var result = window.DeployResult;
+        var target = result.Target;
+        if (target is null)
+            return;
+
+        try
+        {
+            if (result.TargetCreated)
+            {
+                // Убираем запись-тёзку (переименованную тестовую копию) и добавляем новую.
+                foreach (var twin in Infobases
+                             .Where(b => b is not null && TestDeployPlanner.MatchesTargetName(
+                                 target.Name, b.Name, allowPrefixed: true))
+                             .ToList())
+                    Infobases.Remove(twin);
+
+                var index = Infobases.IndexOf(source);
+                if (index >= 0)
+                    Infobases.Insert(index + 1, target);
+                else
+                    Infobases.Add(target);
+            }
+            else if (result.TargetUpdated)
+            {
+                var index = Infobases.IndexOf(target);
+                if (index >= 0)
+                    Infobases[index] = target;
+                else
+                    Infobases.Add(target);
+            }
+
+            if (window.CreatedGroup is not null &&
+                !Groups.Any(g => string.Equals(g.Name, window.CreatedGroup.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                Groups.Add(window.CreatedGroup);
+            }
+
+            Save();
+            SaveGroups();
+            RebuildGroupTree();
+            ExportToIbasesAfterLocalChange();
+            SelectedInfobase = target;
+            RefreshRunningFlags();
+            _logger.Info($"[testdeploy] «{source.Name}» → «{target.Name}» ({(result.TargetCreated ? "создана" : "обновлена")})");
+
+            var doneMessage = LocalizationManager.T(
+                result.TargetCreated ? "TestDeploy.DoneCreated" : "TestDeploy.DoneUpdated");
+            if (result.Warnings.Count > 0)
+            {
+                _dialogs.ShowWarning(
+                    doneMessage + "\n\n" + string.Join("\n", result.Warnings),
+                    LocalizationManager.T("TestDeploy.Title"));
+            }
+            else
+            {
+                _dialogs.ShowInfo(doneMessage, LocalizationManager.T("TestDeploy.Title"));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Ошибка применения результата развёртывания тестовой копии", ex);
+            _dialogs.ShowError(ex.Message, LocalizationManager.T("TestDeploy.Title"));
+        }
+    }
+
     /// <summary>
     /// «Найти в списке» (issue #285): переходит к базе в общем списке «Все базы».
     /// Сбрасывает фильтры (вкладка/поиск/теги), принудительно раскрывает цепочку групп

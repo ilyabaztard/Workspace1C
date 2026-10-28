@@ -63,7 +63,16 @@ public enum ScheduledTaskKind
     /// «Синхронизация настроек» (settings_sync.json). Дополнительный способ запуска
     /// к интервальному таймеру окна — задание планировщика в удобное время.
     /// </summary>
-    SettingsSync
+    SettingsSync,
+
+    /// <summary>
+    /// Развёртывание тестовой копии (п.10, 1.0.0.92): сценарий
+    /// <see cref="TestDeployScenario"/> из <c>test_deploy.json</c>, ссылка — в
+    /// <see cref="ScheduledTask.ScenarioId"/>. Например, «каждый понедельник обновлять
+    /// тест из прода». Источник — база сценария, выполняет
+    /// <see cref="Services.TestDeployService"/>.
+    /// </summary>
+    TestDeploy
 }
 
 /// <summary>

@@ -598,5 +598,95 @@ public partial class MainViewModel : ViewModelBase
                 request.CloneName, request.Server, request.DatabaseName),
             LocalizationManager.T("CloneServer.Title"));
     }
+
+    // ====================== Тестовая копия (п.10, 1.0.0.92) ======================
+
+    private ICommand? _testDeployCommand;
+
+    /// <summary>
+    /// Команда «Развернуть тестовую копию» (п.10, 1.0.0.92): мастер параметров тестовой базы
+    /// → <see cref="TestDeployService"/> (выгрузка .dt → создание/обновление → загрузка →
+    /// регламенты → признаки отличия → группа «Тест») → новая/обновлённая запись списка.
+    /// </summary>
+    public ICommand TestDeployCommand =>
+        _testDeployCommand ??= new RelayCommand(
+            async _ => await ExecuteShowTestDeployAsync(SelectedInfobase),
+            _ => SelectedInfobase?.Connection?.Type is ConnectionType.File or ConnectionType.ClientServer);
+
+    private System.Threading.Tasks.Task ExecuteShowTestDeployAsync(Infobase source)
+    {
+        if (source?.Connection is null)
+            return System.Threading.Tasks.Task.CompletedTask;
+
+        var window = new Workspace1C.TestDeployWindow(source, _allInfobases.ToList(), _groups.ToList());
+        if (!window.ShowDialogSync(OwnerWindow()) || window.Scenario is null || window.DeployResult is null)
+            return System.Threading.Tasks.Task.CompletedTask;
+
+        var result = window.DeployResult;
+        var target = result.Target;
+        if (target is null)
+            return System.Threading.Tasks.Task.CompletedTask;
+
+        try
+        {
+            if (result.TargetCreated)
+            {
+                // Убираем запись-тёзку (переименованную тестовую копию) и добавляем новую.
+                foreach (var twin in _allInfobases
+                             .Where(b => b is not null && TestDeployPlanner.MatchesTargetName(
+                                 target.Name, b.Name, allowPrefixed: true))
+                             .ToList())
+                    _allInfobases.Remove(twin);
+
+                var index = _allInfobases.IndexOf(source);
+                if (index >= 0)
+                    _allInfobases.Insert(index + 1, target);
+                else
+                    _allInfobases.Add(target);
+            }
+            else if (result.TargetUpdated)
+            {
+                var index = _allInfobases.IndexOf(target);
+                if (index >= 0)
+                    _allInfobases[index] = target;
+                else
+                    _allInfobases.Add(target);
+            }
+
+            if (window.CreatedGroup is not null &&
+                !_groups.Any(g => string.Equals(g.Name, window.CreatedGroup.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                _groups.Add(window.CreatedGroup);
+            }
+
+            OnPropertyChanged(nameof(Infobases));
+            SaveSilently();
+            SaveGroupsSilently();
+            RebuildTree();
+            SelectedInfobase = target;
+            RefreshRunningFlags();
+            _logger.Info($"[testdeploy] «{source.Name}» → «{target.Name}» ({(result.TargetCreated ? "создана" : "обновлена")})");
+
+            var doneMessage = LocalizationManager.T(
+                result.TargetCreated ? "TestDeploy.DoneCreated" : "TestDeploy.DoneUpdated");
+            if (result.Warnings.Count > 0)
+            {
+                _dialog.ShowWarning(
+                    doneMessage + "\n\n" + string.Join("\n", result.Warnings),
+                    LocalizationManager.T("TestDeploy.Title"));
+            }
+            else
+            {
+                _dialog.ShowInfo(doneMessage, LocalizationManager.T("TestDeploy.Title"));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Ошибка применения результата развёртывания тестовой копии", ex);
+            _dialog.ShowError(ex.Message, LocalizationManager.T("TestDeploy.Title"));
+        }
+
+        return System.Threading.Tasks.Task.CompletedTask;
+    }
 }
 #endif

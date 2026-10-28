@@ -2206,6 +2206,7 @@ namespace Workspace1C
             ContextMenuCommandKind.NetworkDiagnostics => ("IconNetwork", "#3B82F6"),
             ContextMenuCommandKind.OpenInfobaseFolder => ("IconFolderOpen", "#0EA5E9"),
             ContextMenuCommandKind.CloneBase => ("IconCopy", "#14B8A6"),
+            ContextMenuCommandKind.TestDeploy => ("IconCloudUpload", "#22C55E"),
             ContextMenuCommandKind.CheckIntegrity => ("IconDatabase", "#10B981"),
             ContextMenuCommandKind.DumpToDt => ("IconDatabaseExport", "#0EA5E9"),
             ContextMenuCommandKind.DumpConfigToCf => ("IconFileExport", "#3B82F6"),
@@ -2284,6 +2285,8 @@ namespace Workspace1C
                     item.Command = _vm!.OpenInfobaseFolderCommand; break;
                 case ContextMenuCommandKind.CloneBase:
                     item.Command = _vm!.CloneInfobaseCommand; break;
+                case ContextMenuCommandKind.TestDeploy:
+                    item.Command = _vm!.TestDeployCommand; break;
                 case ContextMenuCommandKind.CheckIntegrity:
                     item.Command = _vm!.CheckIntegrityCommand; break;
                 case ContextMenuCommandKind.WebPublish:

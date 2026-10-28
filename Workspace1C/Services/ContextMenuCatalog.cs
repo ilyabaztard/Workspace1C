@@ -101,7 +101,14 @@ public enum ContextMenuCommandKind
     EditSettings,
 
     /// <summary>Заметки базы (п.8, 1.0.0.90): markdown-карточка и секреты внешних сервисов.</summary>
-    Notes
+    Notes,
+
+    /// <summary>
+    /// «Развернуть тестовую копию» (п.10, 1.0.0.92): мастер параметров тестовой базы
+    /// (имя, сервер/файл, движок выгрузки, регламенты, заголовок/цвет, группа «Тест»,
+    /// расписание) с выполнением через <c>TestDeployService</c>.
+    /// </summary>
+    TestDeploy
 }
 
 /// <summary>
@@ -328,6 +335,11 @@ public static class ContextMenuCatalog
             // Дублирование базы (0.3.9.100, функция №10).
             new("CloneBase", "Clone.Title", GroupAdministration,
                 "ContentCopy", "IconCopy", "#14B8A6", ContextMenuCommandKind.CloneBase),
+            // «Развернуть тестовую копию» (п.10, 1.0.0.92): мастер параметров тестовой
+            // базы; новый пункт — при сохранённой компоновке попадёт в «Новинки приложения».
+            new("TestDeploy", "TestDeploy.MenuItem", GroupAdministration,
+                "CloudUpload", "IconCloudUpload", "#22C55E", ContextMenuCommandKind.TestDeploy,
+                isNew: true),
             // Администрирование ИБ (Этап 6, функция №29): проверка целостности (chdbfl).
             new("CheckIntegrity", "Admin.CheckIntegrity", GroupAdministration,
                 "DatabaseCheck", "IconDatabase", "#10B981", ContextMenuCommandKind.CheckIntegrity, "HotkeyCheckIntegrity"),
@@ -432,6 +444,7 @@ public static class ContextMenuLayouts
                 Separator(),
                 Item("OpenInfobaseFolder"),
                 Item("CloneBase"),
+                Item("TestDeploy"),
                 Item("CheckIntegrity"),
                 Separator(),
                 Item("WebPublish"),

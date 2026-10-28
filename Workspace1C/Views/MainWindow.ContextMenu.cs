@@ -290,6 +290,8 @@ public partial class MainWindow
                 item.Command = _viewModel.OpenInfobaseFolderCommand; break;
             case ContextMenuCommandKind.CloneBase:
                 item.Command = _viewModel.CloneInfobaseCommand; break;
+            case ContextMenuCommandKind.TestDeploy:
+                item.Command = _viewModel.TestDeployCommand; break;
             case ContextMenuCommandKind.CheckIntegrity:
                 item.Command = _viewModel.CheckIntegrityCommand; break;
             case ContextMenuCommandKind.WebPublish:
