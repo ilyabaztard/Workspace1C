@@ -729,6 +729,8 @@ public partial class MainViewModel : ViewModelBase
         s.HotkeyCheckUpdate = _hotkeyCheckUpdate;
         s.HotkeyActualReleases = _hotkeyActualReleases;
         s.HotkeyPlatformUpdate = _hotkeyPlatformUpdate;
+        // Глобальная горячая клавиша «показать главное окно» (issue #82).
+        s.GlobalShowWindowHotkey = _globalShowWindowHotkey;
         // Учётная запись ИТС (issue #333): выбранная запись справочника its_accounts.json
         // (пусто — «Основная»). Старые поля UpdatesLogin/UpdatesPassword не записываются —
         // они нужны только для однократной миграции в справочник.

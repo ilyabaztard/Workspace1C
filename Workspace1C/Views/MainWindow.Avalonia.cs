@@ -498,6 +498,8 @@ namespace Workspace1C
         private IDisposable? _titleBackgroundSub;
         private IDisposable? _titleForegroundSub;
         private readonly List<WindowControlButton> _windowControlButtons = new();
+        // Глобальная горячая клавиша «показать главное окно» (issue #82).
+        private Services.IGlobalHotkeyService? _globalHotkey;
 
         /// <summary>Значок трея создан без ошибки: значение проверяется перед тем, как прятать окно.</summary>
         private bool _trayIconCreated;
@@ -2519,8 +2521,11 @@ namespace Workspace1C
 
             if (settings.WindowWidth > 0 && settings.WindowHeight > 0)
             {
-                Width = settings.WindowWidth;
-                Height = settings.WindowHeight;
+                // issue #71: восстановленный из профиля размер не должен сужать окно
+                // ниже MinWidth/MinHeight (профиль мог сохранить размер из старой версии
+                // или с маленького экрана — окно открылось бы «сжатым»).
+                Width = Math.Max(settings.WindowWidth, MinWidth);
+                Height = Math.Max(settings.WindowHeight, MinHeight);
             }
 
             var left = settings.WindowLeft;
@@ -2560,11 +2565,54 @@ namespace Workspace1C
                 Position = ClampToScreen(Position);
             }
 
+            // Глобальная горячая клавиша «показать главное окно» (issue #82): регистрируем
+            // X11-захват после первого показа и перерегистрируем при изменении настройки.
+            try { RegisterGlobalShowWindowHotkey(); } catch { /* не блокируем показ */ }
+            if (_vm is not null)
+                _vm.PropertyChanged += OnGlobalShowWindowHotkeyChanged;
+            Closed += (_, _) =>
+            {
+                if (_vm is not null)
+                    _vm.PropertyChanged -= OnGlobalShowWindowHotkeyChanged;
+                try { _globalHotkey?.Dispose(); } catch { /* ignore */ }
+                _globalHotkey = null;
+            };
+
             // Монитор запущенных баз (индикатор «зелёная точка»): первый опрос
             // сразу, далее раз в 10 секунд, пока окно открыто.
             _vm?.StartRunningBasesMonitor();
             // Общие списки баз отдела (1.0.0.69): синхронизация при запуске и по интервалу.
             _vm?.StartSharedListsAutoSync();
+        }
+
+        /// <summary>Регистрирует глобальную клавишу «показать главное окно» (issue #82).</summary>
+        private void RegisterGlobalShowWindowHotkey()
+        {
+            if (_vm is null)
+                return;
+            if (_globalHotkey is null)
+            {
+                _globalHotkey = new Services.GlobalHotkeyServiceAvalonia();
+                // Нажатие приходит из фонового X11-цикла — действие окна доставляем
+                // на UI-поток диспетчером Avalonia.
+                _globalHotkey.HotkeyPressed = () =>
+                {
+                    try
+                    {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(ShowAndActivate);
+                    }
+                    catch { /* ignore */ }
+                };
+            }
+            _globalHotkey.SetGesture(_vm.GlobalShowWindowHotkey);
+        }
+
+        /// <summary>Перерегистрация при изменении настройки в окне «Настройки».</summary>
+        private void OnGlobalShowWindowHotkeyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(ViewModels.MainViewModel.GlobalShowWindowHotkey))
+                return;
+            try { RegisterGlobalShowWindowHotkey(); } catch { /* ignore */ }
         }
 
         /// <summary>

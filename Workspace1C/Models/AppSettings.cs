@@ -610,6 +610,15 @@ public class AppSettings
     /// <summary>Горячая клавиша «Командная палитра» (быстрый поиск баз и команд). По умолчанию Ctrl+K.</summary>
     public string HotkeyCommandPalette { get; set; } = "Ctrl+K";
 
+    /// <summary>
+    /// Глобальная горячая клавиша «показать главное окно» (issue #82): работает независимо
+    /// от фокуса — из трея, свёрнутого или находящегося на заднем плане окна. По умолчанию
+    /// Ctrl+Alt+W (как у Start Manager); пусто — глобальная клавиша не назначена.
+    /// Регистрируется платформенной реализацией <see cref="Workspace1C.Services.IGlobalHotkeyService"/>
+    /// (RegisterHotKey на Windows, X11-GrabKey на Linux).
+    /// </summary>
+    public string GlobalShowWindowHotkey { get; set; } = "Ctrl+Alt+W";
+
     /// <summary>Горячая клавиша «Смена пользователя» (issue #200). Пусто — не назначена.</summary>
     public string HotkeySwitchUser { get; set; } = "";
 

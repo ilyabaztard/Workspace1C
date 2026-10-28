@@ -56,6 +56,8 @@ namespace Workspace1C
             // Меню служб (issue #11, пункт 6): настраиваемый хоткей, по умолчанию Ctrl+Shift+Alt+S.
             BindHotkeyBox(HotkeyServicesMenuBox, _viewModel.HotkeyServicesMenu);
             BindHotkeyBox(HotkeySwitchUserBox, _viewModel.HotkeySwitchUser);
+            // Глобальная горячая клавиша «показать главное окно» (issue #82).
+            BindHotkeyBox(GlobalShowWindowHotkeyBox, _viewModel.GlobalShowWindowHotkey);
         }
 
         private static void BindHotkeyBox(Controls.HotkeyBox? box, string current)

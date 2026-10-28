@@ -607,6 +607,17 @@ namespace Workspace1C
                 try { RegisterLaunchHotkeys(); } catch { /* ignore */ }
                 try { RegisterFavoriteHotkeys(); } catch { /* ignore */ }
 
+                // Глобальная горячая клавиша «показать главное окно» (issue #82):
+                // регистрируется после создания дескриптора окна и перерегистрируется
+                // при изменении настройки без перезапуска.
+                try { RegisterGlobalShowWindowHotkey(); } catch { /* ignore */ }
+                _viewModel.PropertyChanged += OnGlobalShowWindowHotkeyChanged;
+                Closed += (_, _) =>
+                {
+                    _viewModel.PropertyChanged -= OnGlobalShowWindowHotkeyChanged;
+                    UnregisterGlobalShowWindowHotkey();
+                };
+
                 // Блокировка приложения (issue #294): если приложение было заблокировано
                 // в прошлом сеансе (закрыто из трея, выход), при запуске окно открывается
                 // с оверлеем и окном ввода пароля. Блокировка снимается только верным

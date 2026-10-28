@@ -836,6 +836,25 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Запоминать размер, позицию, состояние окна и монитор при закрытии.</summary>
     public bool RememberWindowLayout => _rememberWindowLayout;
 
+    /// <summary>
+    /// Глобальная горячая клавиша «показать главное окно» (issue #82): работает из трея,
+    /// свёрнутого или находящегося на заднем плане окна. Пустое значение — клавиша не
+    /// назначена (регистрация отключается). Применяется без перезапуска: главное окно
+    /// перерегистрирует нативный хук по PropertyChanged.
+    /// </summary>
+    public string GlobalShowWindowHotkey
+    {
+        get => _globalShowWindowHotkey;
+        set
+        {
+            // Пустое значение — глобальная клавиша отключается (регистрация снимается);
+            // значение по умолчанию подставляется только при первом запуске (загрузке).
+            var normalized = Services.GlobalHotkeyLogic.Normalize(value);
+            if (SetProperty(ref _globalShowWindowHotkey, normalized))
+                SaveSettings();
+        }
+    }
+
     /// <summary>Компактный режим интерфейса (уменьшенные иконки, отступы, расстояния).</summary>
     public bool CompactMode
     {

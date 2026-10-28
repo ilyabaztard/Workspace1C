@@ -606,6 +606,8 @@ namespace Workspace1C
             // Автообновление платформы 1С (функция 9, этап 0.3.9.214): Ctrl+F9.
             var hkPlatformUpdate = ReadHotkeyBox(HotkeyPlatformUpdateBox);
             var hkSwitchUser = ReadHotkeyBox(HotkeySwitchUserBox);
+            // Глобальная горячая клавиша «показать главное окно» (issue #82).
+            var hkShowWindow = ReadHotkeyBox(GlobalShowWindowHotkeyBox);
             var hkSessionLock = ReadHotkeyBox(HotkeySessionLockBox);
             var hkLockApp = ReadHotkeyBox(HotkeyLockAppBox);
             var hkCheckIntegrity = ReadHotkeyBox(HotkeyCheckIntegrityBox);
@@ -649,6 +651,7 @@ namespace Workspace1C
                 (LocalizationManager.T("Admin.ServerConsoleTitle"), hkServerConsole),
                 (LocalizationManager.T("Services.MenuItem"), hkServices),
                 (LocalizationManager.T("Settings.Hotkeys.ServicesMenu"), hkServicesMenu),
+                (LocalizationManager.T("Settings.Hotkeys.ShowWindow"), hkShowWindow),
                 (LocalizationManager.T("Settings.Screenshot.Title"), hkScreenshot),
                 (LocalizationManager.T("Settings.Hotkeys.ZoomIn"), hkZoomIn),
                 (LocalizationManager.T("Settings.Hotkeys.ZoomOut"), hkZoomOut),
@@ -738,6 +741,10 @@ namespace Workspace1C
                 hotkeyZoomReset: hkZoomReset,
                 hotkeyShowRunning: hkShowRunning,
                 hotkeyBookmarksMenu: hkBookmarksMenu);
+
+            // Глобальная горячая клавиша «показать главное окно» (issue #82): главное
+            // окно перерегистрирует нативный хук по PropertyChanged — без перезапуска.
+            _viewModel.GlobalShowWindowHotkey = hkShowWindow;
 
             // Автообновление платформы 1С (функция 9, этап 0.3.9.214).
             _viewModel.HotkeyPlatformUpdate = hkPlatformUpdate;

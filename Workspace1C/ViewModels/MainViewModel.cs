@@ -145,6 +145,8 @@ public partial class MainViewModel : ViewModelBase
     private const int SaveDebounceMs = 400;
     private string _windowState = string.Empty;
     private bool _rememberWindowLayout = true;
+    // Глобальная горячая клавиша «показать главное окно» (issue #82).
+    private string _globalShowWindowHotkey = Services.GlobalHotkeyLogic.DefaultGesture;
     private IbasesSyncMode _ibasesSyncMode = IbasesSyncMode.None;
     private string _ibasesSyncFilePath = string.Empty;
     private IbasesSyncTrigger _ibasesSyncTrigger = IbasesSyncTrigger.OnStartup;
@@ -669,6 +671,10 @@ public partial class MainViewModel : ViewModelBase
             ? "Ctrl+B"
             : settings.HotkeyBookmarksMenu.Trim();
         _hotkeySwitchUser = settings.HotkeySwitchUser?.Trim() ?? "";
+        // Глобальная горячая клавиша «показать главное окно» (issue #82).
+        _globalShowWindowHotkey = Services.GlobalHotkeyLogic.Normalize(settings.GlobalShowWindowHotkey);
+        if (string.IsNullOrEmpty(_globalShowWindowHotkey))
+            _globalShowWindowHotkey = Services.GlobalHotkeyLogic.DefaultGesture;
         _sortField = string.IsNullOrWhiteSpace(settings.SortField) ? "Name" : settings.SortField;
         _sortAscending = settings.SortAscending;
         _lastSelectedInfobaseId = settings.LastSelectedInfobaseId ?? string.Empty;

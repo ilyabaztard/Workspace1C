@@ -37,6 +37,56 @@ namespace Workspace1C
         /// </summary>
         private readonly List<(string? Gesture, ICommand Command)> _launchHotkeys = new();
 
+        /// <summary>Глобальная горячая клавиша «показать главное окно» (issue #82).</summary>
+        private IGlobalHotkeyService? _globalHotkey;
+
+        /// <summary>
+        /// Регистрирует глобальную клавишу «показать главное окно» (issue #82) через
+        /// RegisterHotKey: работает из трея, свёрнутого или находящегося на заднем плане
+        /// окна. Перерегистрация выполняется при изменении настройки (без перезапуска).
+        /// </summary>
+        private void RegisterGlobalShowWindowHotkey()
+        {
+            if (_viewModel is null)
+                return;
+            if (_globalHotkey is null)
+            {
+                _globalHotkey = new GlobalHotkeyServiceWindows(this);
+                // WM_HOTKEY приходит сообщением на поток окна — восстановление из трея
+                // можно выполнять напрямую (метод RestoreFromTrayPublic из MainWindow.Tray.cs).
+                _globalHotkey.HotkeyPressed = () =>
+                {
+                    try { RestoreFromTrayPublic(); } catch { /* ignore */ }
+                };
+            }
+            try
+            {
+                _globalHotkey.SetGesture(_viewModel.GlobalShowWindowHotkey);
+            }
+            catch
+            {
+                // Ошибка нативной регистрации не должна ронять приложение.
+            }
+        }
+
+        /// <summary>Дерегистрирует глобальную клавишу при закрытии окна.</summary>
+        private void UnregisterGlobalShowWindowHotkey()
+        {
+            try { _globalHotkey?.Dispose(); } catch { /* ignore */ }
+            _globalHotkey = null;
+        }
+
+        /// <summary>
+        /// Изменение настройки глобальной клавиши в окне «Настройки» применяется
+        /// сразу, без перезапуска приложения (issue #82).
+        /// </summary>
+        private void OnGlobalShowWindowHotkeyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(MainViewModel.GlobalShowWindowHotkey))
+                return;
+            try { RegisterGlobalShowWindowHotkey(); } catch { /* ignore */ }
+        }
+
         /// <summary>
         /// Регистрирует настраиваемые горячие клавиши действий (запуск, правка, удаление и т.д.).
         /// </summary>

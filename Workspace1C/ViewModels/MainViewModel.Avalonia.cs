@@ -318,6 +318,27 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>Сохранённое состояние главного окна (Normal, Maximized).</summary>
     public string SavedWindowState => _settings.WindowState;
 
+    /// <summary>
+    /// Глобальная горячая клавиша «показать главное окно» (issue #82): работает из трея,
+    /// свёрнутого или находящегося на заднем плане окна. По умолчанию Ctrl+Alt+W.
+    /// Применяется без перезапуска — окно перерегистрирует X11-захват по PropertyChanged.
+    /// </summary>
+    public string GlobalShowWindowHotkey
+    {
+        get => string.IsNullOrWhiteSpace(_settings.GlobalShowWindowHotkey)
+            ? Services.GlobalHotkeyLogic.DefaultGesture
+            : _settings.GlobalShowWindowHotkey;
+        set
+        {
+            var normalized = Services.GlobalHotkeyLogic.Normalize(value);
+            if (string.IsNullOrEmpty(_settings.GlobalShowWindowHotkey) == string.IsNullOrEmpty(normalized) &&
+                string.Equals(_settings.GlobalShowWindowHotkey ?? string.Empty, normalized, StringComparison.Ordinal))
+                return;
+            _settings.GlobalShowWindowHotkey = normalized;
+            OnPropertyChanged(nameof(GlobalShowWindowHotkey));
+        }
+    }
+
     /// <summary>Сохраняет размер, положение и состояние главного окна.</summary>
     public void SaveWindowLayout(double width, double height, double left, double top, string state)
     {
