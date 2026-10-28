@@ -88,7 +88,7 @@ namespace Workspace1C
         }
 
         /// <summary>Строка переназначения: подпись действия и поле ввода сочетания.</summary>
-        private static Controls.HotkeyBox HotkeyRow(Panel host, string action, string value)
+        private static Controls.HotkeyBox HotkeyRow(Panel host, string action, string value, string? tooltip = null)
         {
             // Раскладка строки из разметки WPF: подпись в колонке Auto (минимум 150,
             // issue #55), поле тянется по остатку ширины, шаг между строками 6.
@@ -97,6 +97,9 @@ namespace Workspace1C
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
 
             var label = new TextBlock { Text = action, VerticalAlignment = VerticalAlignment.Center };
+            // Подсказка строки (аналог ToolTip в разметке WPF).
+            if (!string.IsNullOrEmpty(tooltip))
+                ToolTip.SetTip(label, tooltip);
             grid.Children.Add(label);
 
             // Поле сочетания в разметке идёт тем же стилем, что и обычное поле

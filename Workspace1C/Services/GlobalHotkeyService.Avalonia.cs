@@ -130,7 +130,9 @@ public sealed class GlobalHotkeyServiceAvalonia : IGlobalHotkeyService
                     var type = Marshal.ReadInt32(buffer, 0);
                     if (type != KeyPressEvent)
                         continue;
-                    var keycode = Marshal.ReadUInt32(buffer, KeycodeOffset());
+                    // Marshal.ReadUInt32 не существует: keycode в XKeyEvent —
+                    // unsigned char, читаем байт через ReadInt32 и приводим.
+                    var keycode = (uint)Marshal.ReadInt32(buffer, KeycodeOffset());
                     if (keycode != _keycodeGuard)
                         continue;
                     var pressed = HotkeyPressed;
@@ -259,9 +261,5 @@ public sealed class GlobalHotkeyServiceAvalonia : IGlobalHotkeyService
 
     [DllImport("libX11.so.6")]
     private static extern uint XStringToKeysym(string name);
-
-    // Поле для сравнения с keycode из события: тип uint, но мы храним копию на случай
-    // гонки (keycode меняется только в SetGesture до старта потока).
-    private volatile uint _keycodeGuard;
 }
 #endif

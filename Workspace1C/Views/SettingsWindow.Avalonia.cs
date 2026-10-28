@@ -3143,6 +3143,11 @@ namespace Workspace1C
             // Автообновление платформы 1С (функция 9, этап 0.3.9.214): Ctrl+F9.
             var hotkeyPlatformUpdate = HotkeyRow(hotkeys, LocalizationManager.T("Settings.Hotkeys.PlatformUpdate"), _viewModel.HotkeyPlatformUpdate);
             var hotkeySwitchUser = HotkeyRow(hotkeys, LocalizationManager.T("Settings.Hotkeys.SwitchUser"), _viewModel.HotkeySwitchUser);
+            // Глобальная горячая клавиша «показать главное окно» (issue #82): работает
+            // независимо от активного приложения — из трея, свёрнутого или находящегося
+            // на заднем плане окна. По умолчанию Ctrl+Alt+W.
+            var hotkeyShowWindow = HotkeyRow(hotkeys, LocalizationManager.T("Settings.Hotkeys.ShowWindow"),
+                _viewModel.GlobalShowWindowHotkey, LocalizationManager.T("Settings.Hotkeys.ShowWindowHint"));
             // Блокировка сеансов ИБ (функция №20, Ctrl+Alt+L) и временная блокировка приложения (функция №19).
             var hotkeySessionLock = HotkeyRow(hotkeys, LocalizationManager.T("Settings.Hotkeys.SessionLock"), _viewModel.HotkeySessionLock);
             var hotkeyLockApp = HotkeyRow(hotkeys, LocalizationManager.T("Settings.Hotkeys.LockApp"), _viewModel.HotkeyLockApp);
@@ -3435,6 +3440,9 @@ namespace Workspace1C
                     // Панель информации (Ctrl+D, issue #172) участвует в проверке
                     // дублей, как и в Windows-версии (SettingsWindow.xaml.cs).
                     (LocalizationManager.T("Main.CollapseRightPanel"), hotkeyRightPanelDetails),
+                    // Глобальная горячая клавиша «показать главное окно» (issue #82):
+                    // конфликт с другими сочетаниями проверяется наравне с ними.
+                    (LocalizationManager.T("Settings.Hotkeys.ShowWindow"), hotkeyShowWindow),
                     (LocalizationManager.T("SessionLock.Title"), hotkeySessionLock),
                     (LocalizationManager.T("AppLock.LockTitle"), hotkeyLockApp),
                     (LocalizationManager.T("Admin.CheckIntegrityTitle"), hotkeyCheckIntegrity),
@@ -3567,6 +3575,12 @@ namespace Workspace1C
                     .Concat(currentSlots.Where(key => favoriteSlots.All(slot => slot.Key != key)))
                     .ToList();
                 _viewModel.SetFavoriteHotkeyOrder(orderedSlots);
+
+                // Глобальная горячая клавиша «показать главное окно» (issue #82): ставим
+                // сочетание до ApplyHotkeys — он завершается сохранением настроек на диск,
+                // а главное окно перерегистрирует X11-захват по PropertyChanged
+                // (без перезапуска), как и в Windows-версии.
+                _viewModel.GlobalShowWindowHotkey = hotkeyShowWindow.Value?.Trim() ?? "";
 
                 _viewModel.ApplyHotkeys(
                     hotkeyEnterprise.Value, hotkeyConfigurator.Value, hotkeyEdit.Value, hotkeyAdd.Value,

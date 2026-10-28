@@ -77,6 +77,18 @@ public sealed class GlobalHotkeyTests
     }
 
     [Fact]
+    public void AvaloniaSettings_HasShowWindowHotkeyField()
+    {
+        // Avalonia-окно собирает вкладки кодом, поэтому страж читает исходник
+        // (как и для WPF-разметки): вкладка «Клавиши» обязана содержать строку
+        // «Показать главное окно (глобально)» с подсказкой и привязкой к VM.
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "SettingsWindow.Avalonia.cs"));
+        Assert.Contains("Settings.Hotkeys.ShowWindow", code, StringComparison.Ordinal);
+        Assert.Contains("Settings.Hotkeys.ShowWindowHint", code, StringComparison.Ordinal);
+        Assert.Contains("GlobalShowWindowHotkey", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WpfMainWindow_RegistersGlobalHotkey()
     {
         var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "MainWindow.Hotkeys.cs"));

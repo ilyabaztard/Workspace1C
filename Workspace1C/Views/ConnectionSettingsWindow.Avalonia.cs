@@ -1794,6 +1794,9 @@ namespace Workspace1C
             var win = new ScriptScenariosWindow();
             win.ShowSync(this);
         }
+
+        /// <summary>Показывает окно модально (синхронно).</summary>
+        public bool ShowSync(Window? owner = null) => ShowDialogSync(owner);
     }
 }
 #endif
