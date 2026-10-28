@@ -11,6 +11,112 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.1.0] — 2026-10-28
+
+### Добавлено
+
+- **Глобальная горячая клавиша показа главного окна (issue #82, Windows и Linux).**
+  Новая настройка «Показать главное окно» на вкладке «Клавиши» окна «Настройки»
+  (WPF и Avalonia) — свойство
+  [`AppSettings.GlobalShowWindowHotkey`](Workspace1C/Models/AppSettings.cs),
+  по умолчанию **Ctrl+Alt+W** (как у Start Manager), пустое значение — клавиша не
+  назначена. Изменение в настройках применяется сразу, без перезапуска (окно
+  «Настройки» перерегистрирует хук), на обеих платформах:
+  - Windows — нативный `RegisterHotKey`/`WM_HOTKEY`
+    ([`GlobalHotkeyService.Windows.cs`](Workspace1C/Services/GlobalHotkeyService.Windows.cs));
+  - Linux — X11 `XGrabKey` с фоновым циклом обработки событий
+    ([`GlobalHotkeyService.Avalonia.cs`](Workspace1C/Services/GlobalHotkeyService.Avalonia.cs);
+    на сессиях без X11 глобальная клавиша честно отключается);
+  - контракт [`IGlobalHotkeyService`](Workspace1C/Services/IGlobalHotkeyService.cs) и
+    валидация жеста [`GlobalHotkeyLogic`](Workspace1C/Services/GlobalHotkeyLogic.cs);
+  - при нажатии главное окно восстанавливается и активируется — в том числе из
+    трея ([`MainWindow.Hotkeys.cs`](Workspace1C/Views/MainWindow.Hotkeys.cs),
+    [`MainWindow.Avalonia.cs`](Workspace1C/Views/MainWindow.Avalonia.cs)).
+
+### Исправлено
+
+- **Контраст тёмной темы: окно «Синхронизация», подсветка кнопок окна и стрелки
+  сортировки (issue #26, комментарии 7OH от 2026-10-28; Windows и Linux):**
+  1. **Подписи в окне «Синхронизация» (Avalonia) — чёрные в тёмной теме.** Подписи
+     полей и значение «последняя синхронизация» переведены с дефолтного чёрного на
+     тематические кисти `FormLabelBrush`/`TextSecondaryColorBrush` — читаемы и в
+     тёмной, и в светлой теме
+     ([`SettingsSyncWindow.Avalonia.cs`](Workspace1C/Views/SettingsSyncWindow.Avalonia.cs));
+  2. **Подсветка кнопок окна при неактивном окне «белым».** Подложка наведения
+     (Свернуть/Развернуть/Закрыть) в тёмной теме больше не «дневная»
+     (#E2E8F0/#FFF3CD/#EDE7F6/#D6E4F0): теперь полупрозрачный белый `#33FFFFFF`,
+     метрики по темам через `ThemeFeatureMap.ButtonMetrics(style, dark)`
+     ([`ThemeFeatureMap.cs`](Workspace1C/Themes/ThemeFeatureMap.cs),
+     [`ThemeManager.cs`](Workspace1C/Themes/ThemeManager.cs),
+     [`ThemeManager.Avalonia.cs`](Workspace1C/Themes/ThemeManager.Avalonia.cs));
+     «светофор» macOS и полупрозрачный Glass не трогаются;
+  3. **Стрелки сортировки заголовков DataGrid.** Собственным шаблоном системная
+     стрелка WPF не рисуется — добавлен тематический глиф **▲/▼** кистью
+     `TextSecondaryBrush` (контрастен и в тёмной, и в светлой теме) с триггерами
+     `SortDirection` в шаблонах `DataGridColumnHeader`
+     ([`LightTheme.xaml`](Workspace1C/Themes/LightTheme.xaml),
+     [`DarkTheme.xaml`](Workspace1C/Themes/DarkTheme.xaml)).
+  Чёрные надписи переведены на контрастные кисти темы.
+
+- **Иконка «Новинки программы» в реальном меню «Утилиты» одинакова везде
+  (issue #81, Windows и Linux).** После 1.0.0.103 каталог и редактор структуры
+  отдают звезду NEW (`NewBox`, #22C55E), но сохранённые легаси-layout'ы
+  (`utilities_menu_layout.json`, записанные до 1.0.0.103) могли сохранить в группу
+  запасную «папку» (или пустую иконку) — реальное меню показывало «не ту» иконку.
+  Теперь такие значения распознаются
+  ([`UtilitiesMenuCatalog.IsLegacyFallbackGroupIcon()`](Workspace1C/Services/UtilitiesMenuCatalog.cs))
+  и сбрасываются к стандартной иконке каталога `NewBox`
+  ([`UtilitiesMenuResolver.FixLegacyNewItemsIcon()`](Workspace1C/Services/UtilitiesMenuResolver.cs)),
+  с хард-гардами в построителях меню WPF и Avalonia
+  ([`MainWindow.UtilitiesMenu.cs`](Workspace1C/Views/MainWindow.UtilitiesMenu.cs),
+  [`MainWindow.Avalonia.Tree.cs`](Workspace1C/Views/MainWindow.Avalonia.Tree.cs)).
+  Пользовательская иконка, назначенная в редакторе, сохраняется.
+
+- **Окно больше не открывается «сжатым» до сохранённого узкого размера
+  (issue #71, комментарии RizvanShikhammatov «нет» + 7OH «Я даже меньше скажу»).**
+  Профиль мог сохранить размер из старой версии или с маленького монитора — главное
+  окно открывалось уже суженным ниже минимума. Восстановленные из профиля размеры
+  зажимаются к `MinWidth`/`MinHeight` в WPF
+  ([`MainWindow.Events.cs`](Workspace1C/Views/MainWindow.Events.cs)) и в Avalonia
+  ([`MainWindow.Avalonia.cs`](Workspace1C/Views/MainWindow.Avalonia.cs)).
+  Стартовые размеры окон «Настройки» (1100×760) и «Настройка информационной базы»
+  (900×800) при минимумах 960×720/760×780 сохранены (заданы в 1.0.0.101).
+
+- **Мастер «Развернуть тестовую копию» — единое тематическое оформление и кнопки
+  (issue #79, комментарий 7OH от 2026-10-28 07:51):**
+  - редактируемые поля переведены на единое оформление `ModernTextBox`/
+    `ModernComboBox` (WPF; Avalonia уже была тематической);
+  - автоподстановка «Имя базы данных СУБД» из «Имя базы на сервере», пока поле
+    пустое — [`TestDeployViewModel.AutofillDbNameFromServerDbName()`](Workspace1C/ViewModels/TestDeployViewModel.cs);
+  - кнопки «**Свойства исходной базы…**» (открывает настройки информационной базы,
+    не выходя из мастера) и «**Конфигуратор**» (запускает «Конфигуратор» исходной
+    базы) — [`TestDeployWindow.cs`](Workspace1C/Views/TestDeployWindow.cs),
+    [`TestDeployWindow.Avalonia.cs`](Workspace1C/Views/TestDeployWindow.Avalonia.cs);
+  - локализация ru/en.
+
+### Тесты
+
+- [`Issue26ContrastToggleZebraGuardTests.cs`](Workspace1C.Tests/Issue26ContrastToggleZebraGuardTests.cs):
+  **+6** — кисти подписей окна «Синхронизация» и hover кнопок окна по метрикам
+  тёмной темы, глифы сортировки ▲/▼ в шаблонах `DataGridColumnHeader`;
+- [`Issue81NewBoxIconTests.cs`](Workspace1C.Tests/Issue81NewBoxIconTests.cs): **+2** —
+  распознавание легаси-иконки «папки» в группе «Новинки программы» и сброс к
+  стандартной иконке `NewBox`, хард-гарды в построителях меню;
+- [`Issue71SettingsWindowLayoutTests.cs`](Workspace1C.Tests/Issue71SettingsWindowLayoutTests.cs):
+  **+2** — восстановленные размеры главного окна не опускаются ниже
+  `MinWidth`/`MinHeight` (WPF и Avalonia);
+- [`Issue79TestDeployWindowTests.cs`](Workspace1C.Tests/Issue79TestDeployWindowTests.cs)
+  (новый) — оформление полей мастера (`ModernTextBox`/`ModernComboBox`),
+  автоподстановка имени СУБД, кнопки «Свойства исходной базы…»/«Конфигуратор»,
+  локализация;
+- [`GlobalHotkeyTests.cs`](Workspace1C.Tests/GlobalHotkeyTests.cs) (новый) — контракт
+  `IGlobalHotkeyService`, валидация жеста, страж поля `GlobalShowWindowHotkey` в
+  настройках WPF и Avalonia.
+
+Итого в проекте **~4 958 юнит-тестов**; Linux-сборка (Avalonia) также зелёная.
+
+---
+
 ## [1.0.0.104] — 2026-10-28
 
 ### Добавлено
