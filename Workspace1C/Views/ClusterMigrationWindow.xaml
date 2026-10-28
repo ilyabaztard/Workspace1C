@@ -206,16 +206,35 @@
                   HeadersVisibility="Column" CanUserAddRows="False" CanUserDeleteRows="False"
                   ColumnHeaderStyle="{StaticResource CenteredColumnHeader}"
                   SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal"
-                  RowHeight="38" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
+                  AlternationCount="2"
+                  RowHeight="38" RowBackground="{DynamicResource CardBackgroundBrush}"
+                  AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
                   Background="{DynamicResource CardBackgroundBrush}"
                   BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <!-- issue #76 «Цвета фона строк»: локальные CellStyle/RowStyle наследуют тематические
+                 триггеры через BasedOn, а строки жёстко привязаны к кистям темы — без BasedOn
+                 выбранная строка красилась системной кистью выделения (светло-серая полоса
+                 #E9EBE9 в тёмной теме на неактивном окне). -->
             <DataGrid.CellStyle>
-                <Style TargetType="DataGridCell">
+                <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
                     <Setter Property="VerticalContentAlignment" Value="Center"/>
                     <Setter Property="BorderThickness" Value="0"/>
                     <Setter Property="Padding" Value="0"/>
                 </Style>
             </DataGrid.CellStyle>
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                    <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource ItemHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource ItemSelectedBrush}"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
             <DataGrid.Columns>
                 <DataGridTemplateColumn Width="44" Header="" CanUserSort="False">
                     <DataGridTemplateColumn.CellTemplate>

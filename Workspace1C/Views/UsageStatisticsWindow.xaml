@@ -61,7 +61,7 @@
                   AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
                   BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}">
             <DataGrid.CellStyle>
-                <Style TargetType="DataGridCell">
+                <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
                     <Setter Property="VerticalContentAlignment" Value="Center"/>
                     <Setter Property="BorderThickness" Value="0"/>
                     <Setter Property="Padding" Value="0"/>

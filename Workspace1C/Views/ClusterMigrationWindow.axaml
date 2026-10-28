@@ -27,8 +27,11 @@
         </Grid>
 
         <!-- Чеклист баз источника: флажок, имя, описание, кластер, подключение,
-             статус источника, статус приёмника. -->
+             статус источника, статус приёмника. Фон списка — явная кисть темы
+             (issue #76 «Цвета фона строк»): не полагаемся только на глобальный
+             селектор, чтобы строки не оставались светлыми в тёмной теме. -->
         <ListBox Grid.Row="1" x:Name="BasesList"
+                 Background="{DynamicResource CardBackgroundBrush}"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>
                 <DataTemplate>

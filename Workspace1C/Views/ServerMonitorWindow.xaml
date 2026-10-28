@@ -518,7 +518,7 @@
                           RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
                           BorderThickness="0">
                     <DataGrid.CellStyle>
-                        <Style TargetType="DataGridCell">
+                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
                             <Setter Property="VerticalContentAlignment" Value="Center"/>
                             <Setter Property="BorderThickness" Value="0"/>
                             <Setter Property="Padding" Value="0"/>
@@ -612,7 +612,7 @@
                           RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
                           BorderThickness="0">
                     <DataGrid.CellStyle>
-                        <Style TargetType="DataGridCell">
+                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
                             <Setter Property="VerticalContentAlignment" Value="Center"/>
                             <Setter Property="BorderThickness" Value="0"/>
                             <Setter Property="Padding" Value="0"/>
@@ -667,7 +667,7 @@
                           RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
                           BorderThickness="0">
                     <DataGrid.CellStyle>
-                        <Style TargetType="DataGridCell">
+                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
                             <Setter Property="VerticalContentAlignment" Value="Center"/>
                             <Setter Property="BorderThickness" Value="0"/>
                             <Setter Property="Padding" Value="0"/>
@@ -717,7 +717,7 @@
                           RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
                           BorderThickness="0">
                     <DataGrid.CellStyle>
-                        <Style TargetType="DataGridCell">
+                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
                             <Setter Property="VerticalContentAlignment" Value="Center"/>
                             <Setter Property="BorderThickness" Value="0"/>
                             <Setter Property="Padding" Value="0"/>
@@ -875,7 +875,7 @@
                               RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
                               Canvas.ZIndex="10" MinHeight="120" BorderThickness="0">
                         <DataGrid.CellStyle>
-                            <Style TargetType="DataGridCell">
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
                                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="Padding" Value="0"/>
@@ -913,7 +913,7 @@
                               RowHeight="34" AlternatingRowBackground="{DynamicResource CardBackgroundBrush}"
                               MinHeight="120" BorderThickness="0">
                         <DataGrid.CellStyle>
-                            <Style TargetType="DataGridCell">
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
                                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="Padding" Value="0"/>
