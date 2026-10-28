@@ -1,6 +1,6 @@
 # Workspace 1C
 
-![Версия](https://img.shields.io/badge/Версия-1.0.0.102-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
+![Версия](https://img.shields.io/badge/Версия-1.0.0.103-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
 
 > **Кроссплатформенное десктопное приложение на .NET для управления информационными базами 1С:Предприятие 8.3**, заменяющее стандартный список баз 1С современным интерфейсом. Одна кодовая база собирается под обе ОС: **WPF** на Windows и **Avalonia 11** на Linux.
 
@@ -8,7 +8,7 @@
 
 **Workspace 1C** — новое название программы «Управление конфигурациями 1С». Возможности
 сохранены полностью, нумерация версий начата заново с **1.0.0.0** (последняя версия под
-прежним названием — 0.3.12.70); актуальная версия — **1.0.0.102**
+прежним названием — 0.3.12.70); актуальная версия — **1.0.0.103**
 (поддерживается **4 908 юнит-тестами**).
 
 ## 📣 Telegram-канал
@@ -240,6 +240,15 @@
   (`infobase update --scheduled-jobs-deny=on`), затем завершаются сеансы, затем
   повторяется удаление; если завершение сеансов не удалось — диалог показывается
   снова, «Отмена» прерывает.
+- **Иконка для «Новинки программы» (1.0.0.103, issue #81, Windows и Linux)** —
+  подменю «Новинки программы» в меню «Утилиты» получило ту же иконку, что в
+  контекстном меню базы: четырёхлучевая звезда «NEW» (materialDesign `NewBox`,
+  #22C55E). Раньше ключ `IconNewBox` отсутствовал в словарях иконок, и меню рисовало
+  запасную «папку»; теперь геометрия `IconNewBox` добавлена в базовые словари
+  ([`Icons.xaml`](Workspace1C/Themes/Icons.xaml),
+  [`Icons.axaml`](Workspace1C/Themes/Icons.axaml)) и во все наборы тем. Иконка NEW
+  также появилась в каталоге иконок при правке структуры меню (ключ `NewBox`
+  выбирается как и другие иконки каталога, покрыто `Issue81NewBoxIconTests`).
 - **Контраст и цвета тёмной темы (1.0.0.102, issue #26, Windows и Linux)** — подписи
   «1С Стартер»/«По ссылке» на главной больше не тёмные (переведены с чёрного
   `ButtonTextBrush` на `TextPrimaryBrush`/`TextPrimaryColorBrush`); переключатели

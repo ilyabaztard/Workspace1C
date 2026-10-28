@@ -493,8 +493,11 @@ public class UtilitiesMenuEditorViewModel : ViewModelBase
 
     /// <summary>
     /// Единый каталог иконок пользовательских групп и пунктов меню (issue #62): строится
-    /// из <see cref="UtilitiesMenuCatalog.All"/> (ключ PackIcon + цвет). Используется
-    /// редакторами «Утилиты» и «Меню в трее» — один набор на оба редактора.
+    /// из <see cref="UtilitiesMenuCatalog.All"/> (ключ PackIcon + цвет) и иконок стандартных
+    /// групп (issue #81: без них иконку «Новинки программы» — NewBox — нельзя было выбрать
+    /// при правке структуры, а у группы «Новинки» меню «Утилиты» не было своей иконки).
+    /// Используется редакторами «Утилиты», «Контекстное меню» и «Меню в трее» — один набор
+    /// на все редакторы.
     /// В каталог попадают только РЕЗОЛВИМЫЕ ключи: <see cref="UtilitiesMenuCatalog.WpfIconGeometryKey"/>
     /// отображает PackIcon-имя на ключ геометрии Icon*, которую реально рисуют адаптеры
     /// (меню «Утилиты» и трей) — нерезолвимый ключ показывал бы «совсем другую» иконку.
@@ -511,6 +514,25 @@ public class UtilitiesMenuEditorViewModel : ViewModelBase
                 continue;
             if (seen.Add(item.WpfIconKind + "|" + item.IconColor))
                 result.Add(new UtilitiesIconOption(item.WpfIconKind, item.IconColor));
+        }
+        // Иконки стандартных подменю каталога (issue #81): «Новинки программы» (NewBox),
+        // «Опции блокировки» (Lock), «Информация» (Information), «Операции» (Tune).
+        foreach (var groupId in new[]
+                 {
+                     UtilitiesMenuCatalog.GroupNewItems,
+                     UtilitiesMenuCatalog.GroupLockOptions,
+                     UtilitiesMenuCatalog.GroupInformation,
+                     UtilitiesMenuCatalog.GroupOperations,
+                 })
+        {
+            var wpfKind = UtilitiesMenuCatalog.GroupWpfIconKind(groupId);
+            var color = UtilitiesMenuCatalog.GroupIconColor(groupId);
+            if (string.IsNullOrWhiteSpace(wpfKind) || string.IsNullOrWhiteSpace(color))
+                continue;
+            if (string.IsNullOrEmpty(UtilitiesMenuCatalog.WpfIconGeometryKey(wpfKind)))
+                continue;
+            if (seen.Add(wpfKind + "|" + color))
+                result.Add(new UtilitiesIconOption(wpfKind, color));
         }
         return result;
     }
