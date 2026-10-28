@@ -175,6 +175,9 @@ public sealed class SettingsSyncWindow : ModalWindowBase
         lastSyncRow.Children.Add(Label(T("SettingsSync.LastSync")));
         _lastSyncText.Text = _vm.LastSyncAtText;
         _lastSyncText.VerticalAlignment = VerticalAlignment.Center;
+        // issue #26: значение «последняя синхронизация» привязано к вторичной кисти —
+        // без неё текст был чёрным в тёмной теме (половина надписей белые, половина чёрные).
+        ThemeBrushes.Bind(_lastSyncText, TextBlock.ForegroundProperty, "TextSecondaryColorBrush");
         lastSyncRow.Children.Add(_lastSyncText);
         panel.Children.Add(lastSyncRow);
 
@@ -206,11 +209,20 @@ public sealed class SettingsSyncWindow : ModalWindowBase
         _lastSyncText.Text = _vm.LastSyncAtText;
     }
 
-    private static TextBlock Label(string text) => new()
+    private static TextBlock Label(string text)
     {
-        Text = text,
-        FontWeight = Avalonia.Media.FontWeight.SemiBold,
-        Margin = new Thickness(0, 2, 0, 2)
-    };
+        // issue #26 (7OH, 2026-10-28: «Синхронизация колонок - надписи по-прежнему
+        // чёрные», «половина надписей в одном окне белые, половина чёрные»): подписи
+        // полей формы обязаны брать кисть темы, а не дефолтный чёрный — в тёмной теме
+        // без привязки текст нечитаем. Та же кисть FormLabelBrush, что у остальных форм.
+        var label = new TextBlock
+        {
+            Text = text,
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            Margin = new Thickness(0, 2, 0, 2)
+        };
+        ThemeBrushes.Bind(label, TextBlock.ForegroundProperty, "FormLabelBrush");
+        return label;
+    }
 }
 #endif

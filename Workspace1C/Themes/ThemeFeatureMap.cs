@@ -96,16 +96,36 @@ public static class ThemeFeatureMap
     /// классические квадратные кнопки, <see cref="WindowButtonStyle.Glass"/> — полупрозрачные
     /// кнопки (#AARRGGBB).
     /// </summary>
-    public static WindowButtonMetrics ButtonMetrics(WindowButtonStyle style) => style switch
+    /// <summary>
+    /// Подложка наведения кнопок окна в тёмной теме (issue #26, комментарий 7OH
+    /// 2026-10-28): дневные непрозрачные подложки (#E2E8F0/#FFF3CD/#EDE7F6/#D6E4F0)
+    /// в тёмной теме смотрятся «белой» подсветкой кнопок окна. В тёмной теме кнопки
+    /// «свернуть/развернуть/закрыть» получают полупрозрачную белую подложку, как в
+    /// Windows 11 / VS Code (цветной круг «светофора» macOS и полупрозрачный Glass
+    /// не трогаются).
+    /// </summary>
+    public const string DarkThemeWindowButtonHoverHex = "#33FFFFFF";
+
+    public static WindowButtonMetrics ButtonMetrics(WindowButtonStyle style)
+        => ButtonMetrics(style, dark: false);
+
+    /// <param name="dark">Активна ли тёмная тема (подложка наведения затемняется).</param>
+    public static WindowButtonMetrics ButtonMetrics(WindowButtonStyle style, bool dark)
     {
-        WindowButtonStyle.Minimal => new WindowButtonMetrics("#E2E8F0", "#E81123", 4, 40),
-        WindowButtonStyle.Classic => new WindowButtonMetrics("#E2E8F0", "#E81123", 0, 34),
-        WindowButtonStyle.Material => new WindowButtonMetrics("#EDE7F6", "#E81123", 15, 46),
-        WindowButtonStyle.MacOS => new WindowButtonMetrics("#FF5F57", "#FF5F57", 15, 46, "#F5BF4F", "#59CB59"),
-        WindowButtonStyle.WindowsXp => new WindowButtonMetrics("#D6E4F0", "#E81123", 0, 34),
-        WindowButtonStyle.Glass => new WindowButtonMetrics("#40FFFFFF", "#66E81123", 15, 46),
-        _ => new WindowButtonMetrics("#FFF3CD", "#E81123", 15, 46)
-    };
+        var metrics = style switch
+        {
+            WindowButtonStyle.Minimal => new WindowButtonMetrics("#E2E8F0", "#E81123", 4, 40),
+            WindowButtonStyle.Classic => new WindowButtonMetrics("#E2E8F0", "#E81123", 0, 34),
+            WindowButtonStyle.Material => new WindowButtonMetrics("#EDE7F6", "#E81123", 15, 46),
+            WindowButtonStyle.MacOS => new WindowButtonMetrics("#FF5F57", "#FF5F57", 15, 46, "#F5BF4F", "#59CB59"),
+            WindowButtonStyle.WindowsXp => new WindowButtonMetrics("#D6E4F0", "#E81123", 0, 34),
+            WindowButtonStyle.Glass => new WindowButtonMetrics("#40FFFFFF", "#66E81123", 15, 46),
+            _ => new WindowButtonMetrics("#FFF3CD", "#E81123", 15, 46)
+        };
+        if (dark && style is not WindowButtonStyle.MacOS and not WindowButtonStyle.Glass)
+            metrics = metrics with { HoverHex = DarkThemeWindowButtonHoverHex };
+        return metrics;
+    }
 
     /// <summary>
     /// Имя набора иконок для ресурса <see cref="IconSetNameKey"/>.

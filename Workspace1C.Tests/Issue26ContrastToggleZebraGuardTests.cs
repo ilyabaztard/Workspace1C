@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Workspace1C.Models;
+using Workspace1C.Themes;
 using Xunit;
 
 namespace Workspace1C.Tests;
@@ -250,5 +251,57 @@ public sealed class Issue26ContrastToggleZebraGuardTests
             Assert.Contains("ZebraRowColor", xaml);
             Assert.Contains("ZebraRowBrush", xaml);
         }
+    }
+
+    [Fact]
+    public void DarkTheme_SyncLabels_AreBoundToFormLabelBrush()
+    {
+        // Окно «Синхронизация настроек» (Avalonia/Linux): подписи полей были без
+        // привязки к теме и оставались чёрными в тёмной теме — «половина надписей
+        // белые, половина чёрные» (7OH, 2026-10-28). Теперь Label использует
+        // FormLabelBrush как остальные формы.
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "SettingsSyncWindow.Avalonia.cs"));
+        Assert.Contains("\"FormLabelBrush\"", code, StringComparison.Ordinal);
+        Assert.Contains("\"TextSecondaryColorBrush\"", code, StringComparison.Ordinal);
+    }
+
+    // ===================== (5) Кнопки окна и стрелки сортировки (issue #26) =====================
+
+    [Theory]
+    [InlineData(WindowButtonStyle.Fluent)]
+    [InlineData(WindowButtonStyle.Minimal)]
+    [InlineData(WindowButtonStyle.Classic)]
+    [InlineData(WindowButtonStyle.Material)]
+    [InlineData(WindowButtonStyle.WindowsXp)]
+    public void DarkTheme_WindowButtonHover_IsSemiTransparentWhite_NotDaylight(WindowButtonStyle style)
+    {
+        // «подсветка кнопок окна мышкой при неактивном окне - всё ещё белым цветом»:
+        // дневные непрозрачные подложки (#FFF3CD/#E2E8F0/#EDE7F6/#D6E4F0) в тёмной теме
+        // смотрелись белой заливкой. В тёмной — полупрозрачный белый, как в Win11/VS Code.
+        Assert.Equal("#33FFFFFF", ThemeFeatureMap.ButtonMetrics(style, dark: true).HoverHex);
+        // Светлая тема сохраняет прежние «дневные» подложки.
+        Assert.NotEqual("#33FFFFFF", ThemeFeatureMap.ButtonMetrics(style, dark: false).HoverHex);
+    }
+
+    [Fact]
+    public void DarkTheme_WindowButtonHover_MacosAndGlass_DoNotChange()
+    {
+        // «Светофор» macOS и полупрозрачный Glass сохраняют собственные цветные подложки.
+        Assert.Equal("#FF5F57", ThemeFeatureMap.ButtonMetrics(WindowButtonStyle.MacOS, dark: true).HoverHex);
+        Assert.Equal("#40FFFFFF", ThemeFeatureMap.ButtonMetrics(WindowButtonStyle.Glass, dark: true).HoverHex);
+    }
+
+    [Theory]
+    [InlineData("LightTheme.xaml")]
+    [InlineData("DarkTheme.xaml")]
+    public void WpfThemes_DataGridHeader_HasThemedSortGlyph(string themeFile)
+    {
+        // «СтрЕлки для кого были нарисованы?» — собственный шаблон заголовка DataGrid
+        // не рисовал системную стрелку сортировки. Глиф ▲/▼ добавлен и привязан к
+        // вторичной кисти темы — виден и в тёмной, и в светлой теме.
+        var xaml = ReadProjectFile(Path.Combine("Workspace1C", "Themes", themeFile));
+        Assert.Contains("x:Name=\"SortGlyph\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SortDirection", xaml, StringComparison.Ordinal);
+        Assert.Contains("Foreground=\"{DynamicResource TextSecondaryBrush}\"", xaml, StringComparison.Ordinal);
     }
 }

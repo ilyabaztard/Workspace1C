@@ -205,7 +205,10 @@ namespace Workspace1C.Themes
             var app = Application.Current;
             if (app is null)
                 return;
-            var metrics = ThemeFeatureMap.ButtonMetrics(CurrentWindowButtonStyle);
+            // issue #26: в тёмной теме подложка наведения кнопок окна — полупрозрачный
+            // белый, а не «дневная» яркая заливка (#E2E8F0/#FFF3CD — выглядела белой).
+            var dark = CurrentTheme == DarkThemeName;
+            var metrics = ThemeFeatureMap.ButtonMetrics(CurrentWindowButtonStyle, dark);
             app.Resources[ThemeFeatureMap.WindowButtonHoverBrushKey] = ParseBrush(metrics.HoverHex);
             app.Resources[ThemeFeatureMap.WindowButtonCloseHoverBrushKey] = ParseBrush(metrics.CloseHoverHex);
             // Цвета «светофора» macOS (Задача 3): жёлтый круг «свернуть» и зелёный
