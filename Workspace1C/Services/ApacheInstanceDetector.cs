@@ -250,9 +250,30 @@ public static partial class ApacheInstanceDetector
             defines = ApacheConfIncludeParser.MergeDefines(allTexts.Select(t => t.Text).ToList());
         }
 
+        // Финальный словарь Define (issue #63): VM использует его для раскрытия шаблонов
+        // Include-строк и подбора номера инстанса («Define OneCPort 27» → суффикс «27»)
+        // при fallback-поиске файла алиасов, даже когда DocumentRoot/Listen не раскрылись.
+        var finalDefines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in defines)
+            finalDefines[pair.Key] = pair.Value;
+
+        // Include-цели алиасов 1С, запомненные на проходе с неполным словарём (${...} не
+        // раскрылись), пересобираем по финальному Define-графу: VM-fallback сначала
+        // проверяет такие полные пути напрямую («Include ${SRVROOT}/conf/1c8Aliases${OneCPort}.conf»
+        // → «c:\Apache\Apache24\conf\1c8Aliases27.conf»), а не только имя файла рядом с конфигом.
+        for (var i = 0; i < aliasTargetPatterns.Count; i++)
+        {
+            if (aliasTargetPatterns[i].IndexOf("${", StringComparison.Ordinal) < 0)
+                continue;
+            var expanded = ApacheConfIncludeParser.ExpandVariables(aliasTargetPatterns[i], finalDefines);
+            if (!string.Equals(expanded, aliasTargetPatterns[i], StringComparison.OrdinalIgnoreCase))
+                aliasTargetPatterns[i] = expanded;
+        }
+
         instance.IncludeFiles = includeFiles;
         instance.IncludeDirs = includeDirs;
         instance.AliasTargetPatterns = aliasTargetPatterns;
+        instance.Defines = finalDefines;
 
         // Точный DocumentRoot и порты Listen (issue #63): каталог публикации по умолчанию
         // (может включать подкаталог сайта — «ServerRoot\htdocs\27») и порт URL. DocumentRoot

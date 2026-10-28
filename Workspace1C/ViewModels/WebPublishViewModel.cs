@@ -334,6 +334,27 @@ public sealed class WebPublishViewModel : ViewModelBase
     /// </summary>
     private static string? FindUsedAliasFileNear(ApacheInstance instance)
     {
+        // Include-цели с полным путём (например «c:\Apache\Apache24\conf\1c8Aliases27.conf»,
+        // раскрытые по финальному Define-графу — см. ApacheInstanceDetector.PopulateIncludes):
+        // файл алиасов может лежать ВНЕ стандартных каталогов поиска (другой диск,
+        // conf\vhosts\...), поэтому сначала проверяем точный путь Include-строки напрямую.
+        foreach (var pattern in instance.AliasTargetPatterns ?? Array.Empty<string>())
+        {
+            if (string.IsNullOrWhiteSpace(pattern) || pattern.IndexOf("${", StringComparison.Ordinal) >= 0)
+                continue;
+            if (!IsRootedPath(pattern))
+                continue;
+            try
+            {
+                if (File.Exists(pattern))
+                    return Path.GetFullPath(pattern);
+            }
+            catch
+            {
+                // Файл недоступен — пробуем следующие кандидаты.
+            }
+        }
+
         foreach (var fileName in CandidateAliasFileNames(instance))
         {
             var file = FindExistingAliasFile(instance.ConfPath, fileName);
@@ -476,6 +497,16 @@ public sealed class WebPublishViewModel : ViewModelBase
                 Add(text);
         }
 
+        // Значения Define «Define OneCPort 27» (issue #63): прямой признак номера
+        // инстанса, даже когда DocumentRoot/Listen/Include-граф из конфига не дали
+        // суффикс (например, файл с переменными не прочитался). Нечисловые значения
+        // (SRVROOT, пути) отбрасываются внутри Add.
+        if (instance.Defines is not null)
+        {
+            foreach (var value in instance.Defines.Values)
+                Add(value);
+        }
+
         return suffixes;
     }
 
@@ -545,6 +576,20 @@ public sealed class WebPublishViewModel : ViewModelBase
 
         foreach (var dir in dirs.Distinct(StringComparer.OrdinalIgnoreCase))
             yield return dir;
+    }
+
+    /// <summary>
+    /// Абсолютный ли путь: «C:\...» / «C:/...», UNC «\\...» или POSIX «/...». Нужен и при
+    /// кросс-сборке под Linux, где <see cref="Path.IsPathRooted"/> не распознаёт диск Windows.
+    /// </summary>
+    private static bool IsRootedPath(string path)
+    {
+        if (Path.IsPathRooted(path))
+            return true;
+        return path.Length >= 3
+               && char.IsLetter(path[0])
+               && path[1] == ':'
+               && (path[2] == '\\' || path[2] == '/');
     }
 
     /// <summary>Ключ сравнения путей конфиг-файлов: без учёта регистра и разделителей пути.</summary>

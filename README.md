@@ -1,6 +1,6 @@
 # Workspace 1C
 
-![Версия](https://img.shields.io/badge/Версия-1.0.0.97-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
+![Версия](https://img.shields.io/badge/Версия-1.0.0.98-1F6FEB) ![.NET](https://img.shields.io/badge/.NET-10-512BD4) ![Windows/WPF](https://img.shields.io/badge/Windows-WPF-4B8BBE) ![Linux/Avalonia](https://img.shields.io/badge/Linux-Avalonia%2011-8B5CF6) ![Лицензия](https://img.shields.io/badge/Лицензия-Open%20Source-success) [![Telegram](https://img.shields.io/badge/Telegram-@Workspace1C-26A5E4?logo=telegram&logoColor=white)](https://t.me/Workspace1C)
 
 > **Кроссплатформенное десктопное приложение на .NET для управления информационными базами 1С:Предприятие 8.3**, заменяющее стандартный список баз 1С современным интерфейсом. Одна кодовая база собирается под обе ОС: **WPF** на Windows и **Avalonia 11** на Linux.
 
@@ -8,8 +8,8 @@
 
 **Workspace 1C** — новое название программы «Управление конфигурациями 1С». Возможности
 сохранены полностью, нумерация версий начата заново с **1.0.0.0** (последняя версия под
-прежним названием — 0.3.12.70); актуальная версия — **1.0.0.88**
-(поддерживается **4 748 юнит-тестами**).
+прежним названием — 0.3.12.70); актуальная версия — **1.0.0.98**
+(поддерживается **4 884 юнит-тестами**).
 
 ## 📣 Telegram-канал
 
@@ -252,6 +252,15 @@
   «infobase info», и для «infobase update» («Не удаётся установить блокировку»);
   на время операции удаления автообновление монитора серверов останавливается и
   восстанавливается после (тик таймера не пересоздаёт соединения во время разрыва).
+- **Публикация баз: используемый файл алиасов снова в списке ConfTargets (1.0.0.98,
+  issue #63, Windows и Linux)** — файл `1c8Aliases27.conf` из Include-строки
+  `Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf"` возвращён в список файлов
+  для webinst даже когда Include-граф его не прочитал: точный путь Include-строки
+  проверяется напрямую (в т.ч. вне стандартных каталогов — другой диск,
+  `conf\vhosts\...`), include-шаблоны раскрываются по финальному словарю `Define`,
+  номер инстанса берётся и из значения `Define OneCPort 27`; каталог публикации,
+  порт и URL подставляются корректно (`c:\Apache\Apache24\htdocs\27`,
+  `http://localhost:8027/...`) без сырых `${...}`.
 - **Публикация баз: файл алиасов снова в списке ConfTargets (1.0.0.78, issue #63,
   Windows и Linux)** — детектор раскрывает Include/IncludeOptional-маску
   (`aliases/*.conf`) в реальные файлы, при необходимости работает fallback-поиск

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Workspace1C.Services;
 
@@ -53,6 +54,18 @@ public sealed class ApacheInstance
     /// include?»). Содержат нераскрытые <c>${…}</c>, если переменная не определена ни в
     /// одном файле графа, — по шаблону и номеру инстанса VM находит используемый файл
     /// алиасов рядом с конфигом (fallback), даже когда Include-граф не прочитал файл.
+    /// С версии 1.0.0.98 нераскрытые <c>${…}</c> дополнительно раскрываются по
+    /// финальному словарю <see cref="Defines"/> после стабилизации графа.
     /// </summary>
     public IReadOnlyList<string> AliasTargetPatterns { get; set; } = System.Array.Empty<string>();
+
+    /// <summary>
+    /// Финальный словарь переменных <c>Define</c> конфигурации (issue #63): значения
+    /// после стабилизации include-графа (поздние определения переопределяют ранние).
+    /// Заполняется детектором в <c>PopulateIncludes</c>; VM использует его для
+    /// раскрытия шаблонов и подбора номера инстанса при поиске файла алиасов
+    /// («Define OneCPort 27» → суффикс «27»). Пусто — Define в конфиге не найдены.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Defines { get; set; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }
