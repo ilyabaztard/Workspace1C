@@ -112,10 +112,39 @@ public class TestDeployWindow : Window
         {
             Text = string.Format(LocalizationManager.T("TestDeploy.SourceFormat"), _vm.SourceDisplay),
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, 4),
             FontWeight = FontWeights.SemiBold
         };
         panel.Children.Add(sourceBlock);
+
+        // Действия по исходной базе (issue #79, 7OH: «Логично сразу эту кнопку видеть —
+        // чтобы тут же нажать и открыть свойства», «иметь кнопки в окошке, чтобы админ
+        // мог сам это сделать не выходя из этого окна»): свойства базы и Конфигуратор.
+        var sourceActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        var propsButton = new Button
+        {
+            Content = LocalizationManager.T("TestDeploy.OpenBaseProperties"),
+            Height = 34,
+            Margin = new Thickness(0, 0, 8, 0),
+            ToolTip = LocalizationManager.T("TestDeploy.OpenBasePropertiesHint")
+        };
+        propsButton.SetResourceReference(StyleProperty, "SecondaryButton");
+        propsButton.Click += (_, _) => OpenBaseProperties();
+        sourceActions.Children.Add(propsButton);
+        var configButton = new Button
+        {
+            Content = LocalizationManager.T("TestDeploy.LaunchConfigurator"),
+            Height = 34,
+            ToolTip = LocalizationManager.T("TestDeploy.LaunchConfiguratorHint")
+        };
+        configButton.SetResourceReference(StyleProperty, "SecondaryButton");
+        configButton.Click += (_, _) => LaunchConfigurator();
+        sourceActions.Children.Add(configButton);
+        panel.Children.Add(sourceActions);
 
         // --- Имя тестовой базы ---
         panel.Children.Add(MakeLabel("TestDeploy.TargetName"));
@@ -151,7 +180,19 @@ public class TestDeployWindow : Window
 
         _serverPanel.Children.Add(MakeLabel("TestDeploy.Ref"));
         _refBox = new TextBox { Text = _vm.DatabaseName, Margin = new Thickness(0, 2, 0, 8) };
-        _refBox.TextChanged += (_, _) => _vm.DatabaseName = _refBox.Text;
+        _refBox.TextChanged += (_, _) =>
+        {
+            _vm.DatabaseName = _refBox.Text;
+            // issue #79: «В поле "Имя базы данных СУБД" можно подставлять такое же имя,
+            // как "Имя базы на сервере"» — пока СУБД-имя не заполнено, синхронизируем его
+            // с именем базы на сервере (пользователь может потом поправить вручную).
+            if (_dbNameBox is not null && string.IsNullOrWhiteSpace(_vm.DbName)
+                && !string.IsNullOrWhiteSpace(_refBox.Text))
+            {
+                _vm.AutofillDbNameFromServerDbName();
+                _dbNameBox.Text = _vm.DbName;
+            }
+        };
         _serverPanel.Children.Add(_refBox);
 
         _serverPanel.Children.Add(MakeLabel("TestDeploy.Dbms"));
@@ -341,6 +382,17 @@ public class TestDeployWindow : Window
         grid.Children.Add(buttons);
         Grid.SetRow(buttons, 3);
 
+        // Автоподстановка «Имя базы данных СУБД» из «Имя базы на сервере» (issue #79):
+        // окно уже открыто с предложенным Ref — то же имя сразу подставляется в СУБД-поле.
+        _vm.AutofillDbNameFromServerDbName();
+        if (!string.IsNullOrEmpty(_vm.DbName))
+            _dbNameBox.Text = _vm.DbName;
+
+        // Единое оформление полей ввода (issue #79, 7OH: «одни поля серые, вторые
+        // нормальные и с окантовкой»): все редактируемые поля получают тематический
+        // ModernTextBox / ModernComboBox.
+        ApplyModernStyles(grid);
+
         Content = grid;
         UpdateModePanels();
         UpdateScheduleVisibility();
@@ -529,5 +581,55 @@ public class TestDeployWindow : Window
         Margin = new Thickness(0, 0, 0, 6)
     };
 
+    /// <summary>
+    /// Открывает окно свойств исходной базы (issue #79): «А нельзя брать из свойств базы
+    /// разве? …иметь кнопки в окошке, чтобы админ сам мог это сделать не выходя из окна».
+    /// </summary>
+    private void OpenBaseProperties()
+    {
+        if (_vm.Source is not { } ib)
+            return;
+        var dialog = new ConnectionSettingsWindow(ib, _groups) { Owner = this };
+        dialog.ShowDialog();
+    }
+
+    /// <summary>Запускает Конфигуратор для исходной базы (issue #79).</summary>
+    private void LaunchConfigurator()
+    {
+        if (_vm.Source is not { } ib)
+            return;
+        // Команда главного окна умеет запускать конфигуратор для переданной базы —
+        // таким образом в мастере открывается та же база, что и из списка.
+        if (Owner is MainWindow main && main.DataContext is MainViewModel mainVm
+            && mainVm.LaunchConfiguratorCommand.CanExecute(ib))
+        {
+            mainVm.LaunchConfiguratorCommand.Execute(ib);
+        }
+    }
+
+    /// <summary>
+    /// Единое оформление полей ввода (issue #79): обходит логическое дерево окна и
+    /// назначает тематические стили полям (TextBox/PasswordBox — ModernTextBox,
+    /// ComboBox — ModernComboBox). Без явного стиля часть полей рисуется «серыми»
+    /// и без окантовки — «одни поля серые, вторые нормальные и с окантовкой».
+    /// </summary>
+    private void ApplyModernStyles(System.Windows.DependencyObject root)
+    {
+        var styleBox = TryFindResource("ModernTextBox") as Style;
+        var styleCombo = TryFindResource("ModernComboBox") as Style;
+        if (styleBox is null && styleCombo is null)
+            return;
+        foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is TextBox tb && styleBox is not null)
+                tb.Style = styleBox;
+            else if (child is PasswordBox pb && styleBox is not null)
+                pb.Style = styleBox;
+            else if (child is ComboBox cb && styleCombo is not null)
+                cb.Style = styleCombo;
+            if (child is System.Windows.DependencyObject d)
+                ApplyModernStyles(d);
+        }
+    }
 }
 #endif

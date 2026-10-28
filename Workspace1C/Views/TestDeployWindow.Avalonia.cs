@@ -97,6 +97,10 @@ public class TestDeployWindow : ModalWindowBase
         MinHeight = 620;
         FontSize = 13;
         Content = BuildRoot();
+        // Автоподстановка «Имя базы данных СУБД» из «Имя базы на сервере» (issue #79).
+        _vm.AutofillDbNameFromServerDbName();
+        if (!string.IsNullOrEmpty(_vm.DbName))
+            _dbNameBox.Text = _vm.DbName;
         ApplyModePanels();
         ApplyScheduleState();
     }
@@ -120,6 +124,26 @@ public class TestDeployWindow : ModalWindowBase
         };
         fields.Children.Add(sourceBlock);
 
+        // Действия по исходной базе (issue #79, 7OH: «иметь кнопки в окошке, чтобы админ
+        // мог сам это сделать не выходя из этого окна»): свойства базы и Конфигуратор.
+        var sourceActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        var propsButton = new Button { Content = T("TestDeploy.OpenBaseProperties"), Height = 32 };
+        propsButton.Styled(ControlThemes.SecondaryButton);
+        ToolTip.SetTip(propsButton, T("TestDeploy.OpenBasePropertiesHint"));
+        propsButton.Click += (_, _) => OpenBaseProperties();
+        sourceActions.Children.Add(propsButton);
+        var configButton = new Button { Content = T("TestDeploy.LaunchConfigurator"), Height = 32 };
+        configButton.Styled(ControlThemes.SecondaryButton);
+        ToolTip.SetTip(configButton, T("TestDeploy.LaunchConfiguratorHint"));
+        configButton.Click += (_, _) => LaunchConfigurator();
+        sourceActions.Children.Add(configButton);
+        fields.Children.Add(sourceActions);
+
         fields.Children.Add(Field(T("TestDeploy.TargetName"), _targetNameBox));
         _targetNameBox.Text = _vm.TargetName;
         _targetNameBox.TextChanged += (_, _) => { _vm.TargetName = _targetNameBox.Text; RefreshPreview(); };
@@ -142,7 +166,18 @@ public class TestDeployWindow : ModalWindowBase
 
         _serverPanel.Children.Add(Field(T("TestDeploy.Ref"), _refBox));
         _refBox.Text = _vm.DatabaseName;
-        _refBox.TextChanged += (_, _) => _vm.DatabaseName = _refBox.Text;
+        _refBox.TextChanged += (_, _) =>
+        {
+            _vm.DatabaseName = _refBox.Text;
+            // issue #79: «В поле "Имя базы данных СУБД" можно подставлять такое же имя,
+            // как "Имя базы на сервере"» — пока СУБД-имя не заполнено, синхронизируем.
+            if (string.IsNullOrWhiteSpace(_vm.DbName) && !string.IsNullOrWhiteSpace(_refBox.Text))
+            {
+                _vm.AutofillDbNameFromServerDbName();
+                if (!string.IsNullOrEmpty(_vm.DbName))
+                    _dbNameBox.Text = _vm.DbName;
+            }
+        };
 
         _dbmsBox.ItemsSource = new[] { "MSSQLServer", "PostgreSQL", "IBMDB2", "OracleDatabase" };
         _dbmsBox.SelectedItem = _vm.Dbms;
@@ -423,6 +458,32 @@ public class TestDeployWindow : ModalWindowBase
         var row = new StackPanel { Margin = new Thickness(0, 2, 0, 0) };
         row.Children.Add(control);
         return row;
+    }
+
+    /// <summary>
+    /// Открывает окно свойств исходной базы (issue #79): «А нельзя брать из свойств базы
+    /// разве? …иметь кнопки в окошке, чтобы админ сам мог это сделать не выходя из окна».
+    /// </summary>
+    private void OpenBaseProperties()
+    {
+        if (_vm.Source is not { } ib)
+            return;
+        var dialog = new ConnectionSettingsWindow(ib, _groups);
+        dialog.ShowSync(this);
+    }
+
+    /// <summary>Запускает Конфигуратор для исходной базы (issue #79).</summary>
+    private void LaunchConfigurator()
+    {
+        if (_vm.Source is not { } ib)
+            return;
+        // Команда главного окна умеет запускать конфигуратор для переданной базы —
+        // таким образом в мастере открывается та же база, что и из списка.
+        if (Owner is MainWindow main && main.DataContext is MainViewModel mainVm
+            && mainVm.LaunchConfiguratorCommand.CanExecute(ib))
+        {
+            mainVm.LaunchConfiguratorCommand.Execute(ib);
+        }
     }
 
     private static Grid Field(string label, Control control)

@@ -82,6 +82,18 @@ public sealed class TestDeployViewModel : ViewModelBase
     public string ServerAddress { get; set; } = string.Empty;
     public string DatabaseName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Автоподстановка «Имя базы данных СУБД» из «Имя базы на сервере» (issue #79,
+    /// 7OH: «В поле "Имя базы данных СУБД" можно подставлять как минимум такое же имя,
+    /// как "Имя базы на сервере"»). Синхронизирует только пока СУБД-имя не заполнено —
+    /// пользователь может потом изменить его вручную.
+    /// </summary>
+    public void AutofillDbNameFromServerDbName()
+    {
+        if (string.IsNullOrWhiteSpace(DbName) && !string.IsNullOrWhiteSpace(DatabaseName))
+            DbName = DatabaseName;
+    }
+
     /// <summary>Тип СУБД (MSSQLServer / PostgreSQL / …).</summary>
     public string Dbms { get; set; } = "MSSQLServer";
 
