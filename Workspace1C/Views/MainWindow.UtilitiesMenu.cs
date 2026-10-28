@@ -105,10 +105,15 @@ public partial class MainWindow
     {
         if (!string.IsNullOrWhiteSpace(node.ExternalIconPath))
             return CreateExternalIcon(node.ExternalIconPath!);
-        var iconKey = !string.IsNullOrWhiteSpace(node.IconKey)
+        var isNewItems = string.Equals(node.GroupId, UtilitiesMenuCatalog.GroupNewItems, StringComparison.Ordinal);
+        // issue #81: легаси-«папка»/пустая иконка в группе «Новинки программы» (старые
+        // layout до 1.0.0.103) заменяется стандартной иконкой каталога — звезда NEW,
+        // та же, что в контекстном меню и редакторе. Пользовательская иконка сохраняется.
+        var forceCatalog = isNewItems && UtilitiesMenuCatalog.IsLegacyFallbackGroupIcon(node.IconKey);
+        var iconKey = !forceCatalog && !string.IsNullOrWhiteSpace(node.IconKey)
             ? node.IconKey!
             : UtilitiesMenuCatalog.GroupWpfIconKind(node.GroupId ?? string.Empty);
-        var color = !string.IsNullOrWhiteSpace(node.IconColor)
+        var color = !forceCatalog && !string.IsNullOrWhiteSpace(node.IconColor)
             ? node.IconColor!
             : UtilitiesMenuCatalog.ResolveGroupIconColor(node.GroupId ?? string.Empty, ActiveScheme, IsDarkTheme);
         return CreateMenuIcon(iconKey, color);

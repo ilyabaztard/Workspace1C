@@ -1818,10 +1818,15 @@ namespace Workspace1C
         {
             if (!string.IsNullOrWhiteSpace(node.ExternalIconPath))
                 return CreateAvaloniaExternalIcon(node.ExternalIconPath!);
-            var iconKey = !string.IsNullOrWhiteSpace(node.IconKey)
+            var isNewItems = string.Equals(node.GroupId, UtilitiesMenuCatalog.GroupNewItems, StringComparison.Ordinal);
+            // issue #81: легаси-«папка»/пустая иконка в группе «Новинки программы» (старые
+            // layout до 1.0.0.103) заменяется стандартной иконкой каталога — звезда NEW,
+            // та же, что в контекстном меню и редакторе. Пользовательская иконка сохраняется.
+            var forceCatalog = isNewItems && UtilitiesMenuCatalog.IsLegacyFallbackGroupIcon(node.IconKey);
+            var iconKey = !forceCatalog && !string.IsNullOrWhiteSpace(node.IconKey)
                 ? node.IconKey!
                 : UtilitiesMenuCatalog.GroupAvaloniaIconKey(node.GroupId ?? string.Empty);
-            var color = !string.IsNullOrWhiteSpace(node.IconColor)
+            var color = !forceCatalog && !string.IsNullOrWhiteSpace(node.IconColor)
                 ? node.IconColor!
                 : UtilitiesMenuCatalog.ResolveGroupIconColor(
                     node.GroupId ?? string.Empty, ThemeManager.CurrentScheme,

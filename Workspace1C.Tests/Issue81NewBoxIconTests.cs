@@ -108,6 +108,64 @@ public sealed class Issue81NewBoxIconTests
         Assert.Equal("NewBox", UtilitiesMenuCatalog.GroupWpfIconKind(group.GroupId!));
     }
 
+    [Fact]
+    public void LegacyFolderIcon_IsRecognized_AndNewBoxIsNotLegacy()
+    {
+        // Легаси-значения «папки» (пустое/IconFolder/Folder из старых layout) распознаются
+        // как фолбэк, а стандартный ключ NewBox — нет: иначе нормализация сломала бы
+        // правильную иконку.
+        Assert.True(UtilitiesMenuCatalog.IsLegacyFallbackGroupIcon(null));
+        Assert.True(UtilitiesMenuCatalog.IsLegacyFallbackGroupIcon(string.Empty));
+        Assert.True(UtilitiesMenuCatalog.IsLegacyFallbackGroupIcon("IconFolder"));
+        Assert.True(UtilitiesMenuCatalog.IsLegacyFallbackGroupIcon("Folder"));
+        Assert.False(UtilitiesMenuCatalog.IsLegacyFallbackGroupIcon("NewBox"));
+    }
+
+    [Fact]
+    public void ExistingNewItemsGroup_WithLegacyFolderIcon_IsResetToCatalogNewBox()
+    {
+        // «Реальное» меню при включённой правке структуры строится из сохранённого layout.
+        // Старый файл (созданный до 1.0.0.103) мог сохранить в группу «Новинки программы»
+        // запасную «папку» — реальное меню показывало не ту иконку, тогда как каталог,
+        // редактор и контекстное меню уже отдавали NewBox (issue #81, комментарий 7OH:
+        // «Какая иконка будет у реального меню Утилиты? Сюрприиииииз»).
+        var layout = new UtilitiesMenuLayout
+        {
+            Root = new System.Collections.Generic.List<UtilitiesMenuNode>
+            {
+                new()
+                {
+                    Kind = "group",
+                    GroupId = UtilitiesMenuCatalog.GroupNewItems,
+                    IconKey = "IconFolder",
+                    IconColor = "#64748B",
+                    Visible = true,
+                    Children =
+                    {
+                        new UtilitiesMenuNode { Kind = "item", ItemId = "Services" }
+                    }
+                }
+            }
+        };
+
+        var result = UtilitiesMenuResolver.EnsureNewItemsGroup(layout);
+        Assert.NotNull(result);
+        var group = FindGroupRecursively(result!.Root, UtilitiesMenuCatalog.GroupNewItems);
+        Assert.NotNull(group);
+
+        // Легаси-иконка сброшена — построитель резолвит стандартную каталога.
+        Assert.Null(group!.IconKey);
+        Assert.Null(group.IconColor);
+
+        // И по обоим платформенным ключам это та же звезда NEW, что в контекстном меню.
+        Assert.Equal("NewBox", UtilitiesMenuCatalog.GroupWpfIconKind(group.GroupId!));
+        Assert.Equal("IconNewBox", UtilitiesMenuCatalog.GroupAvaloniaIconKey(group.GroupId!));
+        Assert.Equal("#22C55E", UtilitiesMenuCatalog.GroupIconColor(group.GroupId!));
+        Assert.Equal(
+            ContextMenuCatalog.GroupWpfIconKind(Workspace1C.Services.ContextMenuCatalog.GroupNewItems),
+            UtilitiesMenuCatalog.GroupWpfIconKind(group.GroupId!));
+    }
+
     private static UtilitiesMenuNode? FindGroupRecursively(IEnumerable<UtilitiesMenuNode> nodes, string groupId)
     {
         foreach (var node in nodes)

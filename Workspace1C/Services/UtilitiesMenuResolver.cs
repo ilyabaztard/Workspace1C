@@ -79,6 +79,12 @@ public static class UtilitiesMenuResolver
             // даже если все новинки каталога уже размещены где-либо в компоновке, но
             // в группе остались пункты — группа показывается; пустая группа скрывается.
             existing.Visible = existing.Children.Count > 0;
+            // issue #81: старые layout (до 1.0.0.103) могли сохранить в группу
+            // «Новинки программы» запасную «папку» (или пустую иконку) — реальное меню
+            // показывало не ту иконку, хотя каталог и редактор уже отдавали NewBox.
+            // Сбрасываем легаси-значения к стандартной иконке каталога (звезда NEW),
+            // чтобы иконка была везде одинаковой.
+            FixLegacyNewItemsIcon(existing);
             return layout;
         }
 
@@ -157,5 +163,26 @@ public static class UtilitiesMenuResolver
             }
             CollectItemIds(node.Children, target);
         }
+    }
+
+    /// <summary>
+    /// issue #81: сбрасывает легаси-иконку (запасная «папка»/пустая) в группе
+    /// «Новинки программы», сохранённую старыми layout-файлами до 1.0.0.103, к
+    /// стандартной иконке каталога (NewBox / #22C55E) — чтобы реальное меню,
+    /// редактор структуры и контекстное меню показывали одну и ту же иконку.
+    /// Пользовательская (не-легаси) иконка, назначенная в редакторе, сохраняется.
+    /// </summary>
+    private static void FixLegacyNewItemsIcon(UtilitiesMenuNode group)
+    {
+        if (!string.Equals(group.GroupId, UtilitiesMenuCatalog.GroupNewItems, StringComparison.Ordinal))
+            return;
+        if (!UtilitiesMenuCatalog.IsLegacyFallbackGroupIcon(group.IconKey))
+            return;
+        group.IconKey = null;
+        group.IconColor = null;
+        // Внешняя иконка тоже относится к «пользовательским» — оставляем её, только
+        // если она задана вместе с не-легаси ключом; легаси-путь сбрасываем.
+        if (string.IsNullOrWhiteSpace(group.IconKey))
+            group.ExternalIconPath = null;
     }
 }

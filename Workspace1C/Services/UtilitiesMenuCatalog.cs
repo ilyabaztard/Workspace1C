@@ -240,6 +240,31 @@ public static class UtilitiesMenuCatalog
     /// <summary>Служебная группа: «Новинки программы» (авто-добавление новых пунктов).</summary>
     public const string GroupNewItems = "NewItems";
 
+    /// <summary>
+    /// Запасная «папка» — фолбэк резолва неизвестной иконки (1.0.0.103 и ранее, когда
+    /// ключа геометрии IconNewBox ещё не было в словарях, меню «Утилиты» и оба меню
+    /// в Avalonia/Linux рисовали папку вместо звезды NEW). Сохранённые до 1.0.0.103
+    /// layout-файлы (<c>utilities_menu_layout.json</c>) могли записать именно её (или
+    /// пустую иконку) в группу «Новинки программы» — реальное меню потом показывало
+    /// «не ту» иконку, хотя каталог и редактор уже отдавали NewBox (issue #81).
+    /// </summary>
+    public const string LegacyFallbackIconKey = "IconFolder";
+
+    /// <summary>
+    /// Является ли сохранённая иконка узла легаси-фолбэком «папки» (пустая, запасная
+    /// IconFolder либо PackIcon-имя Folder), который до появления NewBox записывался
+    /// старыми layout-файлами. Такие значения сбрасываются к стандартной иконке
+    /// каталога, чтобы иконка «Новинок программы» была везде одинакова (issue #81).
+    /// </summary>
+    public static bool IsLegacyFallbackGroupIcon(string? iconKey)
+    {
+        if (string.IsNullOrWhiteSpace(iconKey))
+            return true;
+        var key = iconKey.Trim();
+        return string.Equals(key, LegacyFallbackIconKey, StringComparison.Ordinal)
+            || string.Equals(key, "Folder", StringComparison.Ordinal);
+    }
+
     /// <summary>Ключ локализации заголовка стандартной группы.</summary>
     public static string GroupTitleKey(string groupId) => groupId switch
     {
