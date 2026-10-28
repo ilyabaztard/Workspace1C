@@ -46,57 +46,25 @@
             <TextBlock Grid.Row="0" Grid.Column="1" x:Name="MessageText"
                        TextWrapping="Wrap" FontSize="13" VerticalAlignment="Top"/>
 
-            <!-- Кнопки: «Да» (подтверждение) слева, «Нет» (отмена) справа -->
+            <!-- Кнопки: «Да» (подтверждение) слева, «Нет» (отмена) справа.
+                 Единый контракт кнопок (issue #26): подтверждение — ModernButton
+                 (акцентная заливка AccentBrush + контрастный TextOnAccentBrush),
+                 отмена — SecondaryButton (карточка + контур + текст темы).
+                 Прежняя жёсткая зелёная кнопка #16A34A с белым текстом убрана. -->
             <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
                         HorizontalAlignment="Right" Margin="0,20,0,0">
                 <Button x:Name="OkButton" MinWidth="100" Height="34" IsDefault="True"
-                        Background="#16A34A" BorderThickness="0" Cursor="Hand" Foreground="White"
-                        Margin="0,0,10,0"
+                        Style="{DynamicResource ModernButton}" Margin="0,0,10,0"
                         Click="OnOkClick">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="16,6">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <!-- Тёмная полупрозрачная подсветка в состоянии по умолчанию не перекрывает фон кнопки.
-                                     Только явные состояния наведения/нажатия меняют оттенок зелёного. -->
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#15803D"/>
-                                </Trigger>
-                                <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#166534"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                    <!-- Явный белый жирный текст гарантирует читаемость на зелёном фоне -->
                     <TextBlock x:Name="OkText" Text="{loc:Loc Common.Ok}" VerticalAlignment="Center"
-                               Foreground="White" FontWeight="Bold" FontSize="13"
+                               FontWeight="SemiBold" FontSize="13"
                                TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"/>
                 </Button>
                 <Button x:Name="CancelButton" MinWidth="90" Height="34"
-                        Background="Transparent" BorderThickness="1.5"
-                        BorderBrush="{DynamicResource BorderBrushColor}"
-                        Cursor="Hand" Visibility="Collapsed"
-                        IsCancel="True"
-                        Click="OnCancelClick">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8" Padding="14,6">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="{DynamicResource ItemHoverBrush}"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                    <TextBlock x:Name="CancelText" Text="{loc:Loc Common.No}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        Style="{DynamicResource SecondaryButton}" Visibility="Collapsed"
+                        IsCancel="True" Click="OnCancelClick">
+                    <TextBlock x:Name="CancelText" Text="{loc:Loc Common.No}" VerticalAlignment="Center"
+                               FontWeight="SemiBold"/>
                 </Button>
             </StackPanel>
         </Grid>

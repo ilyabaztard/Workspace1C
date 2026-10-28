@@ -146,7 +146,9 @@ namespace Workspace1C
             // Подсветка только нечётных строк (1-я, 3-я, 5-я…): индекс строки начинается с 0,
             // поэтому нечётной позиции соответствует чётный индекс. Hover подсвечивает текущую строку.
             var oddRow = index % 2 == 0;
-            var bandBrush = oddRow ? (TryBrush("ItemHoverBrush") ?? Brushes.Transparent) : Brushes.Transparent;
+            // «Зебра» строк берёт тематическую кисть ZebraRowBrush (issue #26):
+            // в тёмной теме это приглушённая #334155, а не светлая/белая полоса.
+            var bandBrush = oddRow ? (TryBrush("ZebraRowBrush") ?? TryBrush("ItemHoverBrush") ?? Brushes.Transparent) : Brushes.Transparent;
             var hoverBrush = TryBrush("ItemSelectedBrush") ?? Brushes.Transparent;
             grid.Background = bandBrush;
             grid.PointerEntered += (_, _) => grid.Background = hoverBrush;

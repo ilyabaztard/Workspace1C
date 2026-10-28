@@ -39,6 +39,14 @@
     <Color x:Key="DangerHoverColor">#B91C1C</Color>
     <Color x:Key="DangerPressedColor">#991B1B</Color>
     <Color x:Key="DangerTextColor">#FFFFFF</Color>
+    <!-- Дорожка переключателя настроек в выключенном положении (issue #26):
+         в светлой теме светло-серая #CBD5E1, в тёмной — тёмная #475569. Единая
+         кисть SettingsToggleTrackBrush используется шаблонами SettingsToggle и
+         ColumnVisibilitySwitch (WPF) и Controls.axaml (Avalonia). -->
+    <Color x:Key="SettingsToggleTrackColor">#CBD5E1</Color>
+    <!-- «Зебра» таблиц (чередование строк) в светлой теме (issue #26):
+         едва заметная slate-100 на белых карточках. Тёмная тема — #334155. -->
+    <Color x:Key="ZebraRowColor">#F1F5F9</Color>
     <Color x:Key="TreeHoverColor">#FFF9E6</Color>
     <Color x:Key="TreeSelectedColor">#FFD54D</Color>
 
@@ -80,6 +88,8 @@
     <SolidColorBrush x:Key="DangerHoverBrush" Color="{DynamicResource DangerHoverColor}"/>
     <SolidColorBrush x:Key="DangerPressedBrush" Color="{DynamicResource DangerPressedColor}"/>
     <SolidColorBrush x:Key="DangerTextBrush" Color="{DynamicResource DangerTextColor}"/>
+    <SolidColorBrush x:Key="SettingsToggleTrackBrush" Color="{DynamicResource SettingsToggleTrackColor}"/>
+    <SolidColorBrush x:Key="ZebraRowBrush" Color="{DynamicResource ZebraRowColor}"/>
     <SolidColorBrush x:Key="TreeHoverBrush" Color="{DynamicResource TreeHoverColor}"/>
     <SolidColorBrush x:Key="TreeSelectedBrush" Color="{DynamicResource TreeSelectedColor}"/>
 
@@ -1194,7 +1204,9 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="RowBackground" Value="{DynamicResource CardBackgroundBrush}"/>
-        <Setter Property="AlternatingRowBackground" Value="{DynamicResource CardBackgroundBrush}"/>
+        <!-- «Зебра» таблиц следует теме (issue #26): чередующиеся строки — тематический
+             оттенок ZebraRowBrush (#F1F5F9 в светлой, #334155 в тёмной), не белый системный. -->
+        <Setter Property="AlternatingRowBackground" Value="{DynamicResource ZebraRowBrush}"/>
         <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BorderBrushColor}"/>
         <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource BorderBrushColor}"/>
         <Setter Property="RowHeaderWidth" Value="0"/>
@@ -1456,8 +1468,8 @@
                         <ContentPresenter Grid.Column="0" VerticalAlignment="Center"
                                           RecognizesAccessKey="True"/>
                         <Border Grid.Column="1" x:Name="Track" Width="40" Height="22"
-                                CornerRadius="11" Background="#CBD5E1" Margin="12,0,0,0"
-                                VerticalAlignment="Center">
+                                CornerRadius="11" Background="{DynamicResource SettingsToggleTrackBrush}"
+                                Margin="12,0,0,0" VerticalAlignment="Center">
                             <Ellipse x:Name="Thumb" Width="16" Height="16"
                                      Fill="White" HorizontalAlignment="Left" Margin="3,0,0,0"
                                      VerticalAlignment="Center"/>

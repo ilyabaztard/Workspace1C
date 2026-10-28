@@ -82,7 +82,7 @@
                         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                         <Style.Triggers>
                             <Trigger Property="ItemsControl.AlternationIndex" Value="0">
-                                <Setter Property="Background" Value="{DynamicResource ItemHoverBrush}"/>
+                                <Setter Property="Background" Value="{DynamicResource ZebraRowBrush}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Background" Value="{DynamicResource ItemSelectedBrush}"/>

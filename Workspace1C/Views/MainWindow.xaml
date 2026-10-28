@@ -2833,8 +2833,11 @@
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                                 <materialDesign:PackIcon Kind="Application" Width="15" Height="15" Margin="0,0,6,0"
                                                          Foreground="#F59E0B" VerticalAlignment="Center"/>
+                                <!-- Светлая подпись на тёмной кнопке панели действий (issue #26): ButtonTextBrush
+                                     в тёмной теме чёрный и на фоне карточки не читался — здесь и у «По ссылке» текст
+                                     берёт основной цвет темы TextPrimaryBrush (WPF) / TextPrimaryColorBrush (Avalonia). -->
                                 <TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource ButtonTextBrush}"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
                                            Text="{loc:Loc Main.NativeStarter}" TextTrimming="None"/>
                             </StackPanel>
                         </Button>
@@ -2968,7 +2971,7 @@
                                     <materialDesign:PackIcon Kind="Link" Width="16" Height="16" Margin="0,0,4,0"
                                                              Foreground="#0EA5E9" VerticalAlignment="Center"/>
                                     <TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource ButtonTextBrush}">
+                                               Foreground="{DynamicResource TextPrimaryBrush}">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Text" Value="{loc:Loc LinkInput.Title}"/>
@@ -2983,7 +2986,7 @@
                                 </StackPanel>
                                 <TextBlock Grid.Column="1" Text="➜"
                                            VerticalAlignment="Center" FontWeight="SemiBold" FontSize="11"
-                                           Foreground="{DynamicResource ButtonTextBrush}" Opacity="0.75"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" Opacity="0.75"
                                            Margin="8,0,0,0"
                                            Visibility="{Binding ShowRightPanelDetails, Converter={StaticResource BoolToVis}}"/>
                             </Grid>

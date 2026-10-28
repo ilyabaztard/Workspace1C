@@ -1109,7 +1109,10 @@ namespace Workspace1C
                 "BorderColorBrush",
                 new CornerRadius(UiMetrics.RadiusMd))
             {
-                Content = CompactIconAndText(iconKey, text, "ButtonTextBrush", colorHex: colorHex, trailingIconKey: trailingIconKey, colorTextToo: colorTextToo, iconSize: iconSize),
+                // Подпись и значок вторичной кнопки панели действий берут основной цвет
+                // темы (TextPrimaryColorBrush), а не ButtonTextBrush: последний чёрный
+                // в обеих темах и на тёмной подложке карточки не читается (issue #26).
+                Content = CompactIconAndText(iconKey, text, "TextPrimaryColorBrush", colorHex: colorHex, trailingIconKey: trailingIconKey, colorTextToo: colorTextToo, iconSize: iconSize),
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 MinHeight = UiMetrics.ActionButtonMinHeight,
@@ -1152,7 +1155,7 @@ namespace Workspace1C
                 "BorderColorBrush",
                 new CornerRadius(UiMetrics.RadiusMd))
             {
-                Content = CompactIconAndText(iconKey, "", "ButtonTextBrush", textPath, colorHex, trailingIconKey, colorTextToo, iconSize),
+                Content = CompactIconAndText(iconKey, "", "TextPrimaryColorBrush", textPath, colorHex, trailingIconKey, colorTextToo, iconSize),
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 MinHeight = UiMetrics.ActionButtonMinHeight,
@@ -1222,7 +1225,7 @@ namespace Workspace1C
                 if (colorTextToo && colorHex is not null)
                     trailing.Fill = new SolidColorBrush(Color.Parse(colorHex));
                 else
-                    ThemeBrushes.Bind(trailing, Avalonia.Controls.Shapes.Path.FillProperty, "ButtonTextBrush");
+                    ThemeBrushes.Bind(trailing, Avalonia.Controls.Shapes.Path.FillProperty, brushKey);
                 trailingHost.Bind(Control.IsVisibleProperty, new Binding("ShowRightPanelDetails"));
                 Grid.SetColumn(trailingHost, 2);
                 sp.Children.Add(trailingHost);
@@ -1549,7 +1552,9 @@ namespace Workspace1C
                 "BorderColorBrush",
                 new CornerRadius(UiMetrics.RadiusMd))
             {
-                Content = ThemedIconAndText(iconKey, text, "ButtonTextBrush", UiMetrics.ActionIconSize, centered: false),
+                // Текст вторичной кнопки — основной цвет темы (TextPrimaryColorBrush),
+                // а не чёрный ButtonTextBrush (issue #26).
+                Content = ThemedIconAndText(iconKey, text, "TextPrimaryColorBrush", UiMetrics.ActionIconSize, centered: false),
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 MinHeight = UiMetrics.ActionButtonMinHeight,

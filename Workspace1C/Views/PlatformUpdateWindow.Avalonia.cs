@@ -328,7 +328,9 @@ namespace Workspace1C
 
             var rowIndex = _rowsPanel.Children.Count;
             var oddRow = rowIndex % 2 == 0;
-            var bandBrush = oddRow ? (TryBrush("ItemHoverBrush") ?? Brushes.Transparent) : Brushes.Transparent;
+            // «Зебра» строк берёт тематическую кисть ZebraRowBrush (issue #26):
+            // в тёмной теме это приглушённая #334155, а не светлая/белая полоса.
+            var bandBrush = oddRow ? (TryBrush("ZebraRowBrush") ?? TryBrush("ItemHoverBrush") ?? Brushes.Transparent) : Brushes.Transparent;
             var hoverBrush = TryBrush("ItemSelectedBrush") ?? Brushes.Transparent;
             cell.Background = bandBrush;
             cell.PointerEntered += (_, _) => cell.Background = hoverBrush;
@@ -344,7 +346,7 @@ namespace Workspace1C
                     var odd = index % 2 == 0;
                     pair.Value.Background = selected
                         ? hoverBrush
-                        : (odd ? (TryBrush("ItemHoverBrush") ?? Brushes.Transparent) : Brushes.Transparent);
+                        : (odd ? (TryBrush("ZebraRowBrush") ?? TryBrush("ItemHoverBrush") ?? Brushes.Transparent) : Brushes.Transparent);
                 }
 
                 e.Handled = true;

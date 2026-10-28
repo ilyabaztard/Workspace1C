@@ -69,8 +69,10 @@ internal sealed class MaterialMessageWindowAvalonia : Window
         Grid.SetColumn(messageBlock, 1);
         body.Children.Add(messageBlock);
 
-        // Кнопки. Подтверждение («Да»/«ОК») — явно зелёная с жирным белым текстом,
-        // как в WPF-версии: не зависит от акцентной кисти темы и читается всегда.
+        // Кнопки. Подтверждение («Да»/«ОК») — единая акцентная кнопка ModernButton
+        // (issue #26): заливка AccentBrush, контрастный текст TextOnAccentBrush —
+        // как во всех остальных диалогах приложения; прежняя жёстко-зелёная #16A34A
+        // с белым текстом убрана (Windows-версия переведена на тот же контракт).
         var okText = kind == MaterialMessageKind.Question
             ? LocalizationManager.T("Common.Yes")
             : LocalizationManager.T("Common.Ok");
@@ -79,15 +81,13 @@ internal sealed class MaterialMessageWindowAvalonia : Window
             Content = new TextBlock
             {
                 Text = okText,
-                Foreground = Brushes.White,
-                FontWeight = FontWeight.Bold,
+                FontWeight = FontWeight.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center
             },
             MinWidth = 100,
-            IsDefault = true,
-            Background = new SolidColorBrush(Color.Parse("#16A34A")),
-            Foreground = Brushes.White
+            IsDefault = true
         };
+        okButton.Styled(ControlThemes.ModernButton);
         okButton.Click += (_, _) => { _answered = true; Confirmed = true; Close(); };
 
         // Порядок кнопок согласован с WPF-версией: «Да» (подтверждение) слева,
@@ -102,14 +102,15 @@ internal sealed class MaterialMessageWindowAvalonia : Window
 
         if (kind == MaterialMessageKind.Question)
         {
+            // Отмена — вторичная кнопка SecondaryButton (карточка + контур + текст темы),
+            // а не жёсткая тёмная надпись на светлой подложке (issue #26).
             Button cancelButton = new()
             {
                 Content = LocalizationManager.T("Common.No"),
                 MinWidth = 90,
                 IsCancel = true
             };
-            ThemeBrushes.Bind(cancelButton, TemplatedControl.BackgroundProperty, "SecondaryButtonBackgroundColorBrush");
-            ThemeBrushes.Bind(cancelButton, TemplatedControl.ForegroundProperty, "ButtonTextColorBrush");
+            cancelButton.Styled(ControlThemes.SecondaryButton);
             cancelButton.Click += (_, _) => { _answered = true; Confirmed = false; Close(); };
 
             // Закрытие вопроса крестиком оконного менеджера равнозначно ответу «Нет».

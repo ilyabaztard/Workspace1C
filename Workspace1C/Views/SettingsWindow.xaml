@@ -38,7 +38,10 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Track" CornerRadius="11" Background="#CBD5E1">
+                        <!-- Дорожка выключенного переключателя берётся из темы (issue #26):
+                             в тёмной теме SettingsToggleTrackBrush = #475569, а не светлая #CBD5E1,
+                             из-за которой выключенный тумблер выглядел белым на тёмной странице. -->
+                        <Border x:Name="Track" CornerRadius="11" Background="{DynamicResource SettingsToggleTrackBrush}">
                             <Ellipse x:Name="Thumb" Width="16" Height="16" Fill="White"
                                      HorizontalAlignment="Left" Margin="3,0,0,0" VerticalAlignment="Center"/>
                         </Border>

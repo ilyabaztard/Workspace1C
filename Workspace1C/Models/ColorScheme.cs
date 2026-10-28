@@ -372,6 +372,10 @@ public class ColorScheme
         ["SecondaryButtonPressedColor"] = "#FFD54D",
         ["TreeHoverColor"] = "#FFF9E6",
         ["TreeSelectedColor"] = "#FFD54D",
+        // Дорожка переключателя в выключенном положении (issue #26): светлая #CBD5E1.
+        ["SettingsToggleTrackColor"] = "#CBD5E1",
+        // «Зебра» таблиц (issue #26): едва заметная slate-100 на белых карточках.
+        ["ZebraRowColor"] = "#F1F5F9",
         ["ScrollTrackBrush"] = "#E8EDF3",
         ["ScrollThumbBrush"] = "#B6C2D2",
         ["ScrollThumbHoverBrush"] = "#94A3B8",
@@ -410,6 +414,10 @@ public class ColorScheme
         ["SecondaryButtonPressedColor"] = "#FFD54D",
         ["TreeHoverColor"] = "#334155",
         ["TreeSelectedColor"] = "#B45309",
+        // Дорожка переключателя в выключенном положении (issue #26): тёмная #475569.
+        ["SettingsToggleTrackColor"] = "#475569",
+        // «Зебра» таблиц (issue #26): приглушённая slate-700 в тёмной теме.
+        ["ZebraRowColor"] = "#334155",
         ["ScrollTrackBrush"] = "#16202E",
         ["ScrollThumbBrush"] = "#3B4A5F",
         ["ScrollThumbHoverBrush"] = "#52657F",

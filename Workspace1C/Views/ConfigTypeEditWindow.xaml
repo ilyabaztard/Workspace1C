@@ -84,7 +84,8 @@
                               AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                               CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False"
                               RowHeaderWidth="0" SelectionMode="Single" SelectionUnit="FullRow"
-                              GridLinesVisibility="Horizontal" RowHeight="32" AlternationCount="2">
+                              GridLinesVisibility="Horizontal" RowHeight="32" AlternationCount="2"
+                              AlternatingRowBackground="{DynamicResource ZebraRowBrush}">
                         <DataGrid.Columns>
                             <!-- Отметка основной редакции (issue #14). -->
                             <DataGridTextColumn Width="34" Header="★" Binding="{Binding DefaultMark}">

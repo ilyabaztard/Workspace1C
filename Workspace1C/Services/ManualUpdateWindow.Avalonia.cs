@@ -99,21 +99,21 @@ internal sealed class ManualUpdateWindowAvalonia : Window
             content.Children.Add(link);
         }
 
-        // Кнопка «ОК».
+        // Кнопка «ОК» — единая акцентная кнопка ModernButton (issue #26):
+        // заливка AccentBrush, контрастный текст TextOnAccentBrush, как во всех
+        // диалогах приложения. Прежняя жёстко-зелёная #16A34A убрана.
         Button okButton = new()
         {
             Content = new TextBlock
             {
                 Text = LocalizationManager.T("Common.Ok"),
-                Foreground = Brushes.White,
-                FontWeight = FontWeight.Bold,
+                FontWeight = FontWeight.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center
             },
             MinWidth = 100,
-            IsDefault = true,
-            Background = new SolidColorBrush(Color.Parse("#16A34A")),
-            Foreground = Brushes.White
+            IsDefault = true
         };
+        okButton.Styled(ControlThemes.ModernButton);
         okButton.Click += (_, _) => Close();
 
         var buttonsPanel = new StackPanel

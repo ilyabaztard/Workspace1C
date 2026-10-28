@@ -31,6 +31,12 @@
     <Color x:Key="DangerHoverColor">#B91C1C</Color>
     <Color x:Key="DangerPressedColor">#991B1B</Color>
     <Color x:Key="DangerTextColor">#FFFFFF</Color>
+    <!-- Дорожка переключателя в выключенном положении (issue #26): в светлой теме
+         светло-серая #CBD5E1, в тёмной теме — тёмная #475569. -->
+    <Color x:Key="SettingsToggleTrackColor">#CBD5E1</Color>
+    <!-- «Зебра» таблиц (чередование строк, issue #26): в светлой теме едва заметная
+         slate-100 на белых карточках; тёмная тема — #334155. -->
+    <Color x:Key="ZebraRowColor">#F1F5F9</Color>
     <Color x:Key="TreeHoverColor">#FFF9E6</Color>
     <Color x:Key="TreeSelectedColor">#FFD54D</Color>
     <Color x:Key="ScrollTrackBrush">#E8EDF3</Color>
@@ -69,6 +75,8 @@
     <SolidColorBrush x:Key="DangerHoverBrush" Color="{DynamicResource DangerHoverColor}"/>
     <SolidColorBrush x:Key="DangerPressedBrush" Color="{DynamicResource DangerPressedColor}"/>
     <SolidColorBrush x:Key="DangerTextBrush" Color="{DynamicResource DangerTextColor}"/>
+    <SolidColorBrush x:Key="SettingsToggleTrackBrush" Color="{DynamicResource SettingsToggleTrackColor}"/>
+    <SolidColorBrush x:Key="ZebraRowBrush" Color="{DynamicResource ZebraRowColor}"/>
     <SolidColorBrush x:Key="TreeHoverBrush" Color="{DynamicResource TreeHoverColor}"/>
     <SolidColorBrush x:Key="TreeSelectedBrush" Color="{DynamicResource TreeSelectedColor}"/>
 </ResourceDictionary>

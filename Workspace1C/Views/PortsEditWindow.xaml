@@ -47,7 +47,8 @@
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserSortColumns="False" RowHeaderWidth="0" SelectionMode="Single"
                   SelectionUnit="FullRow" GridLinesVisibility="Horizontal"
-                  RowHeight="36" AlternationCount="2">
+                  RowHeight="36" AlternationCount="2"
+                  AlternatingRowBackground="{DynamicResource ZebraRowBrush}">
             <DataGrid.Columns>
                 <DataGridTextColumn Width="*" Header="{loc:Loc Ports.Service}"
                                     Binding="{Binding Service}" IsReadOnly="True"/>
