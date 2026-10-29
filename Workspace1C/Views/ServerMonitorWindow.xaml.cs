@@ -59,12 +59,23 @@ namespace Workspace1C
         /// </summary>
         private readonly HashSet<System.Windows.Controls.Primitives.DataGridColumnHeader> _trackedColumnHeaders = new();
 
-        /// <summary>Состояние перетаскивания границы колонки (issue #75, 1.0.0.96).</summary>
+        /// <summary>Состояние перетаскивания границы колонки (issue #75; 1.0.0.96+).</summary>
         private DataGrid? _resizingGrid;
         private int _resizingColumnIndex = -1;
         private bool _resizingWithCtrl;
         private double[] _resizeStartWidths = Array.Empty<double>();
         private double _resizeTotalDelta;
+        /// <summary>Начальная горизонтальная позиция мыши в заголовке (перетаскивание, issue #75).</summary>
+        private double _resizeStartX;
+        /// <summary>Идёт ли собственный цикл перетаскивания (захват мыши заголовком, issue #75).</summary>
+        private bool _resizingActive;
+        /// <summary>
+        /// Ширина «зоны границы» заголовка колонки, px (issue #75): перетаскивание
+        /// начинается, когда курсор в правых ~2 зонах ширины Thumb
+        /// PART_RightHeaderGripper (7 px) + запас — клик в эту зону перехватывается
+        /// ДО внутреннего обработчика DataGridColumnHeader.
+        /// </summary>
+        private const double HeaderResizeHotZone = 16.0;
 
         /// <summary>Фоновое обновление кэша статусов служб (5 с; issue #3, часть 2).</summary>
         private System.Threading.Timer? _servicesStatusTimer;
@@ -358,37 +369,68 @@ namespace Workspace1C
 
         /// <summary>
         /// Привязывает к заголовку отслеживание ширины и переопределённое перетаскивание
-        /// границы (issue #75, 1.0.0.96): обычное перетаскивание двигает ВСЕ колонки справа
-        /// без изменения их ширины (при переполнении области появляется горизонтальная
+        /// границы (issue #75): обычное перетаскивание двигает ВСЕ колонки справа без
+        /// изменения их ширины (при переполнении области появляется горизонтальная
         /// прокрутка), с зажатым Ctrl меняется ширина только двух смежных колонок.
-        /// Перехватывается штатная «ручка» PART_RightHeaderGripper — наш обработчик
-        /// подписывается ПОСЛЕ внутреннего обработчика DataGridColumnHeader и, отработав
-        /// последним, задаёт ширины по правилам 1С.
+        /// <para>
+        /// В 1.0.0.96 семантика вешалась на события Thumb «ручки» (<c>PART_RightHeaderGripper</c>,
+        /// найденной через FindName шаблона заголовка), рассчитывая перекрыть внутренний
+        /// обработчик DataGridColumnHeader — на практике перехват не срабатывал (ручка
+        /// не всегда находилась по имени шаблона, а внутренний обработчик успевал применить
+        /// штатную ширину), и пользователь не замечал изменений (issue #75, комментарий
+        /// 7OH от 2026-10-28 «изменений по работе с шириной колонок — не замечено»).
+        /// Теперь перетаскивание ведётся САМИМ заголовком через захват мыши:
+        /// <c>PreviewMouseLeftButtonDown</c> перехватывает клик в зоне границы ДО
+        /// внутренних обработчиков (e.Handled), <c>MouseMove</c> применяет ту же семантику
+        /// «как в 1С» из <see cref="ServerMonitorColumnWidthsStore"/>.
+        /// </para>
         /// </summary>
         private void AttachHeaderTracking(DataGrid grid, string tabKey, System.Windows.Controls.Primitives.DataGridColumnHeader header)
         {
             if (!_trackedColumnHeaders.Add(header))
                 return;
             header.SizeChanged += (_, _) => CaptureColumnWidths(grid, tabKey);
-            if (header.Template?.FindName("PART_RightHeaderGripper", header) is System.Windows.Controls.Primitives.Thumb grip)
+            header.PreviewMouseLeftButtonDown += (_, e) =>
             {
-                grip.DragStarted += (_, e) => OnColumnGripDragStarted(grid, header, e);
-                grip.DragDelta += (_, e) => OnColumnGripDragDelta(grid, header, e);
-                grip.DragCompleted += (_, e) => OnColumnGripDragCompleted(grid, tabKey, e);
-            }
+                var columnIndex = header.Column is null ? -1 : grid.Columns.IndexOf(header.Column);
+                if (columnIndex < 0 || columnIndex >= grid.Columns.Count)
+                    return;
+                // Зона границы: правые ~16 px заголовка (ширина «ручки» + запас).
+                var x = e.GetPosition(header).X;
+                if (x < header.ActualWidth - HeaderResizeHotZone)
+                    return;
+                StartColumnDrag(grid, header, columnIndex, x);
+                e.Handled = true;
+            };
+            header.MouseMove += (_, e) =>
+            {
+                if (_resizingGrid == grid && _resizingActive)
+                    UpdateColumnDrag(grid, e.GetPosition(header).X);
+            };
+            header.MouseLeftButtonUp += (_, e) =>
+            {
+                if (_resizingGrid == grid && _resizingActive)
+                    FinishColumnDrag(grid, tabKey);
+                // Освобождаем захват после завершения перетаскивания (LostMouseCapture
+                // при этом вызовет FinishColumnDrag повторно — защищено сбросом состояния).
+                header.ReleaseMouseCapture();
+            };
+            header.LostMouseCapture += (_, _) =>
+            {
+                if (_resizingGrid == grid && _resizingActive)
+                    FinishColumnDrag(grid, tabKey);
+            };
         }
 
-        private void OnColumnGripDragStarted(
-            DataGrid grid, System.Windows.Controls.Primitives.DataGridColumnHeader header,
-            System.Windows.Controls.Primitives.DragStartedEventArgs e)
+        /// <summary>
+        /// Начало перетаскивания границы колонки (issue #75): фиксируем стартовые
+        /// фактические ширины всех колонок (для Ctrl-режима нужна вся пара) и «замораживаем»
+        /// гибкие (звёздные) колонки в пиксели: иначе при обычном перетаскивании звёздные
+        /// колонки справа перераспределяли бы ширину на себя («двигает одну-две,
+        /// упираются в третью» — и граница дальше не идёт).
+        /// </summary>
+        private void StartColumnDrag(DataGrid grid, System.Windows.Controls.Primitives.DataGridColumnHeader header, int columnIndex, double startX)
         {
-            var columnIndex = header.Column is null ? -1 : grid.Columns.IndexOf(header.Column);
-            if (columnIndex < 0 || columnIndex >= grid.Columns.Count)
-                return;
-            // Стартовые фактические ширины всех колонок (для Ctrl-режима нужна вся пара)
-            // и «заморозка» гибких (звёздных) колонок в пиксели: иначе при обычном
-            // перетаскивании звёздные колонки справа перераспределяли бы ширину на себя
-            // («двигает одну-две, упираются в третью» — и граница дальше не идёт).
             _resizeStartWidths = grid.Columns.Select(c => c.ActualWidth).ToArray();
             for (var j = 0; j < grid.Columns.Count; j++)
             {
@@ -399,56 +441,52 @@ namespace Workspace1C
             _resizingColumnIndex = columnIndex;
             _resizingWithCtrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
             _resizeTotalDelta = 0;
-            e.Handled = true;
+            _resizeStartX = startX;
+            _resizingActive = true;
+            // Захват мыши заголовком: MouseMove продолжает приходить, даже когда курсор
+            // выходит за пределы заголовка (drag границы за пределы окна не обрывается).
+            header.CaptureMouse();
         }
 
-        private void OnColumnGripDragDelta(
-            DataGrid grid, System.Windows.Controls.Primitives.DataGridColumnHeader header,
-            System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+        /// <summary>
+        /// Применяет ширины колонок по правилам «как в 1С» (issue #75): обычное
+        /// перетаскивание — <see cref="ServerMonitorColumnWidthsStore.ApplyDragMoveBlock"/>
+        /// (все колонки справа сдвигаются как блок, ширины не меняются; появляется
+        /// горизонтальная прокрутка), с Ctrl —
+        /// <see cref="ServerMonitorColumnWidthsStore.ApplyDragResizePair"/> (меняются
+        /// только две смежные колонки).
+        /// </summary>
+        private void UpdateColumnDrag(DataGrid grid, double currentX)
         {
-            if (_resizingGrid != grid || _resizingColumnIndex < 0)
+            if (!_resizingActive || _resizingGrid != grid || _resizingColumnIndex < 0)
                 return;
-            _resizeTotalDelta += e.HorizontalChange;
             var i = _resizingColumnIndex;
             var columns = grid.Columns;
             if (i >= columns.Count)
                 return;
-            var leftColumn = columns[i];
-            var minLeft = leftColumn.MinWidth > 0 ? leftColumn.MinWidth : 0;
-            if (_resizingWithCtrl && i + 1 < columns.Count)
-            {
-                // Ctrl: меняется только граница между ДВУМЯ смежными колонками — левая
-                // растёт/ужимается, правая — зеркально; остальные колонки не двигаются.
-                var rightColumn = columns[i + 1];
-                var minRight = rightColumn.MinWidth > 0 ? rightColumn.MinWidth : 0;
-                var (newLeft, newRight) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(
-                    _resizeStartWidths[i], _resizeStartWidths[i + 1], _resizeTotalDelta, minLeft, minRight);
-                leftColumn.Width = new DataGridLength(newLeft);
-                rightColumn.Width = new DataGridLength(newRight);
-            }
-            else
-            {
-                // Обычный режим (как в 1С): граница двигается — ВСЕ колонки справа
-                // сдвигаются как блок (их ширины не меняются), левой колонке достаётся
-                // изменение; при переполнении области появляется горизонтальная прокрутка.
-                leftColumn.Width = new DataGridLength(ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(
-                    _resizeStartWidths[i], _resizeTotalDelta, minLeft));
-            }
-            e.Handled = true;
+            _resizeTotalDelta = currentX - _resizeStartX;
+            // Минимальные ширины колонок (заголовок + стрелка сортировки, issue #75):
+            // колонка не сжимается ниже минимума ни в одном режиме.
+            var minWidths = columns.Select(c => c.MinWidth > 0 ? c.MinWidth : ServerMonitorColumnWidthsStore.AbsoluteMinWidth).ToArray();
+            var newWidths = _resizingWithCtrl && i + 1 < columns.Count
+                ? ServerMonitorColumnWidthsStore.ApplyDragResizePair(_resizeStartWidths, i, _resizeTotalDelta, minWidths)
+                : ServerMonitorColumnWidthsStore.ApplyDragMoveBlock(_resizeStartWidths, i, _resizeTotalDelta, minWidths);
+            for (var j = 0; j < columns.Count; j++)
+                columns[j].Width = new DataGridLength(newWidths[j]);
         }
 
-        private void OnColumnGripDragCompleted(DataGrid grid, string tabKey, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        private void FinishColumnDrag(DataGrid grid, string tabKey)
         {
-            if (_resizingGrid == grid)
-            {
-                // Фиксируем фактические ширины вкладки — при закрытии окна они сохранятся
-                // в настройки (переживают закрытие программы).
-                CaptureColumnWidths(grid, tabKey);
-                _resizingGrid = null;
-                _resizingColumnIndex = -1;
-                _resizeStartWidths = Array.Empty<double>();
-            }
-            e.Handled = true;
+            if (!_resizingActive || _resizingGrid != grid)
+                return;
+            // Фиксируем фактические ширины вкладки — при закрытии окна они сохранятся
+            // в настройки (переживают закрытие программы).
+            CaptureColumnWidths(grid, tabKey);
+            _resizingGrid = null;
+            _resizingColumnIndex = -1;
+            _resizeStartWidths = Array.Empty<double>();
+            _resizeTotalDelta = 0;
+            _resizingActive = false;
         }
 
         /// <summary>

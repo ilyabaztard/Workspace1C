@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Workspace1C.Models;
 using Workspace1C.Services;
 using Xunit;
@@ -229,5 +230,92 @@ public sealed class ServerMonitorColumnWidthsTests
         var (left2, right2) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(100.0, 90.0, -25.0, 100.0, 90.0);
         Assert.Equal(100.0, left2);
         Assert.Equal(90.0, right2);
+    }
+
+    // ===================== Эмуляция перетаскивания границы (issue #75) =====================
+    // Тесты «реального сценария»: обычный drag сдвигает ВСЕ колонки справа как блок
+    // (их ширины не меняются, меняется только позиция; при переполнении области
+    // появляется горизонтальная прокрутка), Ctrl-drag меняет только ДВЕ смежные колонки.
+
+    [Fact]
+    public void ApplyDragMoveBlock_DragRight_OnlyLeftColumnGrows_AllRightColumnsUnchanged()
+    {
+        // Обычное перетаскивание границы колонки 1 вправо на 40 px (issue #75):
+        // левая колонка растёт на Δ, ВСЕ колонки справа сохраняют ширины (двигаются
+        // как блок — при переполнении области появится горизонтальная прокрутка).
+        var start = new[] { 100.0, 150.0, 200.0, 120.0 };
+        var mins = new[] { 80.0, 120.0, 130.0, 90.0 };
+
+        var result = ServerMonitorColumnWidthsStore.ApplyDragMoveBlock(start, index: 1, delta: 40.0, mins);
+
+        Assert.Equal(new[] { 100.0, 190.0, 200.0, 120.0 }, result);
+        // Сдвиг «как блок»: у колонок справа от границы ширины НЕ изменились.
+        Assert.Equal(new[] { 200.0, 120.0 }, result.Skip(2));
+        // Суммарная ширина таблицы выросла — появляется место для горизонтальной прокрутки.
+        Assert.True(result.Sum() > start.Sum());
+    }
+
+    [Fact]
+    public void ApplyDragMoveBlock_DragLeft_StopsAtMinWidth()
+    {
+        // Перетаскивание влево: колонка 1 ужимается, но НЕ ниже минимума «заголовок +
+        // стрелка сортировки» (120) — граница дальше не идёт, остальные ширины не меняются.
+        var start = new[] { 100.0, 150.0, 200.0, 120.0 };
+        var mins = new[] { 80.0, 120.0, 130.0, 90.0 };
+
+        var result = ServerMonitorColumnWidthsStore.ApplyDragMoveBlock(start, index: 1, delta: -1000.0, mins);
+
+        Assert.Equal(new[] { 100.0, 120.0, 200.0, 120.0 }, result);
+    }
+
+    [Fact]
+    public void ApplyDragResizePair_Ctrl_OnlyTwoAdjacentColumnsChange_PairTotalKept()
+    {
+        // Ctrl-перетаскивание границы колонки 1 вправо на 50 px (issue #75): меняются
+        // ТОЛЬКО колонки 1 (растёт) и 2 (ужимается зеркально); колонки 0 и 3 — на месте;
+        // сумма ширины пары постоянна.
+        var start = new[] { 100.0, 150.0, 200.0, 120.0 };
+        var mins = new[] { 80.0, 120.0, 130.0, 90.0 };
+
+        var result = ServerMonitorColumnWidthsStore.ApplyDragResizePair(start, index: 1, delta: 50.0, mins);
+
+        Assert.Equal(new[] { 100.0, 200.0, 150.0, 120.0 }, result);
+        Assert.Equal(150.0 + 200.0, result[1] + result[2]);
+        Assert.Equal(start[0], result[0]);
+        Assert.Equal(start[3], result[3]);
+    }
+
+    [Fact]
+    public void ApplyDragResizePair_Ctrl_StopsAtMins_OfBothAdjacentColumns()
+    {
+        // Правая колонка 2 упёрлась в минимум 130: левая колонка 1 больше не растёт.
+        var start = new[] { 100.0, 150.0, 200.0, 120.0 };
+        var mins = new[] { 80.0, 120.0, 130.0, 90.0 };
+
+        var result = ServerMonitorColumnWidthsStore.ApplyDragResizePair(start, index: 1, delta: 1000.0, mins);
+
+        Assert.Equal(220.0, result[1]); // 150 + (200 - 130) = 220
+        Assert.Equal(130.0, result[2]);
+        Assert.Equal(new[] { 100.0, 220.0, 130.0, 120.0 }, result);
+
+        // Левая колонка 1 упёрлась в минимум 120: правая больше не растёт.
+        var result2 = ServerMonitorColumnWidthsStore.ApplyDragResizePair(start, index: 1, delta: -1000.0, mins);
+        Assert.Equal(new[] { 100.0, 120.0, 230.0, 120.0 }, result2);
+    }
+
+    [Fact]
+    public void ApplyDragMoveBlock_WithMinimalWidths_KeepsColumnsAfterDeltaFixed()
+    {
+        // Эмуляция «перетаскивание границы двигает ВСЕ колонки справа как блок»:
+        // при любом Δ (и вправо, и влево) колонки справа от границы не меняются,
+        // а при переполнении области появляется горизонтальная прокрутка.
+        var start = new[] { 90.0, 110.0, 130.0, 95.0 };
+        var mins = new[] { 60.0, 100.0, 120.0, 60.0 };
+
+        var right = ServerMonitorColumnWidthsStore.ApplyDragMoveBlock(start, index: 0, delta: 75.0, mins);
+        var left = ServerMonitorColumnWidthsStore.ApplyDragMoveBlock(start, index: 0, delta: -20.0, mins);
+
+        Assert.Equal(new[] { 165.0, 110.0, 130.0, 95.0 }, right);
+        Assert.Equal(new[] { 70.0, 110.0, 130.0, 95.0 }, left);
     }
 }

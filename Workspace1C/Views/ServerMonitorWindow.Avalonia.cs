@@ -424,16 +424,16 @@ namespace Workspace1C
             var processesTab = CreateTab(_vm.ProcessesTabText,
                 BuildContent(() => BuildSortableTable(_vm.Processes, ProcessColumns, BuildProcessRow,
                     tabKey: ServerMonitorColumnWidthsStore.ProcessesKey)));
-            var infoTab = CreateTab(LocalizationManager.T("ServerMonitor.Tabs.Info"), BuildInfoPane());
-            // п.5 «Мониторинг лицензий» (1.0.0.87): вкладка «Лицензии» (занятые сеансами
-            // лицензии + установленные программные лицензии).
+            // issue #83 (комментарий 7OH): вкладка «Лицензии» идёт ПЕРЕД «Информация о
+            // кластере» — данные по лицензиям интереснее свойств кластера (п.5, 1.0.0.87).
             var licensesTab = CreateTab(_vm.LicensesTabText, BuildLicensesPane());
+            var infoTab = CreateTab(LocalizationManager.T("ServerMonitor.Tabs.Info"), BuildInfoPane());
             tabs.Items.Add(sessionsTab);
             tabs.Items.Add(connectionsTab);
             tabs.Items.Add(locksTab);
             tabs.Items.Add(processesTab);
-            tabs.Items.Add(infoTab);
             tabs.Items.Add(licensesTab);
+            tabs.Items.Add(infoTab);
             // Заголовки с количеством строк обновляются при изменении коллекций.
             RegisterTabHeader(sessionsTab, nameof(ServerMonitorViewModel.SessionsTabText));
             RegisterTabHeader(connectionsTab, nameof(ServerMonitorViewModel.ConnectionsTabText));
@@ -1014,36 +1014,32 @@ namespace Workspace1C
                     if (!dragging)
                         return;
                     var dx = e.GetPosition(headerGrid).X - startX;
-                    var minLeft = Math.Max(30, columns[index].MinWidth);
-                    if (ctrlMode && index + 1 < columns.Count)
-                    {
-                        // Ctrl: меняется только граница между ДВУМЯ смежными колонками —
-                        // левая растёт/ужимается, правая зеркально; остальные не двигаются,
-                        // суммарная ширина пары постоянна.
-                        var minRight = Math.Max(30, columns[index + 1].MinWidth);
-                        var (newLeft, newRight) = ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(
-                            startWidths[index], startWidths[index + 1], dx, minLeft, minRight);
-                        widths[index] = new GridLength(newLeft, GridUnitType.Pixel);
-                        widths[index + 1] = new GridLength(newRight, GridUnitType.Pixel);
-                    }
-                    else
-                    {
-                        // Обычный режим (как в 1С, issue #75 1.0.0.96): граница двигается —
-                        // колонки справа сдвигаются как блок без изменения ширины, левой
-                        // колонке достаётся изменение; при переполнении области появляется
-                        // горизонтальная прокрутка.
-                        widths[index] = new GridLength(
-                            ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(startWidths[index], dx, minLeft),
-                            GridUnitType.Pixel);
-                    }
+                    // issue #75: единая с WPF семантика «как в 1С» из чистой математики
+                    // ServerMonitorColumnWidthsStore: обычное перетаскивание двигает ВСЕ
+                    // колонки справа как блок (ширины не меняются, при переполнении области
+                    // появляется горизонтальная прокрутка), с Ctrl меняются только ДВЕ
+                    // смежные колонки. Минимальные ширины колонок не дают сжать заголовок.
+                    var minWidths = columns.Select(c => (double)Math.Max(30, c.MinWidth)).ToArray();
+                    var newWidths = ctrlMode && index + 1 < columns.Count
+                        ? ServerMonitorColumnWidthsStore.ApplyDragResizePair(startWidths, index, dx, minWidths)
+                        : ServerMonitorColumnWidthsStore.ApplyDragMoveBlock(startWidths, index, dx, minWidths);
+                    for (var j = 0; j < widths.Length; j++)
+                        widths[j] = new GridLength(newWidths[j], GridUnitType.Pixel);
                     ApplyWidths();
                     e.Handled = true;
                 };
-                grip.PointerReleased += (_, e) =>
+                grip.PointerReleased += (_, e) => FinishGripDrag(e);
+                // Обрыв захвата (переключение окна, отмена системы) — обязательно закрывает
+                // цикл перетаскивания: без этого после потери захвата ширины «замирают».
+                // Повторный вызов (после штатного PointerReleased) безопасен: dragging уже false.
+                grip.PointerCaptureLost += (_, _) => FinishGripDrag();
+
+                void FinishGripDrag(Avalonia.Input.PointerEventArgs? e = null)
                 {
+                    if (!dragging)
+                        return;
                     dragging = false;
-                    e.Pointer.Capture(null);
-                    e.Handled = true;
+                    e?.Pointer.Capture(null);
                     // issue #75: фиксируем фактические ширины вкладки — при закрытии окна
                     // они сохранятся в настройки (переживают закрытие программы). Гибкие
                     // колонки записываются нулём («не сохранять» — останутся звёздными).
@@ -1053,7 +1049,7 @@ namespace Workspace1C
                             .Select(w => w.IsStar ? 0.0 : w.Value)
                             .ToArray();
                     }
-                };
+                }
                 Grid.SetColumn(line, i);
                 Grid.SetColumn(grip, i);
                 headerGrid.Children.Add(line);

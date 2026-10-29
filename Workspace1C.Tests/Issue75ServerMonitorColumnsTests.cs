@@ -254,7 +254,7 @@ public sealed class Issue75ServerMonitorColumnsTests
             "Avalonia: MinWidth должен задаваться колонкам шапки.");
         Assert.True(source.Contains("rowGrid.ColumnDefinitions[i].MinWidth = columns[i].MinWidth", StringComparison.Ordinal),
             "Avalonia: MinWidth должен задаваться колонкам строк.");
-        Assert.True(source.Contains("Math.Max(30, columns[index].MinWidth)", StringComparison.Ordinal),
+        Assert.True(source.Contains("Math.Max(30, c.MinWidth)", StringComparison.Ordinal),
             "Avalonia: перетаскивание не должно сжимать колонку ниже минимума.");
     }
 
@@ -282,26 +282,61 @@ public sealed class Issue75ServerMonitorColumnsTests
     [Fact]
     public void BothPlatforms_UseOneCStyleColumnDragSemantics()
     {
-        // issue #75 (1.0.0.96): общая семантика перетаскивания как в 1С — обычное
-        // перетаскивание сдвигает ВСЕ колонки справа (ширины не меняются, появляется
-        // прокрутка), с Ctrl меняется ширина только двух смежных колонок. Обе платформы
-        // используют общую математику ServerMonitorColumnWidthsStore.
+        // issue #75 (1.0.0.96+): общая семантика перетаскивания как в 1С — обычное
+        // перетаскивание сдвигает ВСЕ колонки справа блоком (ширины не меняются, при
+        // переполнении появляется прокрутка), с Ctrl меняется ширина только двух смежных
+        // колонок. Обе платформы применяют единую чистую математику
+        // ServerMonitorColumnWidthsStore.ApplyDragMoveBlock / ApplyDragResizePair.
         var wpf = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.xaml.cs"));
         var avalonia = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.Avalonia.cs"));
 
-        Assert.True(wpf.Contains("ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(", StringComparison.Ordinal),
-            "WPF: обычный режим перетаскивания должен использовать MovedLeftColumnWidth (issue #75).");
-        Assert.True(wpf.Contains("ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(", StringComparison.Ordinal),
-            "WPF: Ctrl-режим должен использовать ResizedTwoAdjacentWidths (issue #75).");
+        Assert.True(wpf.Contains("ServerMonitorColumnWidthsStore.ApplyDragMoveBlock(", StringComparison.Ordinal),
+            "WPF: обычный режим должен применять ApplyDragMoveBlock (сдвиг блока колонок справа, issue #75).");
+        Assert.True(wpf.Contains("ServerMonitorColumnWidthsStore.ApplyDragResizePair(", StringComparison.Ordinal),
+            "WPF: Ctrl-режим должен применять ApplyDragResizePair (только две смежные колонки, issue #75).");
         Assert.True(wpf.Contains("Keyboard.Modifiers.HasFlag(ModifierKeys.Control)", StringComparison.Ordinal),
             "WPF: должен быть перехват Ctrl при перетаскивании (issue #75).");
 
-        Assert.True(avalonia.Contains("ServerMonitorColumnWidthsStore.MovedLeftColumnWidth(startWidths[index], dx, minLeft)", StringComparison.Ordinal),
-            "Avalonia: обычный режим перетаскивания должен использовать MovedLeftColumnWidth (issue #75).");
-        Assert.True(avalonia.Contains("ServerMonitorColumnWidthsStore.ResizedTwoAdjacentWidths(", StringComparison.Ordinal),
-            "Avalonia: Ctrl-режим должен использовать ResizedTwoAdjacentWidths (issue #75).");
+        Assert.True(avalonia.Contains("ServerMonitorColumnWidthsStore.ApplyDragMoveBlock(startWidths, index, dx, minWidths)", StringComparison.Ordinal),
+            "Avalonia: обычный режим должен применять ApplyDragMoveBlock (issue #75).");
+        Assert.True(avalonia.Contains("ServerMonitorColumnWidthsStore.ApplyDragResizePair(startWidths, index, dx, minWidths)", StringComparison.Ordinal),
+            "Avalonia: Ctrl-режим должен применять ApplyDragResizePair (issue #75).");
         Assert.True(avalonia.Contains("Avalonia.Input.KeyModifiers.Control", StringComparison.Ordinal),
             "Avalonia: должен быть перехват Ctrl при перетаскивании (issue #75).");
+    }
+
+    [Fact]
+    public void Wpf_DragIsCapturedByHeader_NotDependentOnTemplateGripperLookup()
+    {
+        // issue #75 (комментарий 7OH 2026-10-28: «изменений по работе с шириной
+        // колонок — не замечено»): в 1.0.0.96 перехват вешался на Thumb «ручки»,
+        // найденной по имени шаблона (PART_RightHeaderGripper), и не срабатывал.
+        // Перетаскивание ведётся самим заголовком: клик в зоне границы перехватывается
+        // в PreviewMouseLeftButtonDown (ДО внутреннего обработчика DataGridColumnHeader),
+        // мышь захватывается заголовком, движение применяет ширины по правилам 1С.
+        var source = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.xaml.cs"));
+
+        Assert.True(source.Contains("header.PreviewMouseLeftButtonDown += ", StringComparison.Ordinal),
+            "WPF: клик в зоне границы должен перехватываться PreviewMouseLeftButtonDown (issue #75).");
+        Assert.True(source.Contains("CaptureMouse", StringComparison.Ordinal),
+            "WPF: заголовок должен захватывать мышь на время перетаскивания (issue #75).");
+        Assert.True(source.Contains("LostMouseCapture", StringComparison.Ordinal),
+            "WPF: потеря захвата должна корректно завершать перетаскивание (issue #75).");
+        Assert.True(source.Contains("HeaderResizeHotZone", StringComparison.Ordinal),
+            "WPF: должна быть «зона границы» начала перетаскивания (issue #75).");
+    }
+
+    [Fact]
+    public void Avalonia_DragHandlesCaptureLoss_AndUsesSharedMath()
+    {
+        var source = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ServerMonitorWindow.Avalonia.cs"));
+
+        // Потеря захвата указателя (переключение окна/системная отмена) закрывает цикл
+        // перетаскивания — иначе ширины «замирают» после PointerCaptureLost.
+        Assert.True(source.Contains("PointerCaptureLost", StringComparison.Ordinal),
+            "Avalonia: PointerCaptureLost должен закрывать цикл перетаскивания (issue #75).");
+        Assert.True(source.Contains("ApplyDragMoveBlock(startWidths, index, dx, minWidths)", StringComparison.Ordinal),
+            "Avalonia: обычный режим должен применять общую математику Store (issue #75).");
     }
 
     [Fact]

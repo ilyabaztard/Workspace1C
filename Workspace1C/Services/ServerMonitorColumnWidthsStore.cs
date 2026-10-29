@@ -150,6 +150,65 @@ public static class ServerMonitorColumnWidthsStore
     }
 
     /// <summary>
+    /// Применяет ОБЫЧНОЕ перетаскивание границы колонки <paramref name="index"/>
+    /// (issue #75, комментарий 6444211969): ширина ЛЕВОЙ колонки становится
+    /// стартовая + Δ (не меньше минимума — заголовок и стрелка сортировки), ВСЕ
+    /// остальные колонки НЕ меняют ширину — они сдвигаются как блок (меняется
+    /// только позиция); при переполнении области появляется горизонтальная
+    /// прокрутка и границу можно двигать дальше. Возвращает новый массив ширин —
+    /// чистый аналог <see cref="MovedLeftColumnWidth"/> для всей строки таблицы.
+    /// </summary>
+    /// <param name="startWidths">Ширины колонок слева направо в начале перетаскивания.</param>
+    /// <param name="index">Индекс левой колонки границы.</param>
+    /// <param name="delta">Накопленное смещение границы, px (вправо — положительное).</param>
+    /// <param name="minWidths">Минимальные ширины колонок (issue #75).</param>
+    public static double[] ApplyDragMoveBlock(
+        double[] startWidths, int index, double delta, IReadOnlyList<double>? minWidths = null)
+    {
+        if (startWidths is null)
+            throw new ArgumentNullException(nameof(startWidths));
+        if (index < 0 || index >= startWidths.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        var result = (double[])startWidths.Clone();
+        result[index] = MovedLeftColumnWidth(
+            startWidths[index], delta, MinOf(minWidths, index, startWidths[index]));
+        return result;
+    }
+
+    /// <summary>
+    /// Применяет перетаскивание границы колонки <paramref name="index"/> с зажатым
+    /// Ctrl (issue #75): меняются ширины ТОЛЬКО двух смежных колонок — левой (растёт/
+    /// ужимается на Δ) и правой (зеркально), остальные колонки НЕ двигаются; сумма
+    /// ширины пары постоянна, обе колонки не сжимаются ниже минимумов. Возвращает
+    /// новый массив ширин — чистый аналог <see cref="ResizedTwoAdjacentWidths"/>.
+    /// </summary>
+    /// <param name="startWidths">Ширины колонок слева направо в начале перетаскивания.</param>
+    /// <param name="index">Индекс левой колонки границы (нужна и правая, индекс+1).</param>
+    /// <param name="delta">Накопленное смещение границы, px (вправо — положительное).</param>
+    /// <param name="minWidths">Минимальные ширины колонок (issue #75).</param>
+    public static double[] ApplyDragResizePair(
+        double[] startWidths, int index, double delta, IReadOnlyList<double>? minWidths = null)
+    {
+        if (startWidths is null)
+            throw new ArgumentNullException(nameof(startWidths));
+        if (index < 0 || index + 1 >= startWidths.Length)
+            throw new ArgumentOutOfRangeException(nameof(index));
+        var result = (double[])startWidths.Clone();
+        var (left, right) = ResizedTwoAdjacentWidths(
+            startWidths[index], startWidths[index + 1], delta,
+            MinOf(minWidths, index, startWidths[index]),
+            MinOf(minWidths, index + 1, startWidths[index + 1]));
+        result[index] = left;
+        result[index + 1] = right;
+        return result;
+    }
+
+    private static double MinOf(IReadOnlyList<double>? minWidths, int index, double fallback)
+        => minWidths is { Count: > 0 } && minWidths.Count > index && IsValid(minWidths[index])
+            ? minWidths[index]
+            : Math.Max(AbsoluteMinWidth, fallback);
+
+    /// <summary>
     /// Сохраняет ширины колонок вкладки в настройки приложения (issue #75):
     /// запись по ключу вкладки заменяется целиком, остальные вкладки не затрагиваются.
     /// Некорректные значения (0 для гибких колонок, NaN) записываются как 0 — значит
