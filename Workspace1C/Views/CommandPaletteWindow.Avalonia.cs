@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Workspace1C.Localization;
@@ -48,7 +49,11 @@ namespace Workspace1C
                 if (_palette.VisibleItems.Count > 0)
                     _itemList.SelectedIndex = _palette.SelectedIndex;
             };
-            _searchBox.KeyDown += OnSearchBox_KeyDown;
+            // Issue #84: стрелки Up/Down в TextBox помечаются Handled внутренней
+            // обработкой Avalonia раньше, чем доходит обычный KeyDown (bubbling), —
+            // подписываемся на KeyDownEvent с RoutingStrategies.Tunnel (аналог
+            // PreviewKeyDown в WPF): обработчик приходит ДО внутренней обработки поля.
+            _searchBox.AddHandler(InputElement.KeyDownEvent, OnSearchBox_PreviewKeyDown, RoutingStrategies.Tunnel);
             _itemList.SelectionChanged += (_, _) =>
             {
                 if (_itemList.SelectedIndex >= 0)
@@ -64,19 +69,32 @@ namespace Workspace1C
             };
         }
 
-        private void OnSearchBox_KeyDown(object? sender, KeyEventArgs e)
+        /// <summary>
+        /// Обработчик клавиш поисковой строки (issue #84). Подписка — туннелирующая
+        /// (RoutingStrategies.Tunnel), чтобы стрелки Up/Down доходили до обработчика
+        /// ДО внутренней обработки TextBox. Навигация — общая с WPF:
+        /// <see cref="CommandPaletteViewModel.MoveSelection"/>; фокус остаётся в
+        /// _searchBox, выбор списка синхронизируется по индексу.
+        /// </summary>
+        private void OnSearchBox_PreviewKeyDown(object? sender, KeyEventArgs e)
         {
             switch (e.Key)
             {
                 case Key.Down:
-                    if (_palette.MoveDown())
+                    if (_palette.MoveSelection(+1))
+                    {
                         _itemList.SelectedIndex = _palette.SelectedIndex;
+                        _itemList.ScrollIntoView(_itemList.SelectedItem);
+                    }
                     e.Handled = true;
                     break;
 
                 case Key.Up:
-                    if (_palette.MoveUp())
+                    if (_palette.MoveSelection(-1))
+                    {
                         _itemList.SelectedIndex = _palette.SelectedIndex;
+                        _itemList.ScrollIntoView(_itemList.SelectedItem);
+                    }
                     e.Handled = true;
                     break;
 

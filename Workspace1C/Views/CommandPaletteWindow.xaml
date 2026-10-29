@@ -31,9 +31,12 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Поисковая строка: Enter — выполнить, Shift+Enter — Конфигуратор (для баз), Esc — закрыть -->
+        <!-- Поисковая строка: Enter — выполнить, Shift+Enter — Конфигуратор (для баз), Esc — закрыть.
+             Стрелки Up/Down — навигация по списку (issue #84): внутренняя обработка TextBox
+             помечает их Handled раньше, чем доходит обычный KeyDown (bubbling), поэтому
+             ловим PreviewKeyDown (tunneling) — срабатывает до внутренней обработки поля. -->
         <TextBox x:Name="SearchBox" Grid.Row="0" Padding="10,8" FontSize="14"
-                 KeyDown="OnSearchBox_KeyDown"
+                 PreviewKeyDown="OnSearchBox_PreviewKeyDown"
                  TextChanged="OnSearchBox_TextChanged"/>
 
         <ListBox x:Name="ItemList" Grid.Row="1" MaxHeight="380" Margin="0,8,0,0"

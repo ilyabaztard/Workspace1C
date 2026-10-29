@@ -119,6 +119,66 @@ public sealed class CommandPaletteViewModelTests
         Assert.Equal(0, vm.SelectedIndex);
     }
 
+    // ===== Issue #84: единая навигация стрелками для обеих платформ (MoveSelection) =====
+
+    [Fact]
+    public void MoveSelection_MinusOneIsUp_PlusOneIsDown()
+    {
+        var vm = CreateVm();
+        vm.ApplyQuery("");
+
+        Assert.True(vm.MoveSelection(+1));
+        Assert.Equal(1, vm.SelectedIndex);
+        Assert.True(vm.MoveSelection(+1));
+        Assert.Equal(2, vm.SelectedIndex);
+
+        Assert.True(vm.MoveSelection(-1));
+        Assert.Equal(1, vm.SelectedIndex);
+        Assert.True(vm.MoveSelection(-1));
+        Assert.Equal(0, vm.SelectedIndex);
+    }
+
+    [Fact]
+    public void MoveSelection_RespectsBounds_NoWrap()
+    {
+        // Границы НЕ зацикливаются (прежнее поведение MoveUp/MoveDown): на первом
+        // элементе вверх и на последнем вниз — позиция не меняется.
+        var vm = CreateVm();
+        vm.ApplyQuery("");
+
+        Assert.False(vm.MoveSelection(-1));
+        Assert.Equal(0, vm.SelectedIndex);
+
+        Assert.True(vm.MoveSelection(+1));
+        Assert.True(vm.MoveSelection(+1));
+        Assert.True(vm.MoveSelection(+1));
+        Assert.True(vm.MoveSelection(+1));
+        Assert.False(vm.MoveSelection(+1));
+        Assert.Equal(4, vm.SelectedIndex);
+        Assert.Equal(5, vm.VisibleItems.Count);
+    }
+
+    [Fact]
+    public void MoveSelection_ZeroIsNoOp()
+    {
+        var vm = CreateVm();
+        vm.ApplyQuery("");
+
+        Assert.False(vm.MoveSelection(0));
+        Assert.Equal(0, vm.SelectedIndex);
+    }
+
+    [Fact]
+    public void MoveSelection_EmptyList_IsSafe()
+    {
+        var vm = new CommandPaletteViewModel();
+        vm.SetSource(System.Array.Empty<CommandPaletteItem>(), System.Array.Empty<CommandPaletteItem>());
+
+        Assert.False(vm.MoveSelection(-1));
+        Assert.False(vm.MoveSelection(+1));
+        Assert.Equal(-1, vm.SelectedIndex);
+    }
+
     [Fact]
     public void Reset_ClearsQueryAndSelectsFirst()
     {

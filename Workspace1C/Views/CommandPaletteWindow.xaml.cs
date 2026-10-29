@@ -50,12 +50,21 @@ namespace Workspace1C
                 SearchBox.CaretIndex = SearchBox.Text.Length;
         }
 
-        private void OnSearchBox_KeyDown(object sender, KeyEventArgs e)
+        /// <summary>
+        /// Обработчик клавиш поисковой строки. Стрелки Up/Down обрабатываются здесь
+        /// (issue #84): обычный KeyDown (bubbling) до этого обработчика не доходит —
+        /// TextBox помечает стрелки Handled внутренней обработкой (движение курсора в
+        /// многострочном поле / выделение), поэтому в XAML подключён PreviewKeyDown
+        /// (tunneling) — он приходит ДО внутренней обработки. Навигация — общая для
+        /// WPF и Avalonia: <see cref="CommandPaletteViewModel.MoveSelection"/>. Фокус
+        /// не покидает SearchBox — выбрано в ListBox синхронизируется по индексу.
+        /// </summary>
+        private void OnSearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             switch (e.Key)
             {
                 case Key.Down:
-                    if (_palette.MoveDown())
+                    if (_palette.MoveSelection(+1))
                     {
                         ItemList.SelectedIndex = _palette.SelectedIndex;
                         ItemList.ScrollIntoView(ItemList.SelectedItem);
@@ -64,7 +73,7 @@ namespace Workspace1C
                     break;
 
                 case Key.Up:
-                    if (_palette.MoveUp())
+                    if (_palette.MoveSelection(-1))
                     {
                         ItemList.SelectedIndex = _palette.SelectedIndex;
                         ItemList.ScrollIntoView(ItemList.SelectedItem);
