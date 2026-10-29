@@ -11,6 +11,79 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.1.1] — 2026-10-29
+
+### Исправлено
+
+- **Перетаскивание колонок во вкладках «Сеансы/Соединения/Блокировки/Рабочие
+  процессы» окна «Серверы 1С» теперь действительно «как в 1С» (issue #75,
+  Windows и Linux).** Обычное перетаскивание границы двигает ВСЕ колонки справа
+  как блок — их ширины не меняются, при переполнении области появляется
+  горизонтальная прокрутка; перетаскивание с зажатым Ctrl меняет ширину ТОЛЬКО
+  двух смежных колонок (минимальные ширины соблюдаются). Причина поломки
+  предыдущих фиксов — перехват вешался на Thumb-ручку по имени шаблона; теперь
+  перехват идёт ДО внутренней обработки DataGrid
+  (`PreviewMouseLeftButtonDown`/`CaptureMouse`), а единая математика вынесена в
+  [`ServerMonitorColumnWidthsStore.ApplyDragMoveBlock()`](Workspace1C/Services/ServerMonitorColumnWidthsStore.cs)
+  и
+  [`ApplyDragResizePair()`](Workspace1C/Services/ServerMonitorColumnWidthsStore.cs) —
+  одна реализация для WPF
+  ([`ServerMonitorWindow.xaml.cs`](Workspace1C/Views/ServerMonitorWindow.xaml.cs))
+  и Avalonia
+  ([`ServerMonitorWindow.Avalonia.cs`](Workspace1C/Views/ServerMonitorWindow.Avalonia.cs)).
+
+- **Автообновление «Серверов 1С» больше не «мешается» с подключением и
+  переключением сервера (issue #77, Windows и Linux).** При
+  подключении/переключении сервера таймер автообновления останавливается ДО
+  начала загрузки и возобновляется после успешного подключения, если галка
+  автообновления стоит; иначе «микс» от автообновления и подключения давал
+  ошибки
+  ([`ServerMonitorViewModel.cs`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)).
+
+- **Удаление базы из кластера: завершение сеансов с повторами и понятным
+  результатом (issue #69, Windows и Linux).** После успешной блокировки
+  регламентных заданий выполняется до 5 попыток завершения сеансов/разрыва
+  соединений с паузами (1–2 с) и индикацией «Попытка N из M…» в статус-строке;
+  ошибка «освобождаемый контекст» обрабатывается паузой и повторной попыткой;
+  при исчерпании попыток — понятное сообщение и диалог повтора (программа не
+  зацикливается)
+  ([`ServerMonitorViewModel.cs`](Workspace1C/ViewModels/ServerMonitorViewModel.cs)).
+
+- **Вкладка «Лицензии» в «Серверы 1С»: понятное сообщение без ring и порядок
+  вкладок (issue #83, Windows и Linux).** Если утилита ring не найдена, в журнал
+  пишется INFO (а не WARN-спам при автообновлении каждые ~5 с), а во вкладке
+  показывается понятное сообщение с указанием, где искалась утилита (PATH и
+  каталог bin платформы рядом с rac)
+  ([`RingLicenseService.cs`](Workspace1C/Services/RingLicenseService.cs)); вкладка
+  «Лицензии» перенесена ПЕРЕД «Информация о кластере» (WPF
+  [`ServerMonitorWindow.xaml`](Workspace1C/Views/ServerMonitorWindow.xaml) и
+  Avalonia).
+
+- **Мастер «Импорт/Миграция из кластера 1С»: без лишнего вопроса при копировании
+  (issue #41, Windows и Linux).** При установленной галочке «Не удалять в старом
+  кластере» вопрос о замене строк подключения больше не задаётся: копии
+  добавляются в список с корректным подключением, старые строки остаются на
+  месте. При переносе (галочка снята) поведение прежнее
+  ([`ClusterMigrationViewModel.cs`](Workspace1C/ViewModels/ClusterMigrationViewModel.cs)).
+
+### Тесты
+
+- [`ServerMonitorColumnWidthsTests.cs`](Workspace1C.Tests/ServerMonitorColumnWidthsTests.cs) /
+  [`Issue75ServerMonitorColumnsTests.cs`](Workspace1C.Tests/Issue75ServerMonitorColumnsTests.cs):
+  эмуляция drag, capture-циклы, математика `ApplyDragMoveBlock`/`ApplyDragResizePair`;
+- [`ServerMonitorViewModelTests.cs`](Workspace1C.Tests/ServerMonitorViewModelTests.cs):
+  пауза таймера автообновления при подключении (#77), ретраи завершения сеансов (#69);
+- [`Issue83LicenseTabTests.cs`](Workspace1C.Tests/Issue83LicenseTabTests.cs) (новый):
+  INFO вместо WARN при отсутствии ring, понятное сообщение вкладки, порядок вкладок;
+- [`ClusterMigrationViewModelTests.cs`](Workspace1C.Tests/ClusterMigrationViewModelTests.cs) /
+  [`Issue41WindowLayoutTests.cs`](Workspace1C.Tests/Issue41WindowLayoutTests.cs):
+  #41 — без вопроса о замене строк при «Не удалять в старом кластере», стражи окон;
+- стабилизация флака FeatureDataStore (`DisableParallelization`).
+
+Итого в проекте **~4 985 юнит-тестов**; Linux-сборка (Avalonia) также зелёная.
+
+---
+
 ## [1.0.1.0] — 2026-10-28
 
 ### Добавлено
