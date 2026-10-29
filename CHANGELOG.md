@@ -11,6 +11,63 @@
 > возможности от точечных исправлений и регрессий предыдущих сборок.
 ---
 
+## [1.0.1.2] — 2026-10-29
+
+### Исправлено / Добавлено
+
+- **Стрелки Up/Down в поле поиска командной палитры снова работают (issue #84,
+  Windows и Linux).** Внутренняя обработка WPF TextBox / Avalonia TextBox помечает
+  стрелки Handled на bubbling-этапе раньше, чем доходит обычный KeyDown, поэтому
+  обработчик переведён на tunneling-этап: WPF — `PreviewKeyDown`
+  ([`CommandPaletteWindow.xaml`](Workspace1C/Views/CommandPaletteWindow.xaml),
+  [`CommandPaletteWindow.xaml.cs`](Workspace1C/Views/CommandPaletteWindow.xaml.cs)),
+  Avalonia — `AddHandler(KeyDownEvent, Tunnel)`
+  ([`CommandPaletteWindow.Avalonia.cs`](Workspace1C/Views/CommandPaletteWindow.Avalonia.cs)).
+  Общая для обеих платформ навигация — `MoveSelection(int delta)` в
+  [`CommandPaletteViewModel`](Workspace1C/ViewModels/CommandPaletteViewModel.cs) —
+  с уважением границ списка; фокус остаётся в поле поиска, выбор в списке
+  синхронизируется по индексу.
+
+- **«Публикация на веб-сервере»: файл алиасов виден даже без детектора инстансов
+  (issue #63, Windows и Linux).** Когда детектор инстансов Apache не находил
+  службу/конфиг (нестандартная служба, недоступный реестр), fallback-ветка
+  очищала список файлов и `1c8Aliases*.conf` в списке webinst не появлялся. Теперь
+  при ручном указании/правке поля конфигурации строится «синтетический» инстанс
+  из конфига на диске
+  ([`WebPublishService.BuildInstanceFromConf`](Workspace1C/Services/WebPublishService.cs))
+  через тот же include-граф/Define (`ApacheInstanceDetector.PopulateIncludes`),
+  и в списке появляются главный конфиг и файл алиасов, а каталог публикации и URL
+  с портом берутся из конфига
+  ([`WebPublishViewModel`](Workspace1C/ViewModels/WebPublishViewModel.cs)).
+
+- **Отладка публикации: новое направление логирования CM_PUBLISH (issue #63,
+  Windows и Linux).** Добавлено направление **CM_PUBLISH** (выключено по
+  умолчанию, работает под общим выключателем CM_ON из issue #80): пишет найденные
+  инстансы (служба/конфиг/ServerRoot), причину fallback, include-граф, Define,
+  найденные alias-файлы и попадание их в список. Категория автоматически появилась
+  на вкладке «Логирование» (WPF и Avalonia) с пояснением ru/en
+  ([`LogCategory`](Workspace1C/Services/LogCategory.cs),
+  [`TraceFlagsFormat`](Workspace1C/Services/TraceFlagsFormat.cs)).
+
+### Тесты
+
+- [`CommandPaletteViewModelTests.cs`](Workspace1C.Tests/CommandPaletteViewModelTests.cs):
+  +`MoveSelection` (навигация по списку с уважением границ) — #84;
+- [`CommandPaletteKeyNavigationTests.cs`](Workspace1C.Tests/CommandPaletteKeyNavigationTests.cs)
+  (новый): стражи PreviewKeyDown/Tunnel и фокуса в поисковой строке — #84;
+- [`WebPublishIssue63Tests.cs`](Workspace1C.Tests/WebPublishIssue63Tests.cs):
+  +fallback-сценарий на фикстурах 27_conf — в ConfTargets ровно
+  `1c8Aliases27.conf`, каталог публикации `…\htdocs\27\demo_27`, URL
+  `http://localhost:8027/demo_27/` — #63;
+- [`WebPublishPublishCategoryTests.cs`](Workspace1C.Tests/WebPublishPublishCategoryTests.cs)
+  (новый): CM_PUBLISH (гейт CM_ON, записи отладки публикации) — #63;
+- [`LoggingCategoriesTests.cs`](Workspace1C.Tests/LoggingCategoriesTests.cs):
+  обновлён до 8 направлений (включая CM_PUBLISH).
+
+Итого в проекте **~5 001 юнит-тест**; Linux-сборка (Avalonia) также зелёная.
+
+---
+
 ## [1.0.1.1] — 2026-10-29
 
 ### Исправлено
