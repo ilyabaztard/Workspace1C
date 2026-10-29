@@ -17,6 +17,7 @@ namespace Workspace1C.Tests;
 /// синхронизации по сетевой папке (выгрузка/скачивание/конфликт-бэкапы, отсутствие
 /// «пинг-понга»), шифрование пароля и маскировка (пароль не попадает в журнал).
 /// </summary>
+[Collection("LocalDataStoreState")]
 public class SettingsSyncTests : IDisposable
 {
     private readonly string _tempDir = Path.Combine(

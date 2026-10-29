@@ -9,6 +9,7 @@ namespace Workspace1C.Tests;
 /// (Trim, удаление пустых/дубликатов); битый файл не роняет загрузку;
 /// временный файл (атомарность) не остаётся после сохранения.
 /// </summary>
+[Collection("LocalDataStoreState")]
 public sealed class ServicesStoreTests
 {
     [Fact]

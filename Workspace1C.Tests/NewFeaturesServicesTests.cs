@@ -13,6 +13,7 @@ namespace Workspace1C.Tests;
 /// технологический журнал, веб-публикация, мониторинг, копии СУБД, команды
 /// Telegram-бота и общие списки баз.
 /// </summary>
+[Collection("LocalDataStoreState")]
 public sealed class NewFeaturesServicesTests
 {
     // ---------------- Git (1.0.0.69) ----------------

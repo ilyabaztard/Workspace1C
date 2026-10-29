@@ -19,6 +19,17 @@ namespace Workspace1C.Tests;
 public sealed class TraceFlagsStateCollection { }
 
 /// <summary>
+/// Коллекция xUnit с отключённой параллельностью для тестов, разделяющих ГЛОБАЛЬНОЕ
+/// состояние <see cref="Workspace1C.Services.FeatureDataStore.DirectoryOverride"/>:
+/// классы, которые на время теста подменяют каталог данных профиля (FeatureDataStore),
+/// выполняются последовательно — иначе чужие подмены каталога перемежаются между
+/// «сохранить» и «прочитать», и JSON-хранилище читается/пишется в чужих каталогах
+/// (тест вида «Save → Load» получает значение по умолчанию).
+/// </summary>
+[CollectionDefinition("LocalDataStoreState", DisableParallelization = true)]
+public sealed class LocalDataStoreStateCollection { }
+
+/// <summary>
 /// Глобальная подготовка тестового процесса (выполняется один раз при загрузке сборки,
 /// до всех тестов). INFO-диагностика редиректов/входа портала 1С (issue #347, флаг
 /// CM_REDIRECT в trace.json) нужна тестам входа (<see cref="OneCUpdatesLoginFlowTests"/>)

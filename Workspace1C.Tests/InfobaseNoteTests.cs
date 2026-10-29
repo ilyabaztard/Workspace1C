@@ -16,6 +16,7 @@ namespace Workspace1C.Tests;
 /// (<see cref="HtmlReportExporter.MarkdownToHtml"/>/BuildDocument) и перенос заметок
 /// через JSON-снимок (только markdown + имена секретов, без значений).
 /// </summary>
+[Collection("LocalDataStoreState")]
 public class InfobaseNoteTests : IDisposable
 {
     private readonly string _tempDir = Path.Combine(

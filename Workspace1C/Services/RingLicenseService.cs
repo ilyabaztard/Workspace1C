@@ -327,7 +327,13 @@ public sealed class RingLicenseService : IRingLicenseService
             }
             else if (!string.IsNullOrWhiteSpace(result.CombinedOutput))
             {
-                _logger?.Warn($"RING: {source} — не удалось получить лицензии: {result.CombinedOutput}");
+                // issue #83 (комментарий 7OH от 2026-10-28): недоступность утилиты лицензий
+                // (ring не найден в PATH/рядом с rac — «An error occurred trying to start
+                // process 'ring'… Не удается найти указанный файл») — ПРОГНОЗИРУЕМАЯ внешняя
+                // причина, а не ошибка приложения: при автообновлении каждые ~5 с в общий
+                // журнал писать WARN-спам больше не нужно — уровень INFO/DEBUG; понятное
+                // сообщение для вкладки «Лицензии» формирует следующий блок.
+                _logger?.Info($"RING: {source} — утилита лицензий недоступна: {result.CombinedOutput}");
             }
         }
 
@@ -336,18 +342,33 @@ public sealed class RingLicenseService : IRingLicenseService
         if (fallback.Count > 0)
         {
             const string warning =
-                "Утилита «ring license list» / «licensetool» не найдена; показаны записи из " +
-                "каталога файлов лицензий платформы.";
-            _logger?.Warn($"RING: {warning} Найдено файлов: {fallback.Count}.");
+                "Не удалось получить список лицензий через утилиту ring (не найдена); показаны " +
+                "записи из каталога файлов лицензий платформы. Установите ring (обычно лежит " +
+                "в каталоге bin платформы рядом с rac) и нажмите «Обновить».";
+            _logger?.Info($"RING: {warning} Найдено файлов: {fallback.Count}.");
             return new RingLicenseResult { Licenses = fallback, Warning = warning };
         }
 
-        return new RingLicenseResult
-        {
-            Warning =
-                "Утилита «ring license list» / «licensetool» не найдена, а каталог файлов " +
-                "лицензий платформы пуст. Установленные программные лицензии недоступны."
-        };
+        return new RingLicenseResult { Warning = BuildUnavailableMessage() };
+    }
+
+    /// <summary>
+    /// Понятное сообщение вкладки «Лицензии», когда утилита ring/licensetool недоступна
+    /// (issue #83): в тексте — где искалась утилита и что сделать, чтобы её найти, вместо
+    /// пустой вкладки. Internal — для юнит-тестов читаемого сообщения.
+    /// </summary>
+    internal static string BuildUnavailableMessage()
+    {
+#if WINDOWS
+        const string searched =
+            "искал: ring в PATH, ring.exe в каталоге bin платформы рядом с rac";
+#else
+        const string searched =
+            "искал: ring в PATH, licensetool в каталогах /opt/1cv8";
+#endif
+        return "Не удалось получить список лицензий: не найдена утилита ring (" + searched +
+               "; каталог файлов лицензий платформы пуст). Установите ring (обычно лежит в " +
+               "каталоге bin платформы рядом с rac) либо добавьте его в PATH и нажмите «Обновить».";
     }
 
     /// <summary>
