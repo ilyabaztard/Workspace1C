@@ -473,8 +473,164 @@ public sealed class WebPublishIssue63Tests
         }
     }
 
+    // ---------- Issue #63 (последний комментарий 7OH 2026-10-28 «файла в списке нет»):
+    // fallback-ветка — инстансы не найдены, конфиг вводится/выбирается вручную ----------
+
     [Fact]
-    public void ViewModel_Fallback_FindsAliasFromIncludePatternWhenVarsUnresolved_Issue63()
+    public void ViewModel_FallbackBranch_ManualConfInput_BuildsConfTargetsAndUrlWithPort_Issue63()
+    {
+        // Сценарий (а) из разбора issue: на машине пользователя детектор инстансов
+        // ничего не вернул (служба httpd нестандартно называется/реестр недоступен) —
+        // в окне лишь fallback-пункт «Apache 2.4», ConfTargets при этом РАНЬШЕ был
+        // пуст («файла в списке нет»). После фикса fallback-ветка строит список из
+        // введённого вручную конфига: ровно один файл алиасов 1c8Aliases27.conf
+        // (из реальных фикстур 27_conf.zip), каталог «…\htdocs\27», URL с портом 8027.
+        var testData = Path.Combine(FindRepoRoot(), "Workspace1C.Tests", "TestData", "Apache27Conf");
+        var tempDir = Path.Combine(Path.GetTempPath(), "W1C_Issue63_FallbackManual_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var confDir = Path.Combine(tempDir, "conf");
+            Directory.CreateDirectory(confDir);
+            // Реальная раскладка пользователя: httpd27.conf → Include conf/httpd.conf →
+            // Include "${SRVROOT}/conf/1c8Aliases${OneCPort}.conf". SRVROOT переписываем
+            // на тестовый каталог, чтобы include-цели существовали «как на машине».
+            var srvRoot = tempDir.Replace('\\', '/');
+            File.WriteAllText(Path.Combine(confDir, "httpd27.conf"),
+                File.ReadAllText(Path.Combine(testData, "httpd27.conf")));
+            File.WriteAllText(Path.Combine(confDir, "httpd.conf"),
+                File.ReadAllText(Path.Combine(testData, "httpd.conf")).Replace("c:/Apache/Apache24", srvRoot));
+            File.WriteAllText(Path.Combine(confDir, "1c8Aliases27.conf"),
+                File.ReadAllText(Path.Combine(testData, "1c8Aliases27.conf")).Replace("c:/Apache/Apache24", srvRoot));
+
+            var infobase = new Infobase
+            {
+                Name = "Тестовая база",
+                Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+            };
+            // Инстансы детектора НЕ передаём — воспроизводим fallback-ветку issue #63.
+            var vm = new WebPublishViewModel(new[] { infobase }, infobase, Array.Empty<ApacheInstance>());
+
+            // Выбираем fallback-пункт «Apache 2.4» (не IIS, не обнаруженный инстанс).
+            var fallbackIndex = -1;
+            for (var i = 0; i < vm.ServerOptions.Count; i++)
+            {
+                vm.ServerIndex = i;
+                if (vm.IsApache && !vm.IsInstanceSelected)
+                {
+                    fallbackIndex = i;
+                    break;
+                }
+            }
+            Assert.True(fallbackIndex >= 0, "Fallback-пункт «Apache по умолчанию» не найден в ServerOptions");
+            vm.ServerIndex = fallbackIndex;
+            vm.VirtualDirectory = "demo_27";
+
+            // Ручная правка поля «Конфигурация»: пользователь указывает свой конфиг.
+            vm.ApacheConfPath = Path.Combine(confDir, "httpd27.conf");
+
+            Assert.True(vm.HasConfTargets,
+                "ConfTargets должен строиться из вручную введённого конфига (fallback-ветка, issue #63)");
+            var aliasTargets = vm.ConfTargetPaths
+                .Where(p => Path.GetFileName(p).StartsWith("1c8Aliases", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            Assert.Single(aliasTargets);
+            Assert.EndsWith("1c8Aliases27.conf", aliasTargets[0], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(vm.ConfTargetPaths,
+                p => p.EndsWith("httpd27.conf", StringComparison.OrdinalIgnoreCase));
+
+            // Значения по умолчанию из введённого конфига: DocumentRoot + порт Listen.
+            Assert.Equal(Path.GetFullPath(Path.Combine(tempDir, "htdocs", "27", "demo_27")),
+                vm.PhysicalDirectory, ignoreCase: true);
+            Assert.Equal("http://localhost:8027/demo_27/", vm.Url);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); }
+            catch { /* временный каталог не влияет на результат теста */ }
+        }
+    }
+
+    [Fact]
+    public void ViewModel_FallbackBranch_MissingConf_EmptyTargets_NoCrash_Issue63()
+    {
+        // Некорректный ручной путь не роняет окно: ConfTargets пуст, ApacheConfPath
+        // сохраняет введённое значение (валидация webinst покажет ошибку при публикации).
+        var infobase = new Infobase
+        {
+            Name = "Тестовая база",
+            Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+        };
+        var vm = new WebPublishViewModel(new[] { infobase }, infobase, Array.Empty<ApacheInstance>());
+
+        var fallbackIndex = -1;
+        for (var i = 0; i < vm.ServerOptions.Count; i++)
+        {
+            vm.ServerIndex = i;
+            if (vm.IsApache && !vm.IsInstanceSelected)
+            {
+                fallbackIndex = i;
+                break;
+            }
+        }
+        Assert.True(fallbackIndex >= 0);
+        vm.ServerIndex = fallbackIndex;
+        vm.ApacheConfPath = Path.Combine(Path.GetTempPath(), "no_such_dir_1c_w1c", "httpd-missing.conf");
+
+        Assert.False(vm.HasConfTargets);
+        Assert.Equal(-1, vm.ConfTargetIndex);
+        Assert.EndsWith("httpd-missing.conf", vm.ApacheConfPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ViewModel_FallbackBranch_FirstEntryIsMainConf_Issue63()
+    {
+        // Основной конфиг службы — первый пункт ConfTargets, даже в fallback-ветке:
+        // значения webinst по умолчанию берутся из него (webinst -confpath).
+        var tempDir = Path.Combine(Path.GetTempPath(), "W1C_Issue63_FallbackFirst_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var mainPath = Path.Combine(tempDir, "httpd27.conf");
+            File.WriteAllText(mainPath,
+                "Define SRVROOT \"" + tempDir.Replace("\\", "/") + "\"\r\n" +
+                "Define OneCPort 27\r\n" +
+                "Include \"${SRVROOT}/conf/1c8Aliases27.conf\"\r\n");
+            var confDir = Path.Combine(tempDir, "conf");
+            Directory.CreateDirectory(confDir);
+            File.WriteAllText(Path.Combine(confDir, "1c8Aliases27.conf"), "# 1c\nAlias \"/Demo\" \"/tmp/Demo/\"\n");
+
+            var infobase = new Infobase
+            {
+                Name = "Тестовая база",
+                Connection = new ConnectionSettings { Type = ConnectionType.File, FilePath = @"D:\1C\test" }
+            };
+            var vm = new WebPublishViewModel(new[] { infobase }, infobase, Array.Empty<ApacheInstance>());
+            var fallbackIndex = -1;
+            for (var i = 0; i < vm.ServerOptions.Count; i++)
+            {
+                vm.ServerIndex = i;
+                if (vm.IsApache && !vm.IsInstanceSelected)
+                {
+                    fallbackIndex = i;
+                    break;
+                }
+            }
+            vm.ServerIndex = fallbackIndex;
+            vm.ApacheConfPath = mainPath;
+
+            Assert.True(vm.HasConfTargets);
+            Assert.EndsWith("httpd27.conf", vm.ConfTargetPaths[0], StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, vm.ConfTargetIndex);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); }
+            catch { /* временный каталог не влияет на результат теста */ }
+        }
+    }
+
+    [Fact]
+    public void ViewModel_FallbackFindsAliasFromIncludePatternWhenVarsUnresolved_Issue63()
     {
         // Include «${SRVROOT}/conf/1c8Aliases${OneCPort}.conf» с НЕРАСКРЫТОЙ переменной
         // (Define нигде нет): в Include-графе файла нет, но детектор запомнил шаблон

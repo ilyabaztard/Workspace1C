@@ -29,6 +29,8 @@ public sealed class WebPublishViewModel : ViewModelBase
     private int _serverIndex;
     private int _confTargetIndex = -1;
     private ApacheInstance? _selectedInstance;
+    private ApacheInstance? _fallbackInstance;
+    private bool _suppressConfPathRebuild;
     private string _virtualDirectory = string.Empty;
     private string _physicalDirectory = string.Empty;
     private string _apacheConfPath = string.Empty;
@@ -57,6 +59,8 @@ public sealed class WebPublishViewModel : ViewModelBase
             servers.Add(new ServerOption(WebServerKind.Apache24, null));
         _servers = servers;
         ServerOptions = _servers.Select(DisplayServerOption).ToList();
+
+        TraceServerOptions(instances);
 
         _serverIndex = 0;
         ApplyCurrentServerDefaults(initial: true);
@@ -123,7 +127,13 @@ public sealed class WebPublishViewModel : ViewModelBase
             if (!SetProperty(ref _confTargetIndex, value))
                 return;
             if (_confTargetIndex >= 0 && _confTargetIndex < _confTargetPaths.Count)
-                ApacheConfPath = _confTargetPaths[_confTargetIndex];
+            {
+                // Выбор готового пункта списка не должен перечитывать конфиг заново
+                // (см. ApacheConfPath) — значение уже получено из построенного графа.
+                _suppressConfPathRebuild = true;
+                try { ApacheConfPath = _confTargetPaths[_confTargetIndex]; }
+                finally { _suppressConfPathRebuild = false; }
+            }
             // Issue #63: при смене файла webinst пересчитываем каталог публикации и
             // порт/URL — значения по умолчанию берутся только из конфига службы и его
             // include-графа (DocumentRoot/Listen инстанса), выбор файла их не «сбрасывает».
@@ -150,12 +160,39 @@ public sealed class WebPublishViewModel : ViewModelBase
 
     public string PhysicalDirectory { get => _physicalDirectory; set => SetProperty(ref _physicalDirectory, value ?? string.Empty); }
 
-    public string ApacheConfPath { get => _apacheConfPath; set => SetProperty(ref _apacheConfPath, value ?? string.Empty); }
+    /// <summary>
+    /// Файл конфигурации Apache для webinst. При РУЧНОЙ правке поля (не из выпадающего
+    /// списка ConfTargets) конфиг перечитывается, а список файлов и значения по умолчанию
+    /// перестраиваются — выделенная строка:
+    /// issue #63, комментарий 7OH 2026-10-28 «файла в списке нет»: даже когда детектор
+    /// инстансов не нашёл службу (fallback-ветка), введённый/выбранный вручную конфиг
+    /// обязан дать список «основной conf + include-файлы (1c8Aliases*.conf)».
+    /// </summary>
+    public string ApacheConfPath
+    {
+        get => _apacheConfPath;
+        set
+        {
+            var newValue = value ?? string.Empty;
+            if (!SetProperty(ref _apacheConfPath, newValue))
+                return;
+            if (_suppressConfPathRebuild)
+                return;
+            RebuildFromEditedConfPath();
+        }
+    }
 
     public string ConnectionString { get => _connectionString; set => SetProperty(ref _connectionString, value ?? string.Empty); }
 
-    /// <summary>Порт слушателя выбранного инстанса Apache (LISTEN); null — 80.</summary>
-    private int? ListenPort => _selectedInstance?.ListenPorts.FirstOrDefault();
+    /// <summary>
+    /// Инстанс, из которого берутся значения по умолчанию (DocumentRoot/Listen): для
+    /// обнаруженной службы — <see cref="_selectedInstance"/>, для fallback-ветки/ручного
+    /// конфига — <see cref="_fallbackInstance"/> (построен из введённого conf-файла).
+    /// </summary>
+    private ApacheInstance? EffectiveInstance => _fallbackInstance ?? _selectedInstance;
+
+    /// <summary>Порт слушателя инстанса Apache (LISTEN); null — 80.</summary>
+    private int? ListenPort => EffectiveInstance?.ListenPorts.FirstOrDefault();
 
     /// <summary>Адрес опубликованной базы (для Apache учитывается порт LISTEN — issue #63).</summary>
     public string Url => WebPublishService.LocalUrl(VirtualDirectory, ListenPort);
@@ -235,6 +272,7 @@ public sealed class WebPublishViewModel : ViewModelBase
 
         var option = _servers[_serverIndex];
         _selectedInstance = option.Instance;
+        _fallbackInstance = null;
 
         if (option.Instance is { } instance)
         {
@@ -244,10 +282,16 @@ public sealed class WebPublishViewModel : ViewModelBase
         }
         else
         {
-            _confTargetPaths.Clear();
-            _confTargets.Clear();
-            _confTargetIndex = -1;
-            _apacheConfPath = WebPublishService.SuggestApacheConf();
+            // Fallback-ветка (issue #63, «файла в списке нет»): детектор инстансов не
+            // нашёл службу/конфиг — но список файлов для webinst обязан строиться и
+            // здесь, иначе пользователь снова не увидит 1c8Aliases*.conf. Конфиг по
+            // умолчанию перечитывается через тот же детектор-парсер (PopulateIncludes),
+            // а при ручной правке ApacheConfPath список перестраивается заново.
+            var fallbackConf = WebPublishService.SuggestApacheConf();
+            _apacheConfPath = fallbackConf;
+            ApplyManualConfDefaults(fallbackConf, option.Kind);
+            TracePublish("fallback-ветка: инстансы не найдены (или выбран «Apache по умолчанию»), " +
+                         "конфиг для webinst — «" + fallbackConf + "»");
             RebuildPhysicalForCurrent();
         }
 
@@ -261,6 +305,69 @@ public sealed class WebPublishViewModel : ViewModelBase
         OnPropertyChanged(nameof(Url));
 
         _ = initial;
+    }
+
+    /// <summary>
+    /// Перестраивает список файлов webinst (ConfTargets) и значения по умолчанию из
+    /// конфига, который пользователь ввёл/выбрал ВРУЧНУЮ в поле ApacheConfPath
+    /// (issue #63: fallback-ветка и ручной ввод). Работает через
+    /// <see cref="WebPublishService.BuildInstanceFromConf"/> — тот же парсер include-графа,
+    /// что и для обнаруженных инстансов.
+    /// </summary>
+    private void RebuildFromEditedConfPath()
+    {
+        if (_servers.Count == 0)
+            return;
+        var option = _servers[_serverIndex];
+        if (option.Kind == WebServerKind.Iis)
+            return;
+        if (string.IsNullOrWhiteSpace(_apacheConfPath))
+            return;
+
+        _suppressConfPathRebuild = true;
+        try
+        {
+            TracePublish("ручная правка конфига webinst: «" + _apacheConfPath + "»");
+            ApplyManualConfDefaults(_apacheConfPath, option.Kind);
+
+            OnPropertyChanged(nameof(ConfTargets));
+            OnPropertyChanged(nameof(ConfTargetIndex));
+            OnPropertyChanged(nameof(HasConfTargets));
+            OnPropertyChanged(nameof(IsInstanceSelected));
+            OnPropertyChanged(nameof(PhysicalDirectory));
+            OnPropertyChanged(nameof(ApacheConfPath));
+            OnPropertyChanged(nameof(Url));
+            RebuildPhysicalForCurrent();
+        }
+        finally
+        {
+            _suppressConfPathRebuild = false;
+        }
+    }
+
+    /// <summary>
+    /// Fallback-ветка: строит ConfTargets «основной конфиг + include-файлы (в т.ч.
+    /// 1c8Aliases*.conf)» по файлу на диске. Если файла нет — список остаётся пустым,
+    /// окно не падает (issue #63).
+    /// </summary>
+    private void ApplyManualConfDefaults(string confPath, WebServerKind kind)
+    {
+        var instance = WebPublishService.BuildInstanceFromConf(confPath, kind);
+        _fallbackInstance = instance;
+        if (instance is null)
+        {
+            _confTargetPaths.Clear();
+            _confTargets.Clear();
+            _confTargetIndex = -1;
+            TracePublish(string.IsNullOrWhiteSpace(confPath)
+                ? "конфиг не задан — список файлов webinst пуст"
+                : "конфиг не прочитан (файл отсутствует/недоступен): «" + confPath + "» — список файлов webinst пуст");
+            return;
+        }
+
+        BuildConfTargets(instance);
+        TracePublish($"конфиг построен: {instance.ConfPath}; " +
+                     $"DocumentRoot={instance.DocumentRoot}; Listen=[{string.Join(",", instance.ListenPorts ?? Array.Empty<int>())}]");
     }
 
     private void BuildConfTargets(ApacheInstance instance)
@@ -278,6 +385,7 @@ public sealed class WebPublishViewModel : ViewModelBase
             _confTargets.Add(string.Format(
                 LocalizationManager.T("WebPublish.ConfTargetMain"),
                 Path.GetFileName(instance.ConfPath)));
+            TracePublish("основной конфиг в списке webinst: " + instance.ConfPath);
         }
         var aliasFileInGraph = false;
         foreach (var include in instance.IncludeFiles ?? Array.Empty<string>())
@@ -291,6 +399,16 @@ public sealed class WebPublishViewModel : ViewModelBase
                 LocalizationManager.T("WebPublish.ConfTargetInclude"),
                 Path.GetFileName(include)));
             aliasFileInGraph |= IsAliasFileName(include);
+            TracePublish("include-файл графа в списке webinst: " + include);
+        }
+
+        // Раскрытый Define-граф (issue #63, «а переменные из файла кто подставлять будет
+        // сейчас?») — при отладке видно, по каким значениям резолвятся Include/DocumentRoot
+        // и номер инстанса (OneCPort → «27» при fallback-поиске файла алиасов).
+        if (instance.Defines is { Count: > 0 })
+        {
+            foreach (var pair in instance.Defines)
+                TracePublish($"Define {pair.Key} = {pair.Value}");
         }
 
         // Fallback (issue #63, «файл алиаса по-прежнему не вернулся»): файл алиасов
@@ -310,11 +428,43 @@ public sealed class WebPublishViewModel : ViewModelBase
                 _confTargets.Add(string.Format(
                     LocalizationManager.T("WebPublish.ConfTargetInclude"),
                     Path.GetFileName(alias)));
+                TracePublish("fallback: файл алиасов добавлен в список webinst: " + alias);
+            }
+            else
+            {
+                TracePublish("fallback: файл алиасов по include-строке/имени инстанса не найден");
             }
         }
 
         _confTargetIndex = _confTargetPaths.Count > 0 ? 0 : -1;
         _apacheConfPath = _confTargetPaths.Count > 0 ? _confTargetPaths[0] : string.Empty;
+    }
+
+    /// <summary>INFO-запись направления «Публикация на веб-сервере» (issue #63, комментарий
+    /// 7OH 2026-10-28 «давайте отладку и тут включать подробную»): пишется в журнал
+    /// приложения с префиксом «[CM_PUBLISH]» только при включённых категории CM_PUBLISH
+    /// и общем выключателе CM_ON (записи выполненных операций — в собственном логе окна).</summary>
+    private static void TracePublish(string message) => Log.Info(LogCategory.Publish, message);
+
+    /// <summary>
+    /// Трассирует результат обнаружения инстансов (issue #63): для каждого найденного —
+    /// имя службы, конфиг и ServerRoot; при пустом списке — причину перехода на
+    /// fallback-ветку (по логу сразу видно, что окно работает «по умолчанию»).
+    /// </summary>
+    private void TraceServerOptions(IReadOnlyList<ApacheInstance>? instances)
+    {
+        var found = instances ?? Array.Empty<ApacheInstance>();
+        if (found.Count == 0)
+        {
+            TracePublish("инстансы Apache не обнаружены (службы httpd не найдены/реестр недоступен) — " +
+                         "доступен только fallback «Apache по умолчанию»");
+            return;
+        }
+        foreach (var instance in found)
+        {
+            TracePublish($"инстанс Apache найден: служба={instance.Name}, " +
+                         $"конфиг={instance.ConfPath}, ServerRoot={instance.ServerRoot}");
+        }
     }
 
     /// <summary>Имя файла алиасов 1С: «1c8Aliases27.conf» и т.п.</summary>
@@ -610,7 +760,11 @@ public sealed class WebPublishViewModel : ViewModelBase
         if (_servers.Count == 0)
             return;
         var option = _servers[_serverIndex];
-        if (option.Instance is { } instance)
+        // EffectiveInstance: для обнаруженной службы — это она; для fallback-ветки/
+        // ручного конфига — построенный из введённого файла (issue #63: каталог и
+        // порт обязаны взяться из конфига, а не из «обычного» C:\Apache24\htdocs).
+        var instance = EffectiveInstance;
+        if (instance is not null)
         {
             // DocumentRoot из конфига (issue #63): точный каталог публикации инстанса
             // (включает подкаталог сайта — «ServerRoot\htdocs\27»); fallback — Htdocs.

@@ -55,6 +55,13 @@ public static class LogCategory
     /// переключения схемы/палитры).</summary>
     public const string Themes = "CM_THEMES";
 
+    /// <summary>CM_PUBLISH: окно «Публикация на веб-сервере» (issue #63, комментарий
+    /// 7OH 2026-10-28: «давайте отладку и тут включать подробную») — найденные
+    /// инстансы Apache, include-граф конфигурации и файлы алиасов 1С в списке
+    /// webinst, порядок fallback-ветки (почему инстансы не найдены/файл не попал
+    /// в список). Выключено по умолчанию, как все категории.</summary>
+    public const string Publish = "CM_PUBLISH";
+
     /// <summary>Все категории направлений вкладки «Логирование» (порядок вывода)
     /// — в терминах issue #80. Существовавшие до неё диагностические флаги
     /// (CM_COLUMNS, CM_MENUCLOSE и др.) выводятся отдельной группой «Диагностика».</summary>
@@ -66,7 +73,8 @@ public static class LogCategory
         Backup,
         Ibases,
         Jobs,
-        Themes
+        Themes,
+        Publish
     };
 
     /// <summary>

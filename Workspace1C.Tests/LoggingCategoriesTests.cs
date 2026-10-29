@@ -55,13 +55,16 @@ public sealed class LoggingCategoriesTests : IDisposable
     }
 
     [Fact]
-    public void AllCategories_ContainsSevenDirectionsAndDiagnostics_NoDuplicates()
+    public void AllCategories_ContainsAllDirectionsAndDiagnostics_NoDuplicates()
     {
         Assert.Equal(
             new[]
             {
                 "CM_MAIN_WINDOW", "CM_RAC", "CM_BASE_RUN", "CM_BACKUP",
-                "CM_IBASES", "CM_JOBS", "CM_THEMES"
+                "CM_IBASES", "CM_JOBS", "CM_THEMES",
+                // Issue #63 (комментарий 7OH 2026-10-28 «давайте отладку и тут
+                // включать подробную»): направление «Публикация на веб-сервере».
+                "CM_PUBLISH"
             },
             LogCategory.DirectionCategories);
 

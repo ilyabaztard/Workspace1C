@@ -534,6 +534,8 @@
     "Settings.Logging.CatJobsDesc": "Scheduled tasks: launch, catch-up run, scheduler background jobs.",
     "Settings.Logging.CatThemes": "Theme application",
     "Settings.Logging.CatThemesDesc": "Debug records of theme switching and application.",
+    "Settings.Logging.CatPublish": "Web publish",
+    "Settings.Logging.CatPublishDesc": "“Publish on web server” window: detected Apache instances, config include graph, 1C alias files in the webinst list and the fallback branch reason.",
     "Settings.Logging.CatColumns": "List columns",
     "Settings.Logging.CatColumnsDesc": "Dump of list columns and their width changes.",
     "Settings.Logging.CatMenuclick": "Context menu opening",

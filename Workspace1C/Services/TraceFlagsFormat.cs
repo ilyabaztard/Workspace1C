@@ -115,7 +115,8 @@ internal static class TraceFlagsFormat
         "CM_BACKUP",
         "CM_IBASES",
         "CM_JOBS",
-        "CM_THEMES"
+        "CM_THEMES",
+        "CM_PUBLISH"
     };
 
     /// <summary>

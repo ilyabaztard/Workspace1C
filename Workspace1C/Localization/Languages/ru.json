@@ -534,6 +534,8 @@
     "Settings.Logging.CatJobsDesc": "Задания по расписанию: запуск, догоняющее выполнение, фоновые задания планировщика.",
     "Settings.Logging.CatThemes": "Применение тем",
     "Settings.Logging.CatThemesDesc": "Диагностика переключения и применения тем оформления.",
+    "Settings.Logging.CatPublish": "Публикация на веб-сервере",
+    "Settings.Logging.CatPublishDesc": "Окно «Публикация на веб-сервере»: найденные инстансы Apache, include-граф конфигурации, файлы алиасов 1С в списке webinst и причина перехода на fallback-ветку.",
     "Settings.Logging.CatColumns": "Колонки списка",
     "Settings.Logging.CatColumnsDesc": "Дампинг колонок списка и изменений их ширины.",
     "Settings.Logging.CatMenuclick": "Открытие контекстного меню",

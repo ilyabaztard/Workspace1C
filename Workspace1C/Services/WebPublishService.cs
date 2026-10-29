@@ -92,6 +92,57 @@ public static class WebPublishService
         return "/etc/apache2/apache2.conf";
     }
 
+    /// <summary>
+    /// Строит «синтетический» инстанс Apache из произвольного conf-файла на диске
+    /// (issue #63, последний комментарий 7OH 2026-10-28 «файла в списке нет»): когда
+    /// детектор инстансов ничего не нашёл (служба нестандартно называется/реестр
+    /// недоступен) и пользователь выбрал или ввёл конфиг ВРУЧНУЮ, список файлов
+    /// webinst обязан строиться и без детектора. Через
+    /// <see cref="ApacheInstanceDetector.PopulateIncludes"/> читается include-граф:
+    /// возвращаемый инстанс содержит <c>IncludeFiles</c> (главный конфиг + включаемые
+    /// файлы, в т.ч. <c>1c8Aliases*.conf</c>), <c>Defines</c>, <c>DocumentRoot</c> и
+    /// <c>ListenPorts</c>. ServerRoot выводится как родитель каталога конфига
+    /// («…\Apache24\conf\httpd.conf» → «…\Apache24»). Возвращает null, если файл
+    /// отсутствует или не читается — окно остаётся без списка, но не падает.
+    /// </summary>
+    public static ApacheInstance? BuildInstanceFromConf(string? confPath, WebServerKind kind)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(confPath) || !File.Exists(confPath))
+                return null;
+
+            var fullPath = Path.GetFullPath(confPath);
+            var confDirectory = Path.GetDirectoryName(fullPath) ?? string.Empty;
+            var serverRoot = string.Empty;
+            if (!string.IsNullOrWhiteSpace(confDirectory))
+            {
+                var parent = Directory.GetParent(confDirectory);
+                if (parent is not null)
+                    serverRoot = parent.FullName;
+            }
+
+            var instance = new ApacheInstance
+            {
+                Id = "manual",
+                Name = "Apache",
+                ServerRoot = serverRoot,
+                ConfPath = fullPath,
+                Htdocs = string.IsNullOrWhiteSpace(serverRoot) ? string.Empty : Path.Combine(serverRoot, "htdocs"),
+                Kind = kind
+            };
+
+            var text = File.ReadAllText(fullPath);
+            ApacheInstanceDetector.PopulateIncludes(instance, text, confDirectory);
+            return instance;
+        }
+        catch
+        {
+            // Файл недоступен/битый — fallback-ветка остаётся без списка (не роняем окно).
+            return null;
+        }
+    }
+
     /// <summary>Строка соединения webinst для базы (с завершающей «;»).</summary>
     public static string ConnectionStringFor(Infobase infobase) =>
         infobase.Connection.ToConnectionString().TrimEnd(';') + ";";
