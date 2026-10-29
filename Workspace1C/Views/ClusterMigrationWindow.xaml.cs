@@ -150,6 +150,13 @@ namespace Workspace1C
             if (_vm.Result is null)
                 return;
 
+            // issue #41 (комментарий 7OH от 2026-10-28): при «Не удалять в старом кластере»
+            // (копирование вместо переноса) вопрос «Хотите заменить строку подключения?»
+            // НЕ задаётся: новые базы уже созданы с корректным подключением, а старые
+            // строки остались на месте — менять их нечем. Вопрос — только при переносе.
+            if (_vm.KeepInSource)
+                return;
+
             var answer = MessageBox.Show(
                 LocalizationManager.T("ClusterMigration.ConfirmReplaceConnection"),
                 LocalizationManager.T("ClusterMigration.ReplaceConnectionTitle"),

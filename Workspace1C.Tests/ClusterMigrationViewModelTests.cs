@@ -983,6 +983,68 @@ public sealed class ClusterMigrationViewModelTests
     }
 
     [Fact]
+    public async Task Migrate_KeepInSource_ResultNotMarkedForReplace_AndCopiesInResult()
+    {
+        // issue #41 (комментарий 7OH от 2026-10-28): при «Не удалять в старом» (копирование)
+        // вопрос «Хотите заменить строку подключения?» не задаётся и результат НЕ помечается
+        // заменой — новые базы созданы с корректным подключением, старые строки остались.
+        // Сами копии при этом корректно попадают в результат/список (AddedInfobases).
+        var client = new FakeRacClient();
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        vm.KeepInSource = true; // копия без удаления из старого кластера
+
+        await vm.MigrateAsync();
+
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(2, vm.Result!.AddedInfobases.Count); // копии добавлены в список
+        Assert.Equal(2, vm.Result.MigratedBaseNames.Count);
+        Assert.False(vm.Result.ReplaceConnectionStrings); // замену строк при копировании не предлагаем
+        Assert.Empty(client.Dropped); // источник не трогаем
+    }
+
+    [Fact]
+    public async Task Migrate_KeepInSource_AfterConfirmedReplaceOnCopyRun_ResetsReplaceFlag()
+    {
+        // issue #41: пользователь подтвердил замену строк при ПЕРВОМ прогоне (перенос),
+        // затем включил «Не удалять в старом» и мигрировал ещё раз (копирование). Для
+        // нового прогона-копии флаг замены строк НЕ сохраняется: старые строки остались
+        // в источнике, менять их нечем и незачем.
+        var client = new FakeRacClient();
+        var vm = new ClusterMigrationViewModel(
+            client, Array.Empty<Infobase>(), new[] { BuildServer("src", "srv-old"), BuildServer("tgt", "srv-new") });
+        vm.SelectedSourceServer = vm.AvailableSourceServers[0];
+        await AwaitSourceClusters(vm);
+        await AwaitSourceRows(vm);
+        vm.SelectedTargetServer = vm.AvailableTargetServers[1];
+        await AwaitTargetClusters(vm);
+        await vm.GetTargetStatusesAsync();
+
+        // Первый прогон — перенос, пользователь подтвердил замену строк подключения.
+        vm.KeepInSource = false;
+        await vm.MigrateAsync();
+        Assert.True(vm.MigrationCompleted);
+        vm.SetReplaceConnectionStrings(true);
+        Assert.True(vm.Result!.ReplaceConnectionStrings);
+
+        // Второй прогон — копирование: флаг сбрасывается, вопрос не нужен (первый прогон
+        // снял галочки — повторно отмечаем строки, как это делает пользователь в окне).
+        vm.SelectAll();
+        vm.KeepInSource = true;
+        await vm.MigrateAsync();
+        Assert.True(vm.MigrationCompleted);
+        Assert.Equal(4, vm.Result.AddedInfobases.Count); // копии добавились к результату
+        Assert.False(vm.Result.ReplaceConnectionStrings);
+    }
+
+    [Fact]
     public async Task SelectAll_SelectNone_ToggleChecks()
     {
         var client = new FakeRacClient();

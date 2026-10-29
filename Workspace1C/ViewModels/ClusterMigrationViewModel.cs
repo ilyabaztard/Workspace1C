@@ -1275,8 +1275,14 @@ public sealed class ClusterMigrationViewModel : ViewModelBase
                     IReadOnlyList<Infobase> allBases = previous is null
                         ? addedInfobases
                         : previous.AddedInfobases.Concat(addedInfobases).ToList();
+                    // issue #41 (комментарий 7OH от 2026-10-28): при установленной галочке
+                    // «Не удалять в старом кластере» (копирование) вопрос о замене строк
+                    // подключения не задаётся, а результат НЕ помечается заменой: новые базы
+                    // созданы с корректным подключением, старые строки остались на месте —
+                    // менять их нечем и незачем. Замена строк возможна только при переносе.
                     Result = new ClusterMigrationResult(
-                        allNames, allBases, newServer, newPort, previous?.ReplaceConnectionStrings ?? false);
+                        allNames, allBases, newServer, newPort,
+                        !KeepInSource && (previous?.ReplaceConnectionStrings ?? false));
                     MigrationCompleted = true;
                 }
             });

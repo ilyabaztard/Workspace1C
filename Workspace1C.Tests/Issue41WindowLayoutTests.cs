@@ -271,6 +271,40 @@ public sealed class Issue41WindowLayoutTests
         Assert.DoesNotContain("DialogResult", body, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void MigrationWindow_Wpf_KeepInSource_DoesNotAskReplaceConnectionQuestion()
+    {
+        // issue #41 (комментарий 7OH от 2026-10-28): при установленной галочке «Не удалять
+        // в старом кластере» (копирование) вопрос «Хотите заменить строку подключения?»
+        // в конце НЕ задаётся — новые базы уже с корректным подключением, старые строки
+        // остались на месте; ранний выход из обработчика до показа диалога.
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.xaml.cs"));
+        var body = ExtractMethodBody(code, "private void OnMigrationCompleted");
+
+        Assert.Contains("if (_vm.KeepInSource)", body, StringComparison.Ordinal);
+        Assert.Contains("return;", body, StringComparison.Ordinal);
+        // Вопрос остаётся только для переноса (KeepInSource == false).
+        var keepIndex = body.IndexOf("if (_vm.KeepInSource)", StringComparison.Ordinal);
+        var confirmIndex = body.IndexOf("MessageBox.Show", StringComparison.Ordinal);
+        Assert.True(keepIndex >= 0 && confirmIndex > keepIndex,
+            "WPF: ранний выход при KeepInSource должен идти ДО вопроса о замене строк (issue #41).");
+    }
+
+    [Fact]
+    public void MigrationWindow_Avalonia_KeepInSource_DoesNotAskReplaceConnectionQuestion()
+    {
+        // issue #41: тот же guard в Avalonia-версии окна миграции.
+        var code = ReadProjectFile(Path.Combine("Workspace1C", "Views", "ClusterMigrationWindow.Avalonia.cs"));
+        var body = ExtractMethodBody(code, "private void OnMigrationCompleted");
+
+        Assert.Contains("if (_vm.KeepInSource)", body, StringComparison.Ordinal);
+        Assert.Contains("return;", body, StringComparison.Ordinal);
+        var keepIndex = body.IndexOf("if (_vm.KeepInSource)", StringComparison.Ordinal);
+        var confirmIndex = body.IndexOf("Confirm(", StringComparison.Ordinal);
+        Assert.True(keepIndex >= 0 && confirmIndex > keepIndex,
+            "Avalonia: ранний выход при KeepInSource должен идти ДО вопроса о замене строк (issue #41).");
+    }
+
     /// <summary>Извлекает тело метода (включая открывающую/закрывающую скобки) по сигнатуре — для текстовых стражей.</summary>
     private static string ExtractMethodBody(string source, string signature)
     {
