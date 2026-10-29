@@ -2325,6 +2325,8 @@
     "ServerMonitor.Infobase.Drop.BlockRetryFailedFormat": "Повторная попытка удаления не удалась: {0}. Не удалось установить блокировку регламентных заданий: {1}",
     "ServerMonitor.Infobase.Drop.BlockNoDbParams": "Не удалось определить параметры подключения к СУБД (тип СУБД, сервер, база данных).",
     "ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat": "Повторная попытка завершения сеансов не удалась: {0}",
+    "ServerMonitor.Infobase.Drop.SessionReleaseAttemptFormat": "Попытка {0} из {1} завершить сеансы…",
+    "ServerMonitor.Infobase.Drop.SessionReleaseExhaustedFormat": "Не удалось завершить сеансы за {0} попыток: {1}",
     "ServerMonitor.Servers.Add": "Добавить",
     "ServerMonitor.Servers.Edit": "Изменить",
     "ServerMonitor.Servers.Delete": "Удалить",

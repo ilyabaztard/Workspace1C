@@ -2342,6 +2342,8 @@
     "ServerMonitor.Infobase.Drop.BlockRetryFailedFormat": "The retry attempt to remove the infobase failed: {0}. Failed to set the scheduled jobs restriction: {1}",
     "ServerMonitor.Infobase.Drop.BlockNoDbParams": "Could not determine the DB connection parameters (DBMS type, DB server, database name).",
     "ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat": "The retry attempt to terminate sessions failed: {0}",
+    "ServerMonitor.Infobase.Drop.SessionReleaseAttemptFormat": "Attempt {0} of {1} to terminate sessions…",
+    "ServerMonitor.Infobase.Drop.SessionReleaseExhaustedFormat": "Failed to terminate sessions after {0} attempts: {1}",
     "ServerMonitor.Servers.Add": "Add",
     "ServerMonitor.Servers.Edit": "Edit",
     "ServerMonitor.Servers.Delete": "Delete",

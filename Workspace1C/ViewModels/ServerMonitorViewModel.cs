@@ -53,6 +53,13 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// </summary>
     private readonly Func<string, string?, string?, DropRetryResult>? _dropRetryDialog;
 
+    /// <summary>
+    /// Провайдер асинхронной паузы (issue #69): в продакшене null (используется
+    /// Task.Delay), в тестах — мгновенная задержка, чтобы ретраи завершения сеансов
+    /// не ждали реальные 1–2 секунды.
+    /// </summary>
+    private readonly Func<TimeSpan, Task>? _delayAsync;
+
     private Timer? _autoRefreshTimer;
     private int _busy;
 
@@ -127,7 +134,8 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         IRingLicenseService? ringLicenses = null,
         LicenseManager? licenseAlerts = null,
         int licenseFreeThreshold = 0,
-        int licenseAlertRepeatHours = 24)
+        int licenseAlertRepeatHours = 24,
+        Func<TimeSpan, Task>? asyncDelay = null)
     {
         _rac = rac ?? throw new ArgumentNullException(nameof(rac));
         _dialogs = dialogs ?? throw new ArgumentNullException(nameof(dialogs));
@@ -138,6 +146,7 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
         _licenseAlerts = licenseAlerts;
         _licenseFreeThreshold = licenseFreeThreshold;
         _licenseAlertRepeatHours = licenseAlertRepeatHours;
+        _delayAsync = asyncDelay;
         LoadServers();
     }
 
@@ -996,21 +1005,27 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                     // disconnect»/«session terminate» (issue #69, комментарий 7OH от
                     // 2026-10-27: «удалять сеансы не хочет» — rac на защищённой базе
                     // без кредов возвращает «Недостаточно прав пользователя»).
-                    var (termOk, termDetail, _, _) = await ReleaseInfobaseActivityAsync(
+                    // issue #69, комментарий 7OH от 2026-10-28: после УСПЕШНОЙ установки
+                    // блокировки регламентных заданий выполняется НЕСКОЛЬКО попыток
+                    // завершения сеансов/разрыва соединений с небольшими паузами и
+                    // индикацией «Попытка N из M…» в статус-строке: rac может вернуть
+                    // «Информационная база имеет непустой список соединений» или «Попытка
+                    // подключения к освобождаемому контексту…» — следующий проход (после
+                    // короткой паузы) добивает остаток.
+                    var (termOk, termDetail) = await ReleaseInfobaseActivityWithRetriesAsync(
                         row.InfobaseId, clusterId, infobaseUser, infobasePassword)
                         .ConfigureAwait(false);
                     StatusText = termDetail;
                     if (!termOk)
                     {
                         // issue #69, комментарий 7OH от 2026-10-26: НЕ выходить после
-                        // первой неудачной попытки завершения сеансов — иногда соединение
-                        // просто не успело закрыться. Снова диалог повтора с пометкой
-                        // «Повторная попытка завершения сеансов не удалась…» (готовое
-                        // сообщение, detail применяется здесь); пользователь может нажать
-                        // «Завершить сеансы и повторить» ещё раз, «Отмена» прерывает удаление.
+                        // первой неудачной попытки — число попыток ограничено
+                        // (MaxSessionReleaseAttempts); при исчерпании — понятное сообщение
+                        // «Не удалось завершить сеансы за N попыток: <последняя ошибка>»
+                        // и снова диалог повтора («Завершить сеансы и повторить» / «Отмена»).
                         retryNote = string.Format(
-                            LocalizationManager.T("ServerMonitor.Infobase.Drop.TerminateRetryFailedFormat"),
-                            termDetail);
+                            LocalizationManager.T("ServerMonitor.Infobase.Drop.SessionReleaseExhaustedFormat"),
+                            MaxSessionReleaseAttempts, termDetail);
                         continue;
                     }
                 }
@@ -1266,11 +1281,90 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
                text.Contains("service connection", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Признак ошибки rac «Попытка подключения к освобождаемому контексту информационной
+    /// базы. Требуется повторить попытку подключения.» (issue #69, лог 7OH от 2026-10-28):
+    /// разрыв соединений столкнулся с ещё освобождаемым (drop-совместимым) контекстом базы.
+    /// Такая ошибка — НЕ финал: после короткой паузы (освобождение контекста) следующий
+    /// проход завершения сеансов обычно проходит. Internal — для юнит-тестов.
+    /// </summary>
+    internal static bool IsReleaseContextError(string? detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return false;
+        var text = detail.ToLowerInvariant();
+        return text.Contains("освобождаем", StringComparison.Ordinal) ||
+               text.Contains("released context", StringComparison.Ordinal) ||
+               text.Contains("being released", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Число ВНЕШНИХ попыток завершения сеансов/разрыва соединений в одном нажатии
+    /// «Завершить сеансы и повторить» (issue #69, комментарий 7OH от 2026-10-28:
+    /// «несколько попыток завершения с небольшим перерывом и индикацией»). При
+    /// исчерпании показывается «Не удалось завершить сеансы за N попыток: …»
+    /// и снова диалог повтора — программа не зацикливается.
+    /// </summary>
+    private const int MaxSessionReleaseAttempts = 5;
+
+    /// <summary>Пауза между попытками завершения сеансов (issue #69, «с небольшим перерывом»).</summary>
+    internal static readonly TimeSpan SessionReleaseRetryDelay = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>Пауза после ошибки «освобождаемый контекст» (issue #69): дать rac время
+    /// освободить контекст информационной базы перед следующей попыткой.</summary>
+    internal static readonly TimeSpan ReleaseContextRetryDelay = TimeSpan.FromSeconds(2);
+
     /// <summary>Максимальное число проходов разрыва соединений/сеансов базы перед
     /// «infobase drop» (issue #69): списки запрашиваются заново на каждом проходе
     /// (race-free), чтобы соединения, появившиеся между «connection list» и
     /// «connection disconnect», не оставили rac-ошибку «непустой список соединений».</summary>
     private const int MaxReleasePasses = 3;
+
+    /// <summary>
+    /// Завершение активных сеансов/разрыва соединений базы НЕСКОЛЬКИМИ попытками
+    /// (issue #69, комментарий 7OH от 2026-10-28): используется после УСПЕШНОЙ установки
+    /// блокировки регламентных заданий и внутри одного нажатия «Завершить сеансы и
+    /// повторить». Каждая попытка запрашивает список соединений/сеансов ЗАНОВО
+    /// (через <see cref="ReleaseInfobaseActivityAsync"/>) и выполняет разрыв; между
+    /// попытками — пауза <see cref="SessionReleaseRetryDelay"/>, а после ошибки
+    /// «освобождаемый контекст» (<see cref="IsReleaseContextError"/>) — пауза
+    /// <see cref="ReleaseContextRetryDelay"/>. В статус-строку окна монитора пишется
+    /// индикация «Попытка N из M завершить сеансы…». При успехе возвращается сводка,
+    /// при исчерпании — последняя ошибка rac (готовое сообщение «Не удалось завершить
+    /// сеансы за N попыток: …» формирует вызывающий).
+    /// </summary>
+    private async Task<(bool Ok, string Detail)> ReleaseInfobaseActivityWithRetriesAsync(
+        Guid infobaseId, Guid clusterId,
+        string? infobaseUser = null, string? infobasePassword = null)
+    {
+        var lastDetail = string.Empty;
+        for (var attempt = 1; attempt <= MaxSessionReleaseAttempts; attempt++)
+        {
+            StatusText = string.Format(
+                LocalizationManager.T("ServerMonitor.Infobase.Drop.SessionReleaseAttemptFormat"),
+                attempt, MaxSessionReleaseAttempts);
+            var (ok, detail, _, _) = await ReleaseInfobaseActivityAsync(
+                    infobaseId, clusterId, infobaseUser, infobasePassword)
+                .ConfigureAwait(false);
+            if (ok)
+            {
+                StatusText = detail;
+                return (true, detail);
+            }
+            lastDetail = detail;
+            // Пауза между попытками; после «освобождаемого контекста» ждём дольше —
+            // rac нужно время, чтобы освободить контекст информационной базы.
+            await DelayAsync(IsReleaseContextError(detail)
+                    ? ReleaseContextRetryDelay
+                    : SessionReleaseRetryDelay)
+                .ConfigureAwait(false);
+        }
+        return (false, lastDetail);
+    }
+
+    /// <summary>Ожидание паузы (issue #69): в тестах подменяется мгновенной задержкой.</summary>
+    private Task DelayAsync(TimeSpan delay)
+        => _delayAsync is not null ? _delayAsync(delay) : Task.Delay(delay);
 
     /// <summary>
     /// Блокировка регламентных заданий информационной базы перед повторным удалением
@@ -1707,6 +1801,16 @@ public sealed class ServerMonitorViewModel : ViewModelBase, IDisposable
     /// </summary>
     public async Task ConnectAsync()
     {
+        // issue #77 (комментарий 7OH от 2026-10-28): ПЕРЕД началом подключения таймер
+        // автообновления останавливается — иначе во время подключения к новому серверу
+        // тик каждые N секунд перезапрашивает данные со СТАРЫМ контекстом (адрес уже
+        // сменился, а SelectedClusterId ещё от прежнего сервера) и выплёвывает ошибку
+        // («микс»). Галка «Автообновление» при этом НЕ трогается: после успешного
+        // подключения таймер перезапускается внизу (когда галка стоит), при ошибке —
+        // остаётся остановленным (StopAutoRefresh в catch). Повторные нажатия/переключение
+        // на тот же сервер обрабатываются штатно (первый вызов перезапустит таймер).
+        StopAutoRefresh();
+
         if (!TryEnterBusy())
             return;
 
